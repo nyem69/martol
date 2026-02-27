@@ -16,9 +16,9 @@
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy",
     "cap:build": "CAPACITOR=true vite build",
-    "cap:sync": "CAPACITOR=true vite build && npx cap sync",
-    "cap:ios": "CAPACITOR=true vite build && npx cap sync && npx cap open ios",
-    "cap:android": "CAPACITOR=true vite build && npx cap sync && npx cap open android"
+    "cap:sync": "CAPACITOR=true vite build && cap sync",
+    "cap:ios": "CAPACITOR=true vite build && cap sync && cap open ios",
+    "cap:android": "CAPACITOR=true vite build && cap sync && cap open android"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.2",
@@ -48,5 +48,12 @@
     "typescript": "^5.7.3",
     "vite": "^6.2.6",
     "wrangler": "^4.14.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ]
   }
 }

@@ -18,10 +18,10 @@ Agents don't self-execute from chat — they submit structured intents validated
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Start dev server (localhost:5190)
-npm run dev
+pnpm dev
 ```
 
 Create a `.dev.vars` file with your environment variables (see `.dev.vars.example` or ask a team member).
@@ -29,17 +29,17 @@ Create a `.dev.vars` file with your environment variables (see `.dev.vars.exampl
 ## Commands
 
 ```bash
-npm run dev              # Dev server on localhost:5190
-npm run check            # TypeScript check
-npm run build            # Production build (Cloudflare)
+pnpm dev              # Dev server on localhost:5190
+pnpm check            # TypeScript check
+pnpm build            # Production build (Cloudflare)
 
-npm run db:generate      # Generate Drizzle migrations
-npm run db:push          # Push schema to DB (dev)
-npm run db:studio        # Drizzle Studio GUI
+pnpm db:generate      # Generate Drizzle migrations
+pnpm db:push          # Push schema to DB (dev)
+pnpm db:studio        # Drizzle Studio GUI
 
-npm run cap:sync         # Build SPA + sync native projects
-npm run cap:ios          # Build + open Xcode
-npm run cap:android      # Build + open Android Studio
+pnpm cap:sync         # Build SPA + sync native projects
+pnpm cap:ios          # Build + open Xcode
+pnpm cap:android      # Build + open Android Studio
 ```
 
 ## Architecture

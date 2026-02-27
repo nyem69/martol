@@ -28,24 +28,24 @@ Feature plan: `docs/001-Features.md`
 
 ```bash
 # Development
-npm run dev              # Start dev server on localhost:5190
-npm run check            # TypeScript check
+pnpm dev              # Start dev server on localhost:5190
+pnpm check            # TypeScript check
 
 # Database
-npm run db:generate      # Generate Drizzle migrations
-npm run db:migrate       # Run migrations
-npm run db:push          # Push schema directly (dev)
-npm run db:studio        # Drizzle Studio GUI
+pnpm db:generate      # Generate Drizzle migrations
+pnpm db:migrate       # Run migrations
+pnpm db:push          # Push schema directly (dev)
+pnpm db:studio        # Drizzle Studio GUI
 
 # Cloudflare
-npm run cf:dev           # Local Cloudflare Workers dev
-npm run cf:deploy        # Deploy to Cloudflare
+pnpm cf:dev           # Local Cloudflare Workers dev
+pnpm cf:deploy        # Deploy to Cloudflare
 
 # Capacitor (mobile)
-npm run cap:build        # Build static SPA
-npm run cap:sync         # Build + sync native projects
-npm run cap:ios          # Build + sync + open Xcode
-npm run cap:android      # Build + sync + open Android Studio
+pnpm cap:build        # Build static SPA
+pnpm cap:sync         # Build + sync native projects
+pnpm cap:ios          # Build + sync + open Xcode
+pnpm cap:android      # Build + sync + open Android Studio
 ```
 
 ## Architecture
