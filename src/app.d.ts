@@ -1,0 +1,43 @@
+/// <reference types="@sveltejs/kit" />
+/// <reference types="@cloudflare/workers-types" />
+
+interface CloudflareEnv {
+	CACHE: KVNamespace;
+	HYPERDRIVE: Hyperdrive;
+	STORAGE: R2Bucket;
+	CHAT_ROOM: DurableObjectNamespace;
+	RESEND_API_KEY: string;
+	EMAIL_FROM: string;
+	EMAIL_NAME: string;
+	BETTER_AUTH_SECRET: string;
+	APP_BASE_URL: string;
+	ENVIRONMENT: string;
+	SENTRY_DSN: string;
+}
+
+declare global {
+	namespace App {
+		interface Locals {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			auth: any;
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			user: any | null;
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			session: any | null;
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			db: any | null;
+		}
+
+		interface Platform {
+			env: CloudflareEnv;
+			context: ExecutionContext;
+			caches: CacheStorage & { default: Cache };
+		}
+
+		// interface Error {}
+		// interface PageData {}
+		// interface PageState {}
+	}
+}
+
+export { CloudflareEnv };

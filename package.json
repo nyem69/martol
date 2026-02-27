@@ -1,0 +1,52 @@
+{
+  "name": "martol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cap:build": "CAPACITOR=true vite build",
+    "cap:sync": "CAPACITOR=true vite build && npx cap sync",
+    "cap:ios": "CAPACITOR=true vite build && npx cap sync && npx cap open ios",
+    "cap:android": "CAPACITOR=true vite build && npx cap sync && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.0.2",
+    "@inlang/paraglide-js": "^2.6.0",
+    "@lucide/svelte": "^0.575.0",
+    "better-auth": "^1.3.0",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.44.0",
+    "pg": "^8.13.1",
+    "svelte": "^5.46.0",
+    "tailwind-merge": "^3.0.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.2",
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "@sveltejs/adapter-cloudflare": "^6.0.0",
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.49.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.1.4",
+    "@types/pg": "^8.11.11",
+    "dotenv": "^17.3.1",
+    "drizzle-kit": "^0.31.0",
+    "svelte-check": "^4.1.5",
+    "tailwindcss": "^4.1.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.6",
+    "wrangler": "^4.14.0"
+  }
+}

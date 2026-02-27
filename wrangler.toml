@@ -1,0 +1,27 @@
+name = "martol"
+main = ".svelte-kit/cloudflare/_worker.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "3f35237a947044bbb2a5dde31dd1f2e8"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "opensesame"
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "14081dac30c2417e907bd9a3f77cf4a8"
+
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ChatRoom"]

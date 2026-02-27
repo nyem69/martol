@@ -1,0 +1,15 @@
+node_modules
+.svelte-kit
+build
+dist
+.env
+.env.*
+.dev.vars
+.DS_Store
+ios/
+android/
+.wrangler/
+drizzle/meta/
+*.local
+.vercel
+.output
