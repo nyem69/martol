@@ -13,7 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "cf:dev": "wrangler dev",
+    "cf:dev": "set -a && . ./.dev.vars && set +a && wrangler dev",
     "cf:deploy": "wrangler deploy",
     "cap:build": "CAPACITOR=true vite build",
     "cap:sync": "CAPACITOR=true vite build && cap sync",

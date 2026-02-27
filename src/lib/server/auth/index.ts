@@ -9,6 +9,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { emailOTP, organization, apiKey } from 'better-auth/plugins';
 import { sendEmail, otpEmailTemplate } from '$lib/server/email';
+import * as authSchema from '$lib/server/db/auth-schema';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 interface EmailConfig {
@@ -57,7 +58,8 @@ export function createAuth(
 ) {
 	const auth = betterAuth({
 		database: drizzleAdapter(db, {
-			provider: 'pg'
+			provider: 'pg',
+			schema: authSchema
 		}),
 
 		secret,

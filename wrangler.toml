@@ -1,6 +1,6 @@
 name = "martol"
 account_id = "ce472ff22555d61a27d583d552d5f461"
-main = ".svelte-kit/cloudflare/_worker.js"
+main = "worker-entry.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat_v2", "nodejs_als"]
 
