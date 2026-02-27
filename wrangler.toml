@@ -51,7 +51,6 @@ id = "14081dac30c2417e907bd9a3f77cf4a8"
 [[durable_objects.bindings]]
 name = "CHAT_ROOM"
 class_name = "ChatRoom"
-remote = true
 
 [[migrations]]
 tag = "v1"
