@@ -36,7 +36,7 @@ id = "3f35237a947044bbb2a5dde31dd1f2e8"
 
 [[routes]]
 pattern = "martol.plitix.com/*"
-zone_name = "martol.plitix.com"
+zone_name = "plitix.com"
 
 [[r2_buckets]]
 binding = "STORAGE"
