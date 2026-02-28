@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { X, ChevronDown, Check, Copy, ExternalLink } from '@lucide/svelte';
+	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader } from '@lucide/svelte';
 	import { getAvailableCommands } from '$lib/chat/commands';
 	import { themeStore, THEMES } from '$lib/stores/theme.svelte';
 	import type { SvelteMap } from 'svelte/reactivity';
@@ -95,6 +95,69 @@
 		() => m.guide_reply(),
 		() => m.guide_scroll_history()
 	];
+
+	// ── Agent key management state ──
+	let registeredAgents = $state<Array<{id: number, label: string, model: string, keyStart: string | null, createdAt: string | null}>>([]);
+	let newLabel = $state('');
+	let newModel = $state('claude-sonnet-4-20250514');
+	let generatedKey = $state<string | null>(null);
+	let agentLoading = $state(false);
+	let agentError = $state('');
+	let agentsFetched = $state(false);
+
+	const canManageAgents = $derived(userRole === 'owner' || userRole === 'lead');
+
+	async function fetchAgents() {
+		try {
+			const res = await fetch('/api/agents');
+			const data: { ok?: boolean; data?: typeof registeredAgents } = await res.json();
+			if (data.ok && data.data) registeredAgents = data.data;
+		} catch { /* silent */ }
+		agentsFetched = true;
+	}
+
+	async function createAgent() {
+		agentError = '';
+		generatedKey = null;
+		agentLoading = true;
+		try {
+			const res = await fetch('/api/agents', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ label: newLabel, model: newModel })
+			});
+			const data: { ok?: boolean; data?: { key?: string }; message?: string; error?: string } = await res.json();
+			if (!res.ok || !data.ok) {
+				agentError = data.message || data.error || 'Failed to create agent';
+				return;
+			}
+			generatedKey = data.data?.key ?? null;
+			newLabel = '';
+			await fetchAgents();
+		} catch {
+			agentError = 'Network error';
+		} finally {
+			agentLoading = false;
+		}
+	}
+
+	async function revokeAgent(id: number) {
+		if (!confirm(m.agent_revoke_confirm())) return;
+		try {
+			const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' });
+			const data: { ok?: boolean } = await res.json();
+			if (data.ok) {
+				registeredAgents = registeredAgents.filter((a) => a.id !== id);
+			}
+		} catch { /* silent */ }
+	}
+
+	// Fetch agents when agentSetup section opens
+	$effect(() => {
+		if (sectionsOpen.agentSetup && !agentsFetched) {
+			fetchAgents();
+		}
+	});
 
 	// Temporary heuristic: agents have labels with colons (e.g., "claude:backend").
 	const agents = $derived(
@@ -565,6 +628,121 @@
 							</div>
 						</div>
 
+						<!-- ── Generate Agent Key (owner/lead only) ── -->
+						{#if canManageAgents}
+							<div class="mb-3" style="border-top: 1px solid var(--border); padding-top: 0.75rem;">
+								<h4 class="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+									<KeyRound size={11} />
+									{m.agent_generate_title()}
+								</h4>
+
+								<div class="mb-2 flex flex-col gap-1.5">
+									<input
+										type="text"
+										bind:value={newLabel}
+										placeholder={m.agent_label_placeholder()}
+										class="agent-input"
+										data-testid="agent-label-input"
+									/>
+									<input
+										type="text"
+										bind:value={newModel}
+										placeholder={m.agent_model_placeholder()}
+										class="agent-input"
+										data-testid="agent-model-input"
+									/>
+									<button
+										class="agent-btn"
+										onclick={createAgent}
+										disabled={agentLoading || !newLabel.trim()}
+										data-testid="agent-generate-btn"
+									>
+										{#if agentLoading}
+											<Loader size={11} class="animate-spin" />
+											{m.agent_generating()}
+										{:else}
+											<KeyRound size={11} />
+											{m.agent_generate_btn()}
+										{/if}
+									</button>
+								</div>
+
+								{#if agentError}
+									<div class="mb-2 rounded px-2 py-1 text-[10px]" style="background: color-mix(in oklch, var(--error) 15%, transparent); color: var(--error);">
+										{agentError}
+									</div>
+								{/if}
+
+								{#if generatedKey}
+									<div class="mb-2 rounded p-2" style="background: color-mix(in oklch, var(--success) 10%, transparent); border: 1px solid color-mix(in oklch, var(--success) 30%, transparent);">
+										<div class="mb-1 text-[10px] font-semibold" style="color: var(--success);">
+											{m.agent_key_warning()}
+										</div>
+										<div class="flex items-center gap-1">
+											<code class="flex-1 break-all text-[10px]" style="color: var(--text); font-family: var(--font-mono);">
+												{generatedKey}
+											</code>
+											<button
+												class="copy-btn"
+												onclick={() => copyToClipboard(generatedKey!, 'agentKey')}
+												aria-label="Copy"
+											>
+												{#if copiedField === 'agentKey'}
+													<Check size={10} />
+												{:else}
+													<Copy size={10} />
+												{/if}
+											</button>
+										</div>
+									</div>
+								{/if}
+							</div>
+						{/if}
+
+						<!-- ── Active Agents ── -->
+						<div class="mb-3" style="border-top: 1px solid var(--border); padding-top: 0.75rem;">
+							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								{m.agent_active_title()}
+							</h4>
+
+							{#if registeredAgents.length === 0}
+								<p class="text-[10px]" style="color: var(--text-muted);">
+									{m.agent_no_agents()}
+								</p>
+							{:else}
+								<div class="flex flex-col gap-1.5">
+									{#each registeredAgents as agent (agent.id)}
+										<div class="rounded p-1.5" style="background: var(--bg); border: 1px solid var(--border);">
+											<div class="flex items-center justify-between">
+												<span class="text-[11px] font-semibold" style="color: var(--text); font-family: var(--font-mono);">
+													{agent.label}
+												</span>
+												{#if canManageAgents}
+													<button
+														class="rounded p-0.5 transition-colors hover:opacity-80"
+														style="color: var(--error);"
+														onclick={() => revokeAgent(agent.id)}
+														aria-label={m.agent_revoke()}
+														data-testid="agent-revoke-btn"
+													>
+														<Trash2 size={11} />
+													</button>
+												{/if}
+											</div>
+											<div class="text-[9px]" style="color: var(--text-muted);">
+												{agent.model}
+											</div>
+											{#if agent.keyStart}
+												<div class="text-[9px]" style="color: var(--text-muted); font-family: var(--font-mono);">
+													{m.agent_key_prefix()}: {agent.keyStart}
+												</div>
+											{/if}
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+
 						<!-- Repo link -->
 						<a
 							href="https://github.com/nyem69/martol-client"
@@ -579,6 +757,7 @@
 					</div>
 				</div>
 			</div>
+		</div>
 		<!-- ═══ LEGAL SECTION ═══ -->
 		<div style="border-bottom: 1px solid var(--border);">
 			<button
@@ -723,5 +902,51 @@
 
 	.copy-btn:hover {
 		color: var(--accent);
+	}
+
+	.agent-input {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 0.375rem;
+		padding: 0.375rem 0.5rem;
+		font-size: 10px;
+		font-family: var(--font-mono);
+		color: var(--text);
+		outline: none;
+		width: 100%;
+	}
+
+	.agent-input:focus {
+		border-color: var(--accent);
+	}
+
+	.agent-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.agent-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		background: var(--accent);
+		color: var(--bg);
+		border: none;
+		border-radius: 0.375rem;
+		padding: 0.375rem 0.75rem;
+		font-size: 10px;
+		font-family: var(--font-mono);
+		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 150ms ease;
+	}
+
+	.agent-btn:hover:not(:disabled) {
+		opacity: 0.85;
+	}
+
+	.agent-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

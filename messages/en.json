@@ -119,5 +119,16 @@
   "legal_anthropic_privacy": "Anthropic Privacy Policy",
   "login_agree_prefix": "By signing in, you agree to the",
   "login_agree_and": "and",
-  "login_agree_required": "You must agree to the terms to continue"
+  "login_agree_required": "You must agree to the terms to continue",
+  "agent_generate_title": "Generate Agent Key",
+  "agent_label_placeholder": "claude:backend",
+  "agent_model_placeholder": "claude-sonnet-4-20250514",
+  "agent_generate_btn": "Generate Key",
+  "agent_generating": "Generating...",
+  "agent_key_warning": "Copy now — key is shown only once",
+  "agent_active_title": "Active Agents",
+  "agent_no_agents": "No agents connected",
+  "agent_revoke": "Revoke",
+  "agent_revoke_confirm": "Revoke this agent key? The agent will disconnect.",
+  "agent_key_prefix": "Key"
 }
