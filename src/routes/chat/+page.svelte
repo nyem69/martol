@@ -218,5 +218,6 @@
 		onClose={() => (memberPanelOpen = false)}
 		onlineUsers={store.onlineUsers}
 		{userRole}
+		{roomId}
 	/>
 </main>

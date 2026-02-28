@@ -97,5 +97,19 @@
   "theme_neon": "Neon Foundry",
   "theme_patina": "Patina",
   "theme_daybreak": "Daybreak",
-  "panel_title": "Panel"
+  "panel_title": "Panel",
+  "agent_setup_title": "Agent Setup",
+  "agent_setup_desc": "Connect an AI agent to this room using the Python wrapper.",
+  "agent_setup_install": "Install",
+  "agent_setup_configure": "Configure .env",
+  "agent_setup_run": "Run",
+  "agent_setup_params": "Parameters",
+  "agent_setup_ws_url": "WebSocket URL for this room",
+  "agent_setup_api_key": "Agent API key (from org settings)",
+  "agent_setup_provider": "anthropic or openai",
+  "agent_setup_ai_key": "LLM provider API key",
+  "agent_setup_model": "Model override (optional)",
+  "agent_setup_label": "Agent label for @mentions",
+  "agent_setup_repo": "Repository",
+  "agent_setup_copied": "Copied!"
 }

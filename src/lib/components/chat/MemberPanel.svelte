@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { X, ChevronDown, Check } from '@lucide/svelte';
+	import { X, ChevronDown, Check, Copy, ExternalLink } from '@lucide/svelte';
 	import { getAvailableCommands } from '$lib/chat/commands';
 	import { themeStore, THEMES } from '$lib/stores/theme.svelte';
 	import type { SvelteMap } from 'svelte/reactivity';
@@ -9,20 +9,46 @@
 		open = false,
 		onClose,
 		onlineUsers,
-		userRole = 'member'
+		userRole = 'member',
+		roomId = ''
 	}: {
 		open: boolean;
 		onClose: () => void;
 		onlineUsers: SvelteMap<string, string>;
 		userRole?: string;
+		roomId?: string;
 	} = $props();
 
 	// Collapsible section state — members open by default, rest collapsed
 	let sectionsOpen = $state<Record<string, boolean>>({
 		members: true,
 		guide: false,
-		theme: false
+		theme: false,
+		agentSetup: false
 	});
+
+	// Copy-to-clipboard feedback
+	let copiedField = $state<string | null>(null);
+	let copiedTimeout: ReturnType<typeof setTimeout> | undefined;
+
+	function copyToClipboard(text: string, field: string) {
+		navigator.clipboard.writeText(text);
+		copiedField = field;
+		clearTimeout(copiedTimeout);
+		copiedTimeout = setTimeout(() => (copiedField = null), 1500);
+	}
+
+	// Derive connection URLs from current page
+	const wsUrl = $derived(
+		typeof window !== 'undefined'
+			? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/rooms/${roomId}/ws`
+			: ''
+	);
+	const mcpUrl = $derived(
+		typeof window !== 'undefined'
+			? `${window.location.origin}/mcp/v1`
+			: ''
+	);
 
 	function toggleSection(id: string) {
 		sectionsOpen[id] = !sectionsOpen[id];
@@ -358,6 +384,185 @@
 				</div>
 			</div>
 		</div>
+		<!-- ═══ AGENT SETUP SECTION ═══ -->
+		<div style="border-bottom: 1px solid var(--border);">
+			<button
+				class="section-toggle flex w-full items-center justify-between px-4 py-2.5"
+				onclick={() => toggleSection('agentSetup')}
+				aria-expanded={sectionsOpen.agentSetup}
+			>
+				<span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
+					{m.agent_setup_title()}
+				</span>
+				<span
+					class="transition-transform duration-150"
+					style="color: var(--text-muted); transform: rotate({sectionsOpen.agentSetup ? '0' : '-90'}deg);"
+				>
+					<ChevronDown size={14} />
+				</span>
+			</button>
+
+			<div
+				class="section-body"
+				style="display: grid; grid-template-rows: {sectionsOpen.agentSetup ? '1fr' : '0fr'}; transition: grid-template-rows 200ms ease;"
+			>
+				<div style="overflow: hidden;">
+					<div class="px-4 pb-3">
+						<p class="mb-3 text-[11px]" style="color: var(--text-muted);">
+							{m.agent_setup_desc()}
+						</p>
+
+						<!-- Parameters -->
+						<div class="mb-3">
+							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								{m.agent_setup_params()}
+							</h4>
+
+							<!-- WS URL -->
+							<div class="param-row">
+								<div class="flex items-center justify-between">
+									<code class="param-label">MARTOL_WS_URL</code>
+									<button
+										class="copy-btn"
+										onclick={() => copyToClipboard(wsUrl, 'ws')}
+										aria-label="Copy"
+									>
+										{#if copiedField === 'ws'}
+											<Check size={10} />
+										{:else}
+											<Copy size={10} />
+										{/if}
+									</button>
+								</div>
+								<div class="param-value">{wsUrl}</div>
+								<div class="param-desc">{m.agent_setup_ws_url()}</div>
+							</div>
+
+							<!-- MCP URL -->
+							<div class="param-row">
+								<div class="flex items-center justify-between">
+									<code class="param-label">MARTOL_MCP_URL</code>
+									<button
+										class="copy-btn"
+										onclick={() => copyToClipboard(mcpUrl, 'mcp')}
+										aria-label="Copy"
+									>
+										{#if copiedField === 'mcp'}
+											<Check size={10} />
+										{:else}
+											<Copy size={10} />
+										{/if}
+									</button>
+								</div>
+								<div class="param-value">{mcpUrl}</div>
+								<div class="param-desc">MCP HTTP endpoint</div>
+							</div>
+
+							<!-- API Key -->
+							<div class="param-row">
+								<code class="param-label">MARTOL_API_KEY</code>
+								<div class="param-desc">{m.agent_setup_api_key()}</div>
+							</div>
+
+							<!-- Provider -->
+							<div class="param-row">
+								<code class="param-label">AI_PROVIDER</code>
+								<div class="param-desc">{m.agent_setup_provider()}</div>
+							</div>
+
+							<!-- AI Key -->
+							<div class="param-row">
+								<code class="param-label">AI_API_KEY</code>
+								<div class="param-desc">{m.agent_setup_ai_key()}</div>
+							</div>
+
+							<!-- Model -->
+							<div class="param-row">
+								<code class="param-label">AI_MODEL</code>
+								<div class="param-desc">{m.agent_setup_model()}</div>
+							</div>
+
+							<!-- Label -->
+							<div class="param-row">
+								<code class="param-label">AGENT_LABEL</code>
+								<div class="param-desc">{m.agent_setup_label()}</div>
+							</div>
+						</div>
+
+						<!-- Quick start steps -->
+						<div class="mb-3">
+							<!-- Step 1: Install -->
+							<div class="mb-2">
+								<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+									1. {m.agent_setup_install()}
+								</h4>
+								<div class="code-block">
+									<div class="flex items-center justify-between">
+										<code>pip install -r requirements.txt</code>
+										<button
+											class="copy-btn"
+											onclick={() => copyToClipboard('git clone https://github.com/nyem69/martol-client.git && cd martol-client && pip install -r requirements.txt', 'install')}
+											aria-label="Copy"
+										>
+											{#if copiedField === 'install'}
+												<Check size={10} />
+											{:else}
+												<Copy size={10} />
+											{/if}
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<!-- Step 2: Configure -->
+							<div class="mb-2">
+								<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+									2. {m.agent_setup_configure()}
+								</h4>
+								<div class="code-block">
+									<code>cp .env.example .env</code>
+								</div>
+							</div>
+
+							<!-- Step 3: Run -->
+							<div class="mb-2">
+								<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+									3. {m.agent_setup_run()}
+								</h4>
+								<div class="code-block">
+									<div class="flex items-center justify-between">
+										<code>python -m martol_agent</code>
+										<button
+											class="copy-btn"
+											onclick={() => copyToClipboard('python -m martol_agent', 'run')}
+											aria-label="Copy"
+										>
+											{#if copiedField === 'run'}
+												<Check size={10} />
+											{:else}
+												<Copy size={10} />
+											{/if}
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Repo link -->
+						<a
+							href="https://github.com/nyem69/martol-client"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1 text-[11px] transition-opacity hover:opacity-80"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={11} />
+							{m.agent_setup_repo()}
+						</a>
+					</div>
+				</div>
+			</div>
+		</div>
 	</div>
 </aside>
 
@@ -380,5 +585,59 @@
 
 	.theme-swatch:active {
 		transform: scale(0.98);
+	}
+
+	.param-row {
+		padding: 0.375rem 0;
+		border-bottom: 1px solid color-mix(in oklch, var(--border) 30%, transparent);
+	}
+
+	.param-row:last-child {
+		border-bottom: none;
+	}
+
+	.param-label {
+		font-size: 11px;
+		font-family: var(--font-mono);
+		color: var(--accent);
+	}
+
+	.param-value {
+		font-size: 10px;
+		font-family: var(--font-mono);
+		color: var(--text);
+		word-break: break-all;
+		padding: 0.125rem 0;
+	}
+
+	.param-desc {
+		font-size: 10px;
+		color: var(--text-muted);
+	}
+
+	.code-block {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 0.375rem;
+		padding: 0.375rem 0.5rem;
+		font-size: 10px;
+		font-family: var(--font-mono);
+		color: var(--text);
+		word-break: break-all;
+	}
+
+	.copy-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--text-muted);
+		padding: 0.125rem;
+		border-radius: 0.25rem;
+		transition: color 150ms ease;
+		flex-shrink: 0;
+	}
+
+	.copy-btn:hover {
+		color: var(--accent);
 	}
 </style>
