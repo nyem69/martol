@@ -10,7 +10,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "NODE_TLS_REJECT_UNAUTHORIZED=0 drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "cf:dev": "node scripts/pg-tls-proxy.mjs & set -a && . ./.dev.vars && set +a && CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=\"postgres://$PG_USER:$PG_PASSWORD@127.0.0.1:5434/$PG_DATABASE\" wrangler dev; kill %1 2>/dev/null",
