@@ -147,8 +147,8 @@
 	<title>Chat — Martol</title>
 </svelte:head>
 
-<main class="flex h-dvh" aria-label="Chat room: {roomName}">
-	<div class="flex flex-1 flex-col overflow-hidden">
+<main class="h-dvh overflow-hidden" aria-label="Chat room: {roomName}">
+	<div class="mx-auto flex h-full max-w-5xl flex-col overflow-hidden">
 		<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
 		<ChatHeader
 			roomName={roomName}

@@ -41,11 +41,9 @@
 {/if}
 
 <aside
-	class="fixed top-0 right-0 z-40 flex h-full w-64 flex-col transition-transform duration-200
-		md:relative md:z-0 md:translate-x-0 md:border-l"
+	class="fixed top-0 right-0 z-40 flex h-full w-72 flex-col border-l transition-transform duration-200"
 	style="background: var(--bg-elevated); border-color: var(--border);
 		transform: {open ? 'translateX(0)' : 'translateX(100%)'};"
-	style:display={open ? 'flex' : ''}
 	aria-label={m.chat_members_panel()}
 >
 	<!-- Header -->
