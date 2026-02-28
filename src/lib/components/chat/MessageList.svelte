@@ -59,7 +59,6 @@
 	});
 
 	// Auto-scroll when new messages arrive and user is at bottom
-	// Auto-scroll when new messages arrive and user is at bottom
 	$effect(() => {
 		// Access length to track changes
 		const _len = timeline.length;

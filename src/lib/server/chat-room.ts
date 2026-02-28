@@ -392,6 +392,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	}
 
 	// ── REST Ingest (for MCP chat_send) ──────────────────────────────
+	// Trust boundary: only reachable via stub.fetch() from the Worker (chat-send.ts).
+	// The calling code authenticates the agent via API key before invoking this endpoint.
+	// If the DO ever becomes directly routable, add a shared internal secret header.
 
 	private async handleRestIngest(request: Request): Promise<Response> {
 		let payload: {
@@ -415,6 +418,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 });
 		}
 
+		// [I6] Validate localId format (same rules as WebSocket path)
+		if (
+			typeof payload.localId !== 'string' ||
+			payload.localId.length === 0 ||
+			payload.localId.length > MAX_LOCAL_ID_LENGTH ||
+			!LOCAL_ID_RE.test(payload.localId)
+		) {
+			return new Response(JSON.stringify({ error: 'Invalid localId' }), { status: 400 });
+		}
+
 		if (typeof payload.body !== 'string') {
 			return new Response(JSON.stringify({ error: 'Body must be a string' }), { status: 400 });
 		}
@@ -422,6 +435,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const bodyBytes = new TextEncoder().encode(payload.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
 			return new Response(JSON.stringify({ error: 'Message too large' }), { status: 413 });
+		}
+
+		// [I5] Rate limit REST ingest (same as WebSocket path)
+		if (this.isRateLimited(payload.senderId)) {
+			return new Response(JSON.stringify({ error: 'Rate limited' }), { status: 429 });
 		}
 
 		if (this.degraded) {
@@ -709,7 +727,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// [C2] Only prune flushed entries; [M1] Use limit to avoid loading all into memory
 	private async pruneOldEntries(): Promise<void> {
-		// Skip expensive list if WAL is small enough — walMessageCount tracks total stored messages
+		// Skip expensive list if total stored (flushed + unflushed) is small.
+		// walMessageCount may overcount slightly (includes unflushed), but this is a
+		// conservative early-exit — the storage.list below provides the exact count.
 		if (this.walMessageCount <= 200) return;
 
 		const all = await this.ctx.storage.list<StoredMessage>({ prefix: 'msg:', limit: 500 });

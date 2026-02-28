@@ -27,12 +27,12 @@
 		{:else if status === 'closed'}
 			{m.chat_connection_closed()}
 			<button onclick={() => window.location.reload()} class="ml-2 underline font-semibold">
-				Refresh
+				{m.chat_refresh()}
 			</button>
 		{:else if status === 'failed'}
 			{m.chat_connection_failed()}
 			<button onclick={() => window.location.reload()} class="ml-2 underline font-semibold">
-				Refresh
+				{m.chat_refresh()}
 			</button>
 		{/if}
 	</div>

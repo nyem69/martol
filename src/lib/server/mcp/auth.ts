@@ -2,7 +2,6 @@ import { eq, and } from 'drizzle-orm';
 import { agentRoomBindings } from '$lib/server/db/schema';
 import { user, member } from '$lib/server/db/auth-schema';
 import type { McpError } from '$lib/types/mcp';
-import type { HyperdriveDb } from '$lib/server/db/hyperdrive';
 
 export interface AgentContext {
 	agentUserId: string;
@@ -17,9 +16,10 @@ type AuthResult =
 	| { ok: true; agent: AgentContext }
 	| { ok: false; status: number; error: McpError };
 
+// db typed as any: App.Locals.db is any (Drizzle instance varies by env — Hyperdrive vs direct pool)
 export async function authenticateAgent(
 	apiKeyHeader: string | null,
-	auth: any,
+	auth: { api: { verifyApiKey: (opts: { body: { key: string } }) => Promise<any> } },
 	db: any,
 	kv?: KVNamespace
 ): Promise<AuthResult> {

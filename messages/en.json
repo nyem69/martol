@@ -38,5 +38,8 @@
   "chat_failed": "Failed to send",
   "chat_connection_closed": "Connection closed",
   "chat_connection_failed": "Connection failed — please refresh",
-  "chat_loading": "Loading messages..."
+  "chat_loading": "Loading messages...",
+  "chat_sending": "Sending...",
+  "chat_refresh": "Refresh",
+  "chat_dismiss": "Dismiss"
 }

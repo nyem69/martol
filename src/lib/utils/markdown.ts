@@ -22,8 +22,11 @@ const PURIFY_CONFIG: Config = {
 	ALLOW_DATA_ATTR: false
 };
 
+// Scoped DOMPurify instance — prevents hook from affecting other DOMPurify consumers
+const purify = DOMPurify();
+
 // Force external links to open in new tab with noopener
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+purify.addHook('afterSanitizeAttributes', (node) => {
 	if (node.tagName === 'A') {
 		node.setAttribute('rel', 'noopener noreferrer');
 		node.setAttribute('target', '_blank');
@@ -36,5 +39,5 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 
 export function renderMarkdown(input: string): string {
 	const raw = marked.parse(input) as string;
-	return DOMPurify.sanitize(raw, PURIFY_CONFIG) as string;
+	return purify.sanitize(raw, PURIFY_CONFIG) as string;
 }

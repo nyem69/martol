@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
-import { member, organization } from '$lib/server/db/auth-schema';
+import { user, member, organization } from '$lib/server/db/auth-schema';
 import { messages as messagesTable } from '$lib/server/db/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull, inArray } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -60,10 +60,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(desc(messagesTable.id))
 		.limit(50);
 
+	// Resolve sender names via batched user lookup
+	const senderIds = [...new Set<string>(recentMessages.map((row: typeof recentMessages[number]) => row.senderId))];
+	const senderNameMap = new Map<string, string>();
+	if (senderIds.length > 0) {
+		const users = await db
+			.select({ id: user.id, name: user.name })
+			.from(user)
+			.where(inArray(user.id, senderIds));
+		for (const u of users) {
+			senderNameMap.set(u.id, u.name);
+		}
+	}
+
 	// Reverse to chronological order and map to serializable format
 	const initialMessages = recentMessages.reverse().map((msg: typeof recentMessages[number]) => ({
 		dbId: msg.id,
 		senderId: msg.senderId,
+		senderName: senderNameMap.get(msg.senderId) ?? 'Unknown',
 		senderRole: msg.senderRole,
 		body: msg.body,
 		createdAt: msg.createdAt.toISOString()

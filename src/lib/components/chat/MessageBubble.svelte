@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { DisplayMessage } from '$lib/stores/messages.svelte';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import * as m from '$lib/paraglide/messages';
@@ -17,7 +16,7 @@
 	const htmlBody = $derived(renderMarkdown(message.body));
 
 	// Tick every 30s to keep relative timestamps fresh
-	onMount(() => {
+	$effect(() => {
 		const interval = setInterval(() => {
 			now = Date.now();
 		}, 30_000);
@@ -68,7 +67,7 @@
 		<div class="mt-1 flex items-center justify-end gap-2">
 			{#if message.pending}
 				<span class="text-[11px] animate-pulse" style="color: var(--text-muted);">
-					Sending...
+					{m.chat_sending()}
 				</span>
 			{:else if message.failed}
 				<span class="text-[11px]" style="color: var(--danger);">

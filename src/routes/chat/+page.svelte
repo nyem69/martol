@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { MessagesStore, type DisplayMessage } from '$lib/stores/messages.svelte';
+	import * as m from '$lib/paraglide/messages';
 	import ConnectionBanner from '$lib/components/chat/ConnectionBanner.svelte';
 	import ChatHeader from '$lib/components/chat/ChatHeader.svelte';
 	import MessageList from '$lib/components/chat/MessageList.svelte';
@@ -8,7 +9,8 @@
 
 	let { data } = $props();
 
-	// These values are stable for the page lifetime (from server load)
+	// These values are stable for the page lifetime (server load runs once, no invalidation).
+	// svelte-ignore state_referenced_locally — intentional: capturing initial snapshot for store.
 	const { roomId, userId, userName, userRole, roomName, initialMessages } = data;
 
 	// Convert DB messages to DisplayMessage format
@@ -16,7 +18,7 @@
 		localId: `db-${msg.dbId}`,
 		dbId: msg.dbId,
 		senderId: msg.senderId,
-		senderName: msg.senderId === userId ? userName : msg.senderId,
+		senderName: msg.senderId === userId ? userName : (msg.senderName ?? msg.senderId),
 		senderRole: msg.senderRole,
 		body: msg.body,
 		timestamp: msg.createdAt,
@@ -65,9 +67,9 @@
 			<button
 				class="ml-2 underline"
 				onclick={() => (store.error = null)}
-				aria-label="Dismiss error"
+				aria-label={m.chat_dismiss()}
 			>
-				Dismiss
+				{m.chat_dismiss()}
 			</button>
 		</div>
 	{/if}
