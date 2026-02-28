@@ -61,7 +61,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.limit(50);
 
 	// Reverse to chronological order and map to serializable format
-	const initialMessages = recentMessages.reverse().map((msg) => ({
+	const initialMessages = recentMessages.reverse().map((msg: typeof recentMessages[number]) => ({
 		dbId: msg.id,
 		senderId: msg.senderId,
 		senderRole: msg.senderRole,

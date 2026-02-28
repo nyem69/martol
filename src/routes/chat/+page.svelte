@@ -12,7 +12,7 @@
 	const { roomId, userId, userName, userRole, roomName, initialMessages } = data;
 
 	// Convert DB messages to DisplayMessage format
-	const dbMessages: DisplayMessage[] = initialMessages.map((msg) => ({
+	const dbMessages: DisplayMessage[] = initialMessages.map((msg: (typeof initialMessages)[number]) => ({
 		localId: `db-${msg.dbId}`,
 		dbId: msg.dbId,
 		senderId: msg.senderId,

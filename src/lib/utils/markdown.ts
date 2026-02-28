@@ -7,12 +7,12 @@
  */
 
 import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import DOMPurify, { type Config } from 'dompurify';
 
 marked.setOptions({ async: false, gfm: true, breaks: true });
 
 // Restrict to tags needed for chat markdown — no <style>, <form>, <svg>, etc.
-const PURIFY_CONFIG: DOMPurify.Config = {
+const PURIFY_CONFIG: Config = {
 	ALLOWED_TAGS: [
 		'p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'blockquote',
 		'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -36,5 +36,5 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 
 export function renderMarkdown(input: string): string {
 	const raw = marked.parse(input) as string;
-	return DOMPurify.sanitize(raw, PURIFY_CONFIG);
+	return DOMPurify.sanitize(raw, PURIFY_CONFIG) as string;
 }
