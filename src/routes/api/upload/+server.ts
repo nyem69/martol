@@ -18,10 +18,13 @@ const ALLOWED_TYPES = new Set([
 	'image/png',
 	'image/gif',
 	'image/webp',
-	'image/svg+xml',
+	// SVG intentionally excluded — can contain embedded scripts (stored XSS)
 	'application/pdf',
 	'text/plain'
 ]);
+
+// Strict key format: orgId/timestamp-filename (no path traversal)
+const R2_KEY_RE = /^[\w-]+\/[\w][\w._-]*$/;
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
@@ -79,25 +82,24 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
+	if (!locals.db) error(503, 'Database unavailable');
 
 	const r2 = platform?.env?.STORAGE;
 	if (!r2) error(503, 'Storage unavailable');
 
 	const key = url.searchParams.get('key');
 	if (!key) error(400, 'Missing key parameter');
+	if (!R2_KEY_RE.test(key)) error(400, 'Invalid key format');
 
 	// Org scoping: key starts with orgId — verify membership
 	const orgId = key.split('/')[0];
-	if (!orgId) error(400, 'Invalid key format');
 
-	if (locals.db) {
-		const [memberRecord] = await locals.db
-			.select({ role: member.role })
-			.from(member)
-			.where(and(eq(member.organizationId, orgId), eq(member.userId, locals.user.id)))
-			.limit(1);
-		if (!memberRecord) error(403, 'Not a member of this organization');
-	}
+	const [memberRecord] = await locals.db
+		.select({ role: member.role })
+		.from(member)
+		.where(and(eq(member.organizationId, orgId), eq(member.userId, locals.user.id)))
+		.limit(1);
+	if (!memberRecord) error(403, 'Not a member of this organization');
 
 	const object = await r2.get(key);
 	if (!object) error(404, 'File not found');

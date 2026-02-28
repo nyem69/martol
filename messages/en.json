@@ -63,5 +63,10 @@
   "chat_slash_no_results": "No matching commands",
   "chat_mention_no_results": "No matching users",
   "chat_reply_to": "Replying to {name}",
-  "chat_cancel_reply": "Cancel reply"
+  "chat_cancel_reply": "Cancel reply",
+  "chat_image_preview": "Image preview",
+  "chat_close": "Close",
+  "chat_reply": "reply",
+  "chat_slash_commands": "Slash commands",
+  "chat_mention_users": "Mention users"
 }

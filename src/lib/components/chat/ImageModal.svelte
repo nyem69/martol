@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages';
 	import { X } from '@lucide/svelte';
 
 	let {
@@ -25,14 +26,14 @@
 	onclick={onClose}
 	role="dialog"
 	aria-modal="true"
-	aria-label={alt || 'Image preview'}
+	aria-label={alt || m.chat_image_preview()}
 	tabindex="-1"
 >
 	<button
 		class="absolute top-4 right-4 rounded-full p-2 transition-opacity hover:opacity-70"
 		style="background: var(--bg-elevated); color: var(--text);"
 		onclick={onClose}
-		aria-label="Close"
+		aria-label={m.chat_close()}
 	>
 		<X size={20} />
 	</button>

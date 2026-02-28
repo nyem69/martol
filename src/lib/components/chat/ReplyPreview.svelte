@@ -13,7 +13,7 @@
 	} = $props();
 
 	// Truncate reply preview to first line, max 120 chars
-	const preview = $derived(() => {
+	const preview = $derived.by(() => {
 		const firstLine = body.split('\n')[0];
 		return firstLine.length > 120 ? firstLine.slice(0, 117) + '...' : firstLine;
 	});
@@ -28,7 +28,7 @@
 			{m.chat_reply_to({ name: senderName })}
 		</span>
 		<p class="truncate text-xs" style="color: var(--text-muted);">
-			{preview()}
+			{preview}
 		</p>
 	</div>
 	<button

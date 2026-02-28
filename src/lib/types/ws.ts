@@ -9,6 +9,7 @@
 
 export type ClientMessage =
 	| { type: 'message'; body: string; replyTo?: number; localId: string }
+	| { type: 'command'; name: string; args: string }
 	| { type: 'typing'; active: boolean }
 	| { type: 'read'; lastReadId: number };
 

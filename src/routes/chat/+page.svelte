@@ -34,8 +34,8 @@
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
 
 	function handleCommand(command: string, args: string) {
-		// Commands are sent as system messages for server processing
-		store.sendMessage(`/${command}${args ? ' ' + args : ''}`);
+		// Send as distinct command type — not broadcast as chat text
+		store.ws.send({ type: 'command', name: command, args });
 	}
 
 	function handleReply(message: DisplayMessage) {
@@ -107,6 +107,5 @@
 		open={memberPanelOpen}
 		onClose={() => (memberPanelOpen = false)}
 		onlineUsers={store.onlineUsers}
-		{userRole}
 	/>
 </main>

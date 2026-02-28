@@ -6,17 +6,15 @@
 	let {
 		open = false,
 		onClose,
-		onlineUsers,
-		userRole
+		onlineUsers
 	}: {
 		open: boolean;
 		onClose: () => void;
 		onlineUsers: SvelteMap<string, string>;
-		userRole: string;
 	} = $props();
 
-	// Split users into agents and humans by name convention
-	// Agents have names like "claude:backend" with colons
+	// Temporary heuristic: agents have labels with colons (e.g., "claude:backend").
+	// TODO: extend presence data with isAgent flag from server for reliable detection.
 	const agents = $derived(
 		[...onlineUsers.entries()]
 			.filter(([_, name]) => name.includes(':'))

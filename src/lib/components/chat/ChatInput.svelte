@@ -3,7 +3,8 @@
 	import { Send } from '@lucide/svelte';
 	import { matchCommands, parseCommand, type SlashCommand } from '$lib/chat/commands';
 	import SlashMenu from './SlashMenu.svelte';
-	import MentionPopup, { type MentionUser } from './MentionPopup.svelte';
+	import MentionPopup from './MentionPopup.svelte';
+	import type { MentionUser } from '$lib/types/chat';
 	import ReplyPreview from './ReplyPreview.svelte';
 
 	let {

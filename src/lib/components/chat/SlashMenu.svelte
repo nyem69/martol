@@ -32,7 +32,7 @@
 		class="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg shadow-lg"
 		style="background: var(--bg-elevated); border: 1px solid var(--border);"
 		role="listbox"
-		aria-label="Slash commands"
+		aria-label={m.chat_slash_commands()}
 		data-testid="slash-menu"
 	>
 		{#each commands as cmd, i (cmd.name)}

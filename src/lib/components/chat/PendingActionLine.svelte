@@ -1,17 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-
-	export interface PendingAction {
-		id: number;
-		actionType: string;
-		riskLevel: 'low' | 'medium' | 'high';
-		description: string;
-		requestedBy: string;
-		requestedRole: string;
-		agentName: string;
-		status: 'pending' | 'approved' | 'rejected' | 'expired' | 'executed';
-		timestamp: string;
-	}
+	import type { PendingAction } from '$lib/types/chat';
 
 	let {
 		action,

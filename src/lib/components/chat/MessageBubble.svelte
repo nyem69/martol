@@ -91,7 +91,7 @@
 					onclick={() => onReply(message)}
 					aria-label={m.chat_reply_to({ name: message.senderName })}
 				>
-					reply
+					{m.chat_reply()}
 				</button>
 			{/if}
 			<time datetime={message.timestamp} class="text-[11px]" style="color: var(--text-muted);">

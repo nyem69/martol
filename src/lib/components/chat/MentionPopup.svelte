@@ -1,10 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-
-	export interface MentionUser {
-		id: string;
-		name: string;
-	}
+	import type { MentionUser } from '$lib/types/chat';
 
 	let {
 		users,
@@ -22,7 +18,7 @@
 		class="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg shadow-lg"
 		style="background: var(--bg-elevated); border: 1px solid var(--border);"
 		role="listbox"
-		aria-label="Mention users"
+		aria-label={m.chat_mention_users()}
 		data-testid="mention-popup"
 	>
 		{#each users as user, i (user.id)}
