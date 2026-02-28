@@ -1,21 +1,46 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { Send } from '@lucide/svelte';
+	import { matchCommands, parseCommand, type SlashCommand } from '$lib/chat/commands';
+	import SlashMenu from './SlashMenu.svelte';
+	import MentionPopup, { type MentionUser } from './MentionPopup.svelte';
+	import ReplyPreview from './ReplyPreview.svelte';
 
 	let {
 		onSend,
 		onTyping,
+		onCommand,
 		disabled,
-		typingNames
+		typingNames,
+		userRole = 'member',
+		onlineUsers,
+		replyTo,
+		onCancelReply
 	}: {
-		onSend: (body: string) => void;
+		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
+		onCommand?: (command: string, args: string) => void;
 		disabled: boolean;
 		typingNames: string[];
+		userRole?: string;
+		onlineUsers?: Map<string, string>;
+		replyTo?: { dbId: number; senderName: string; body: string } | null;
+		onCancelReply?: () => void;
 	} = $props();
 
 	let value = $state('');
 	let textarea: HTMLTextAreaElement | undefined = $state();
+
+	// Slash menu state
+	let showSlashMenu = $state(false);
+	let slashMenuIndex = $state(0);
+	let slashMatches = $state<SlashCommand[]>([]);
+
+	// Mention popup state
+	let showMentionPopup = $state(false);
+	let mentionIndex = $state(0);
+	let mentionMatches = $state<MentionUser[]>([]);
+	let mentionStart = $state(-1);
 
 	const canSend = $derived(value.trim().length > 0 && !disabled);
 
@@ -31,9 +56,20 @@
 	function send() {
 		const body = value.trim();
 		if (!body || disabled) return;
-		onSend(body);
+
+		// Check if it's a slash command
+		const parsed = parseCommand(body);
+		if (parsed && onCommand) {
+			onCommand(parsed.command, parsed.args);
+			value = '';
+			resize();
+			return;
+		}
+
+		onSend(body, replyTo?.dbId);
 		value = '';
 		resize();
+		onCancelReply?.();
 	}
 
 	// Keys that should not trigger typing indicator
@@ -45,12 +81,75 @@
 	]);
 
 	function onKeydown(e: KeyboardEvent) {
+		// Slash menu keyboard navigation
+		if (showSlashMenu && slashMatches.length > 0) {
+			if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				slashMenuIndex = (slashMenuIndex - 1 + slashMatches.length) % slashMatches.length;
+				return;
+			}
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				slashMenuIndex = (slashMenuIndex + 1) % slashMatches.length;
+				return;
+			}
+			if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+				e.preventDefault();
+				selectSlashCommand(slashMatches[slashMenuIndex]);
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				showSlashMenu = false;
+				return;
+			}
+		}
+
+		// Mention popup keyboard navigation
+		if (showMentionPopup && mentionMatches.length > 0) {
+			if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				mentionIndex = (mentionIndex - 1 + mentionMatches.length) % mentionMatches.length;
+				return;
+			}
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				mentionIndex = (mentionIndex + 1) % mentionMatches.length;
+				return;
+			}
+			if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+				e.preventDefault();
+				selectMention(mentionMatches[mentionIndex]);
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				showMentionPopup = false;
+				return;
+			}
+		}
+
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			send();
 		} else if (!NON_CHARACTER_KEYS.has(e.key)) {
 			onTyping();
 		}
+	}
+
+	function selectSlashCommand(cmd: SlashCommand) {
+		value = `/${cmd.name} `;
+		showSlashMenu = false;
+		textarea?.focus();
+	}
+
+	function selectMention(user: MentionUser) {
+		// Replace from mentionStart to cursor with @name
+		const before = value.slice(0, mentionStart);
+		const after = value.slice(textarea?.selectionStart ?? value.length);
+		value = `${before}@${user.name} ${after}`;
+		showMentionPopup = false;
+		textarea?.focus();
 	}
 
 	function resize() {
@@ -62,11 +161,46 @@
 
 	function onInput() {
 		resize();
+		updatePopups();
+	}
+
+	function updatePopups() {
+		const cursorPos = textarea?.selectionStart ?? 0;
+
+		// Check for slash command at start of input
+		if (value.startsWith('/') && !value.includes('\n')) {
+			const matches = matchCommands(value, userRole);
+			slashMatches = matches;
+			slashMenuIndex = 0;
+			showSlashMenu = true;
+			showMentionPopup = false;
+			return;
+		}
+		showSlashMenu = false;
+
+		// Check for @ mention
+		if (onlineUsers && cursorPos > 0) {
+			const textBeforeCursor = value.slice(0, cursorPos);
+			const atIdx = textBeforeCursor.lastIndexOf('@');
+			if (atIdx !== -1 && (atIdx === 0 || textBeforeCursor[atIdx - 1] === ' ')) {
+				const query = textBeforeCursor.slice(atIdx + 1).toLowerCase();
+				const matches = [...onlineUsers.entries()]
+					.filter(([_, name]) => name.toLowerCase().startsWith(query))
+					.map(([id, name]) => ({ id, name }))
+					.slice(0, 8);
+				mentionMatches = matches;
+				mentionIndex = 0;
+				mentionStart = atIdx;
+				showMentionPopup = true;
+				return;
+			}
+		}
+		showMentionPopup = false;
 	}
 </script>
 
 <div
-	class="px-4 pt-2"
+	class="relative px-4 pt-2"
 	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
 >
 	{#if typingText}
@@ -74,34 +208,61 @@
 			{typingText}
 		</div>
 	{/if}
-	<div
-		class="flex items-end gap-2 rounded-lg px-3 py-2"
-		style="background: var(--bg); border: 1px solid var(--border);"
-	>
-		<textarea
-			bind:this={textarea}
-			bind:value
-			oninput={onInput}
-			onkeydown={onKeydown}
-			placeholder={m.chat_placeholder()}
-			rows="1"
-			{disabled}
-			data-testid="chat-input"
-			aria-label={m.chat_placeholder()}
-			class="flex-1 resize-none border-0 bg-transparent text-sm leading-relaxed outline-none"
-			style="color: var(--text); font-family: var(--font-sans); max-height: 144px;"
-		></textarea>
-		<button
-			onclick={send}
-			disabled={!canSend}
-			data-testid="send-button"
-			class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-			style="background: {canSend
-				? 'var(--accent)'
-				: 'var(--bg-elevated)'}; color: {canSend ? 'var(--bg)' : 'var(--text-muted)'};"
-			aria-label={m.chat_send()}
+
+	{#if replyTo}
+		<ReplyPreview
+			senderName={replyTo.senderName}
+			body={replyTo.body}
+			onCancel={() => onCancelReply?.()}
+		/>
+	{/if}
+
+	<!-- Popup container (positioned relative to input area) -->
+	<div class="relative">
+		{#if showSlashMenu}
+			<SlashMenu
+				commands={slashMatches}
+				selectedIndex={slashMenuIndex}
+				onSelect={selectSlashCommand}
+			/>
+		{/if}
+		{#if showMentionPopup}
+			<MentionPopup
+				users={mentionMatches}
+				selectedIndex={mentionIndex}
+				onSelect={selectMention}
+			/>
+		{/if}
+
+		<div
+			class="flex items-end gap-2 rounded-lg px-3 py-2"
+			style="background: var(--bg); border: 1px solid var(--border);"
 		>
-			<Send size={16} />
-		</button>
+			<textarea
+				bind:this={textarea}
+				bind:value
+				oninput={onInput}
+				onkeydown={onKeydown}
+				placeholder={m.chat_placeholder()}
+				rows="1"
+				{disabled}
+				data-testid="chat-input"
+				aria-label={m.chat_placeholder()}
+				class="flex-1 resize-none border-0 bg-transparent text-sm leading-relaxed outline-none"
+				style="color: var(--text); font-family: var(--font-sans); max-height: 144px;"
+			></textarea>
+			<button
+				onclick={send}
+				disabled={!canSend}
+				data-testid="send-button"
+				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+				style="background: {canSend
+					? 'var(--accent)'
+					: 'var(--bg-elevated)'}; color: {canSend ? 'var(--bg)' : 'var(--text-muted)'};"
+				aria-label={m.chat_send()}
+			>
+				<Send size={16} />
+			</button>
+		</div>
 	</div>
 </div>

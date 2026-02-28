@@ -9,12 +9,14 @@
 		messages,
 		systemEvents,
 		loading = false,
-		onRetry
+		onRetry,
+		onReply
 	}: {
 		messages: DisplayMessage[];
 		systemEvents: SystemEvent[];
 		loading?: boolean;
 		onRetry?: (localId: string) => void;
+		onReply?: (message: DisplayMessage) => void;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -121,7 +123,7 @@
 
 		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.data.id)}
 			{#if item.kind === 'message'}
-				<MessageBubble message={item.data} {onRetry} />
+				<MessageBubble message={item.data} {onRetry} {onReply} />
 			{:else}
 				{@const event = item.data}
 				<SystemLine

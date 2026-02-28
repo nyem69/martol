@@ -5,10 +5,12 @@
 
 	let {
 		message,
-		onRetry
+		onRetry,
+		onReply
 	}: {
 		message: DisplayMessage;
 		onRetry?: (localId: string) => void;
+		onReply?: (message: DisplayMessage) => void;
 	} = $props();
 
 	let now = $state(Date.now());
@@ -37,7 +39,7 @@
 </script>
 
 <div
-	class="flex {message.isOwn ? 'justify-end' : 'justify-start'} px-4 py-1"
+	class="group flex {message.isOwn ? 'justify-end' : 'justify-start'} px-4 py-1"
 	style:opacity={message.pending ? '0.6' : '1'}
 >
 	<div
@@ -82,6 +84,15 @@
 						{m.chat_retry()}
 					</button>
 				{/if}
+			{:else if onReply && message.dbId}
+				<button
+					class="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+					style="color: var(--text-muted);"
+					onclick={() => onReply(message)}
+					aria-label={m.chat_reply_to({ name: message.senderName })}
+				>
+					reply
+				</button>
 			{/if}
 			<time datetime={message.timestamp} class="text-[11px]" style="color: var(--text-muted);">
 				{timeStr}

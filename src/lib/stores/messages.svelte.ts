@@ -280,7 +280,7 @@ export class MessagesStore {
 
 	// ── Public API ──────────────────────────────────────────────────────
 
-	sendMessage(body: string): void {
+	sendMessage(body: string, replyTo?: number): void {
 		const localId = crypto.randomUUID().replace(/-/g, '');
 
 		const pending: DisplayMessage = {
@@ -297,7 +297,7 @@ export class MessagesStore {
 
 		this.messages.push(pending);
 
-		const sent = this.ws.send({ type: 'message', body, localId });
+		const sent = this.ws.send({ type: 'message', body, localId, ...(replyTo ? { replyTo } : {}) });
 		if (sent) {
 			this.startPendingTimer(localId);
 		} else {
