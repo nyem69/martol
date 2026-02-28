@@ -101,10 +101,15 @@
 					type="submit"
 					disabled={loading || !email.trim()}
 					data-testid="send-code-btn"
-					class="mt-4 w-full rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
+					class="mt-4 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
 					style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px;"
 				>
-					{loading ? 'Sending...' : 'Continue with email'}
+					{#if loading}
+						<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+						Sending...
+					{:else}
+						Continue with email
+					{/if}
 				</button>
 			</form>
 		{:else}
@@ -142,10 +147,15 @@
 						type="submit"
 						disabled={loading || code.length !== 6}
 						data-testid="verify-btn"
-						class="mt-4 w-full rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
+						class="mt-4 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
 						style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px;"
 					>
-						{loading ? 'Verifying...' : 'Sign in'}
+						{#if loading}
+							<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+							Verifying...
+						{:else}
+							Sign in
+						{/if}
 					</button>
 				</form>
 			</div>

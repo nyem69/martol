@@ -59,6 +59,7 @@
 	});
 
 	// Auto-scroll when new messages arrive and user is at bottom
+	// Auto-scroll when new messages arrive and user is at bottom
 	$effect(() => {
 		// Access length to track changes
 		const _len = timeline.length;
@@ -70,6 +71,12 @@
 			hasNewMessages = true;
 		}
 	});
+
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === 'End') {
+			scrollToBottom();
+		}
+	}
 </script>
 
 <div
@@ -77,9 +84,11 @@
 	style="background: var(--bg);"
 	bind:this={container}
 	onscroll={onScroll}
+	onkeydown={onKeydown}
 	role="log"
 	aria-live="polite"
 	aria-busy={loading}
+	tabindex="-1"
 >
 	<div class="flex min-h-full flex-col justify-end py-4">
 		{#if loading}
@@ -120,6 +129,7 @@
 					text={event.type === 'join'
 						? m.chat_joined({ name: event.name })
 						: m.chat_left({ name: event.name })}
+					type={event.type}
 				/>
 			{/if}
 		{/each}

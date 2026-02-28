@@ -46,10 +46,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				ok: false,
 				error: 'Invalid request',
 				code: 'validation_error',
-				details: parsed.error.issues.map((i) => ({
-					path: i.path.join('.'),
-					message: i.message
-				}))
+				details: parsed.error.issues.map((i) => i.message)
 			},
 			{ status: 400 }
 		);

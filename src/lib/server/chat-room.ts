@@ -709,6 +709,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// [C2] Only prune flushed entries; [M1] Use limit to avoid loading all into memory
 	private async pruneOldEntries(): Promise<void> {
+		// Skip expensive list if WAL is small enough — walMessageCount tracks total stored messages
+		if (this.walMessageCount <= 200) return;
+
 		const all = await this.ctx.storage.list<StoredMessage>({ prefix: 'msg:', limit: 500 });
 		if (all.size <= 200) return;
 
