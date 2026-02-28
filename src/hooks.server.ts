@@ -143,6 +143,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		'Permissions-Policy',
 		'camera=(), microphone=(), geolocation=(), interest-cohort=()'
 	);
+	response.headers.set(
+		'Strict-Transport-Security',
+		'max-age=63072000; includeSubDomains; preload'
+	);
 
 	const csp = [
 		"default-src 'self'",
@@ -150,7 +154,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
 		"img-src 'self' data: blob: https:",
 		"font-src 'self' data: https://cdn.jsdelivr.net",
-		"connect-src 'self' https: wss:",
+		"connect-src 'self' https://martol.app wss://martol.app",
 		"worker-src 'self' blob:",
 		"object-src 'none'",
 		"base-uri 'self'",

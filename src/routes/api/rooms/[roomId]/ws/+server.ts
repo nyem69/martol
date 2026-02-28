@@ -10,7 +10,20 @@ import { error } from '@sveltejs/kit';
 import { member } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
 
+// Allowed origins for WebSocket upgrade (prevents CSWSH)
+const WS_ALLOWED_ORIGINS = new Set([
+	'http://localhost:5190',
+	'http://127.0.0.1:5190',
+	'https://martol.app'
+]);
+
 export const GET: RequestHandler = async ({ params, locals, platform, request }) => {
+	// 0. Origin check — prevent cross-site WebSocket hijacking
+	const origin = request.headers.get('origin');
+	if (origin && !WS_ALLOWED_ORIGINS.has(origin)) {
+		error(403, 'Origin not allowed');
+	}
+
 	// 1. Auth check
 	const user = locals.user;
 	const session = locals.session;

@@ -8,6 +8,9 @@
 import type { ServerMessage, ServerMessagePayload } from '$lib/types/ws';
 import { WebSocketStore } from './websocket.svelte';
 
+const MAX_SYSTEM_EVENTS = 100;
+const PENDING_TIMEOUT_MS = 15_000;
+
 export interface DisplayMessage {
 	localId: string;
 	serverSeqId?: number;
@@ -18,14 +21,18 @@ export interface DisplayMessage {
 	body: string;
 	timestamp: string;
 	pending: boolean;
+	failed: boolean;
 	isOwn: boolean;
 }
 
 export interface SystemEvent {
+	id: string;
 	type: 'join' | 'leave';
 	name: string;
 	timestamp: string;
 }
+
+let systemEventCounter = 0;
 
 export class MessagesStore {
 	messages = $state<DisplayMessage[]>([]);
@@ -35,19 +42,41 @@ export class MessagesStore {
 	systemEvents = $state<SystemEvent[]>([]);
 	error = $state<string | null>(null);
 
-	ws: WebSocketStore;
+	readonly ws: WebSocketStore;
 
 	private readonly userId: string;
 	private readonly userName: string;
+	private readonly userRole: string;
 	private lastTypingSent = 0;
 	private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
+	private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-	constructor(roomId: string, userId: string, userName: string) {
+	constructor(
+		roomId: string,
+		userId: string,
+		userName: string,
+		userRole: string,
+		initialMessages?: DisplayMessage[]
+	) {
 		this.userId = userId;
 		this.userName = userName;
+		this.userRole = userRole;
 
-		this.ws = new WebSocketStore(roomId, this.lastServerSeqId, (msg) =>
-			this.handleServerMessage(msg)
+		if (initialMessages && initialMessages.length > 0) {
+			this.messages = initialMessages;
+			// Set lastServerSeqId from initial messages
+			for (const msg of initialMessages) {
+				if (msg.serverSeqId && msg.serverSeqId > this.lastServerSeqId) {
+					this.lastServerSeqId = msg.serverSeqId;
+				}
+			}
+		}
+
+		this.ws = new WebSocketStore(
+			roomId,
+			this.lastServerSeqId,
+			(msg) => this.handleServerMessage(msg),
+			() => this.retryPendingMessages()
 		);
 	}
 
@@ -86,10 +115,13 @@ export class MessagesStore {
 			body: payload.body,
 			timestamp: payload.timestamp,
 			pending: false,
+			failed: false,
 			isOwn: payload.senderId === this.userId
 		};
 
 		if (existingIdx !== -1) {
+			// Clear pending timer
+			this.clearPendingTimer(payload.localId);
 			this.messages[existingIdx] = display;
 		} else {
 			this.messages.push(display);
@@ -102,26 +134,45 @@ export class MessagesStore {
 	}
 
 	private handleHistory(payloads: ServerMessagePayload[]): void {
-		const existingIds = new Set(this.messages.map((m) => m.localId));
+		const existingByLocalId = new Map(this.messages.map((m, i) => [m.localId, i]));
 
-		const newMessages: DisplayMessage[] = payloads
-			.filter((p) => !existingIds.has(p.localId))
-			.map((p) => ({
-				localId: p.localId,
-				serverSeqId: p.serverSeqId,
-				senderId: p.senderId,
-				senderName: p.senderName,
-				senderRole: p.senderRole,
-				body: p.body,
-				timestamp: p.timestamp,
-				pending: false,
-				isOwn: p.senderId === this.userId
-			}));
+		const newMessages: DisplayMessage[] = [];
+
+		for (const p of payloads) {
+			const existingIdx = existingByLocalId.get(p.localId);
+			if (existingIdx !== undefined) {
+				// Reconcile: update pending message to confirmed state
+				const existing = this.messages[existingIdx];
+				if (existing.pending) {
+					this.clearPendingTimer(p.localId);
+					this.messages[existingIdx] = {
+						...existing,
+						serverSeqId: p.serverSeqId,
+						senderRole: p.senderRole,
+						pending: false,
+						failed: false
+					};
+				}
+			} else {
+				newMessages.push({
+					localId: p.localId,
+					serverSeqId: p.serverSeqId,
+					senderId: p.senderId,
+					senderName: p.senderName,
+					senderRole: p.senderRole,
+					body: p.body,
+					timestamp: p.timestamp,
+					pending: false,
+					failed: false,
+					isOwn: p.senderId === this.userId
+				});
+			}
+		}
 
 		if (newMessages.length > 0) {
-			// Prepend history messages (they're older), then sort by serverSeqId
+			// Merge and sort — pending messages (no serverSeqId) go to the end
 			this.messages = [...newMessages, ...this.messages].sort(
-				(a, b) => (a.serverSeqId ?? 0) - (b.serverSeqId ?? 0)
+				(a, b) => (a.serverSeqId ?? Infinity) - (b.serverSeqId ?? Infinity)
 			);
 		}
 
@@ -152,68 +203,122 @@ export class MessagesStore {
 
 			const timeout = setTimeout(() => {
 				this.typingUsers.delete(senderId);
-				// Trigger reactivity
-				this.typingUsers = new Map(this.typingUsers);
 			}, 4000);
 
 			this.typingUsers.set(senderId, { name: senderName, timeout });
-			this.typingUsers = new Map(this.typingUsers);
 		} else {
 			const existing = this.typingUsers.get(senderId);
 			if (existing) clearTimeout(existing.timeout);
 			this.typingUsers.delete(senderId);
-			this.typingUsers = new Map(this.typingUsers);
 		}
 	}
 
 	private handlePresence(senderId: string, senderName: string, status: 'online' | 'offline'): void {
 		if (status === 'online') {
 			this.onlineUsers.set(senderId, senderName);
-			this.onlineUsers = new Map(this.onlineUsers);
-			this.systemEvents.push({
-				type: 'join',
-				name: senderName,
-				timestamp: new Date().toISOString()
-			});
+			this.addSystemEvent('join', senderName);
 		} else {
 			this.onlineUsers.delete(senderId);
-			this.onlineUsers = new Map(this.onlineUsers);
 			// Clear typing state on disconnect
 			const existing = this.typingUsers.get(senderId);
 			if (existing) {
 				clearTimeout(existing.timeout);
 				this.typingUsers.delete(senderId);
-				this.typingUsers = new Map(this.typingUsers);
 			}
-			this.systemEvents.push({
-				type: 'leave',
-				name: senderName,
-				timestamp: new Date().toISOString()
-			});
+			this.addSystemEvent('leave', senderName);
+		}
+	}
+
+	private addSystemEvent(type: 'join' | 'leave', name: string): void {
+		this.systemEvents.push({
+			id: `sys-${++systemEventCounter}`,
+			type,
+			name,
+			timestamp: new Date().toISOString()
+		});
+		// Cap to prevent unbounded growth
+		if (this.systemEvents.length > MAX_SYSTEM_EVENTS) {
+			this.systemEvents = this.systemEvents.slice(-MAX_SYSTEM_EVENTS);
+		}
+	}
+
+	// ── Pending message management ──────────────────────────────────────
+
+	private startPendingTimer(localId: string): void {
+		const timer = setTimeout(() => {
+			this.pendingTimers.delete(localId);
+			const msg = this.messages.find((m) => m.localId === localId);
+			if (msg && msg.pending) {
+				msg.failed = true;
+				msg.pending = false;
+			}
+		}, PENDING_TIMEOUT_MS);
+		this.pendingTimers.set(localId, timer);
+	}
+
+	private clearPendingTimer(localId: string): void {
+		const timer = this.pendingTimers.get(localId);
+		if (timer) {
+			clearTimeout(timer);
+			this.pendingTimers.delete(localId);
+		}
+	}
+
+	/** Retry pending messages after reconnection */
+	private retryPendingMessages(): void {
+		for (const msg of this.messages) {
+			if (msg.pending && !msg.failed && msg.isOwn) {
+				const sent = this.ws.send({ type: 'message', body: msg.body, localId: msg.localId });
+				if (sent) {
+					// Reset the timer
+					this.clearPendingTimer(msg.localId);
+					this.startPendingTimer(msg.localId);
+				}
+			}
 		}
 	}
 
 	// ── Public API ──────────────────────────────────────────────────────
 
 	sendMessage(body: string): void {
-		const localId = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+		const localId = crypto.randomUUID().replace(/-/g, '');
 
 		const pending: DisplayMessage = {
 			localId,
 			senderId: this.userId,
 			senderName: this.userName,
-			senderRole: 'member',
+			senderRole: this.userRole,
 			body,
 			timestamp: new Date().toISOString(),
 			pending: true,
+			failed: false,
 			isOwn: true
 		};
 
 		this.messages.push(pending);
-		this.ws.send({ type: 'message', body, localId });
+
+		const sent = this.ws.send({ type: 'message', body, localId });
+		if (sent) {
+			this.startPendingTimer(localId);
+		} else {
+			// Will be retried on reconnect
+		}
 
 		// Clear typing state after sending
 		this.sendTypingInactive();
+	}
+
+	/** Retry a failed message */
+	retrySend(localId: string): void {
+		const msg = this.messages.find((m) => m.localId === localId);
+		if (!msg || !msg.failed) return;
+
+		msg.failed = false;
+		msg.pending = true;
+		const sent = this.ws.send({ type: 'message', body: msg.body, localId: msg.localId });
+		if (sent) {
+			this.startPendingTimer(localId);
+		}
 	}
 
 	/** Call on keydown in input — throttled to once per 2s */
@@ -240,9 +345,7 @@ export class MessagesStore {
 		}
 	}
 
-	get typingNames(): string[] {
-		return [...this.typingUsers.values()].map((t) => t.name).sort();
-	}
+	typingNames = $derived([...this.typingUsers.values()].map((t) => t.name).sort());
 
 	connect(): void {
 		this.ws.connect();
@@ -254,6 +357,11 @@ export class MessagesStore {
 		for (const entry of this.typingUsers.values()) {
 			clearTimeout(entry.timeout);
 		}
+		// Clear all pending timers
+		for (const timer of this.pendingTimers.values()) {
+			clearTimeout(timer);
+		}
+		this.pendingTimers.clear();
 		if (this.typingIdleTimer) {
 			clearTimeout(this.typingIdleTimer);
 			this.typingIdleTimer = null;

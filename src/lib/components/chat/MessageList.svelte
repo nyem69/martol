@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { DisplayMessage, SystemEvent } from '$lib/stores/messages.svelte';
 	import * as m from '$lib/paraglide/messages';
 	import MessageBubble from './MessageBubble.svelte';
@@ -6,10 +7,14 @@
 
 	let {
 		messages,
-		systemEvents
+		systemEvents,
+		loading = false,
+		onRetry
 	}: {
 		messages: DisplayMessage[];
 		systemEvents: SystemEvent[];
+		loading?: boolean;
+		onRetry?: (localId: string) => void;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -51,8 +56,9 @@
 	$effect(() => {
 		// Access length to track changes
 		const _len = timeline.length;
-		if (isAtBottom) {
-			// Use tick-like microtask to scroll after DOM update
+		// Read isAtBottom without tracking to avoid re-triggering on scroll
+		const atBottom = untrack(() => isAtBottom);
+		if (atBottom) {
 			queueMicrotask(() => scrollToBottom());
 		} else {
 			hasNewMessages = true;
@@ -65,11 +71,36 @@
 	style="background: var(--bg);"
 	bind:this={container}
 	onscroll={onScroll}
+	role="log"
+	aria-live="polite"
 >
 	<div class="flex min-h-full flex-col justify-end py-4">
-		{#each timeline as item (item.kind === 'message' ? item.data.localId : `sys-${item.data.timestamp}`)}
+		{#if loading}
+			<div class="flex flex-col gap-3 px-4 py-2" aria-label={m.chat_loading()}>
+				{#each { length: 4 } as _}
+					<div class="flex gap-2">
+						<div
+							class="h-8 w-8 shrink-0 animate-pulse rounded-full"
+							style="background: var(--bg-elevated);"
+						></div>
+						<div class="flex-1 space-y-1.5">
+							<div
+								class="h-3 w-24 animate-pulse rounded"
+								style="background: var(--bg-elevated);"
+							></div>
+							<div
+								class="h-4 w-48 animate-pulse rounded"
+								style="background: var(--bg-elevated);"
+							></div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.data.id)}
 			{#if item.kind === 'message'}
-				<MessageBubble message={item.data} />
+				<MessageBubble message={item.data} {onRetry} />
 			{:else}
 				{@const event = item.data}
 				<SystemLine
@@ -86,6 +117,7 @@
 			class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg"
 			style="background: var(--accent); color: var(--bg);"
 			onclick={scrollToBottom}
+			aria-label={m.chat_new_messages()}
 		>
 			{m.chat_new_messages()}
 		</button>

@@ -36,11 +36,19 @@
 		resize();
 	}
 
+	// Keys that should not trigger typing indicator
+	const NON_CHARACTER_KEYS = new Set([
+		'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab',
+		'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+		'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete',
+		'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+	]);
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			send();
-		} else {
+		} else if (!NON_CHARACTER_KEYS.has(e.key)) {
 			onTyping();
 		}
 	}
@@ -62,7 +70,7 @@
 	style="background: var(--bg-surface); border-top: 1px solid var(--border);"
 >
 	{#if typingText}
-		<div class="mb-1.5 text-xs" style="color: var(--text-muted);">
+		<div class="mb-1.5 text-xs" style="color: var(--text-muted);" aria-live="polite">
 			{typingText}
 		</div>
 	{/if}
@@ -79,6 +87,7 @@
 			rows="1"
 			{disabled}
 			data-testid="chat-input"
+			aria-label={m.chat_placeholder()}
 			class="flex-1 resize-none border-0 bg-transparent text-sm leading-relaxed outline-none"
 			style="color: var(--text); font-family: var(--font-sans); max-height: 144px;"
 		></textarea>

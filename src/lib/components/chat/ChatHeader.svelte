@@ -20,10 +20,11 @@
 			{roomName}
 		</span>
 	</div>
-	<div class="flex items-center gap-1.5">
+	<div class="flex items-center gap-1.5" aria-live="polite">
 		<span
 			class="inline-block h-2 w-2 rounded-full"
 			style="background: var(--success);"
+			aria-hidden="true"
 		></span>
 		<span class="text-xs" style="color: var(--text-muted);">
 			{m.chat_online({ count: String(onlineCount) })}

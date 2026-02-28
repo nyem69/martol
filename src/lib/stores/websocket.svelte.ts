@@ -7,7 +7,9 @@
 
 import type { ClientMessage, ServerMessage } from '$lib/types/ws';
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed';
+export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'failed';
+
+const MAX_RECONNECT_ATTEMPTS = 20;
 
 export class WebSocketStore {
 	status = $state<ConnectionStatus>('connecting');
@@ -18,25 +20,36 @@ export class WebSocketStore {
 	private readonly roomId: string;
 	private lastKnownId: number;
 	private readonly onMessage: (msg: ServerMessage) => void;
+	private readonly onReconnected: (() => void) | null;
 
-	constructor(roomId: string, lastKnownId: number, onMessage: (msg: ServerMessage) => void) {
+	constructor(
+		roomId: string,
+		lastKnownId: number,
+		onMessage: (msg: ServerMessage) => void,
+		onReconnected?: () => void
+	) {
 		this.roomId = roomId;
 		this.lastKnownId = lastKnownId;
 		this.onMessage = onMessage;
+		this.onReconnected = onReconnected ?? null;
 	}
 
 	connect(): void {
-		if (this.status === 'closed') return;
+		if (this.status === 'closed' || this.status === 'failed') return;
 
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const url = `${protocol}//${window.location.host}/api/rooms/${this.roomId}/ws?lastKnownId=${this.lastKnownId}`;
+		const url = `${protocol}//${window.location.host}/api/rooms/${encodeURIComponent(this.roomId)}/ws?lastKnownId=${this.lastKnownId}`;
 
 		this.ws = new WebSocket(url);
 		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
 
 		this.ws.onopen = () => {
+			const wasReconnect = this.reconnectAttempt > 0;
 			this.status = 'connected';
 			this.reconnectAttempt = 0;
+			if (wasReconnect && this.onReconnected) {
+				this.onReconnected();
+			}
 		};
 
 		this.ws.onmessage = (event) => {
@@ -49,7 +62,7 @@ export class WebSocketStore {
 		};
 
 		this.ws.onclose = () => {
-			if (this.status === 'closed') return;
+			if (this.status === 'closed' || this.status === 'failed') return;
 			this.scheduleReconnect();
 		};
 
@@ -58,10 +71,13 @@ export class WebSocketStore {
 		};
 	}
 
-	send(msg: ClientMessage): void {
+	/** Send a message. Returns true if sent, false if dropped. */
+	send(msg: ClientMessage): boolean {
 		if (this.ws?.readyState === WebSocket.OPEN) {
 			this.ws.send(JSON.stringify(msg));
+			return true;
 		}
+		return false;
 	}
 
 	/** Update the lastKnownId for reconnection delta sync */
@@ -86,6 +102,11 @@ export class WebSocketStore {
 	}
 
 	private scheduleReconnect(): void {
+		if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+			this.status = 'failed';
+			return;
+		}
+
 		this.status = 'reconnecting';
 		this.reconnectAttempt++;
 

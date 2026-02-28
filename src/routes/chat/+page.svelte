@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { MessagesStore } from '$lib/stores/messages.svelte';
+	import { onMount } from 'svelte';
+	import { MessagesStore, type DisplayMessage } from '$lib/stores/messages.svelte';
 	import ConnectionBanner from '$lib/components/chat/ConnectionBanner.svelte';
 	import ChatHeader from '$lib/components/chat/ChatHeader.svelte';
 	import MessageList from '$lib/components/chat/MessageList.svelte';
@@ -8,10 +9,25 @@
 	let { data } = $props();
 
 	// These values are stable for the page lifetime (from server load)
-	const { roomId, userId, userName } = data;
-	const store = new MessagesStore(roomId, userId, userName);
+	const { roomId, userId, userName, userRole, roomName, initialMessages } = data;
 
-	$effect(() => {
+	// Convert DB messages to DisplayMessage format
+	const dbMessages: DisplayMessage[] = initialMessages.map((msg) => ({
+		localId: `db-${msg.dbId}`,
+		dbId: msg.dbId,
+		senderId: msg.senderId,
+		senderName: msg.senderId === userId ? userName : msg.senderId,
+		senderRole: msg.senderRole,
+		body: msg.body,
+		timestamp: msg.createdAt,
+		pending: false,
+		failed: false,
+		isOwn: msg.senderId === userId
+	}));
+
+	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages);
+
+	onMount(() => {
 		store.connect();
 		return () => store.disconnect();
 	});
@@ -21,11 +37,16 @@
 	<title>Chat — Martol</title>
 </svelte:head>
 
-<div class="flex h-dvh flex-col">
+<main class="flex h-dvh flex-col">
 	<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
-	<ChatHeader roomName="Chat" onlineCount={store.onlineUsers.size} />
+	<ChatHeader roomName={roomName} onlineCount={store.onlineUsers.size} />
 
-	<MessageList messages={store.messages} systemEvents={store.systemEvents} />
+	<MessageList
+		messages={store.messages}
+		systemEvents={store.systemEvents}
+		loading={store.ws.status === 'connecting'}
+		onRetry={(localId) => store.retrySend(localId)}
+	/>
 
 	<ChatInput
 		onSend={(body) => store.sendMessage(body)}
@@ -33,4 +54,20 @@
 		disabled={store.ws.status !== 'connected'}
 		typingNames={store.typingNames}
 	/>
-</div>
+
+	{#if store.error}
+		<div
+			class="absolute bottom-20 left-1/2 z-20 -translate-x-1/2 rounded-lg px-4 py-2 text-xs shadow-lg"
+			style="background: var(--danger); color: var(--text);"
+			role="alert"
+		>
+			{store.error}
+			<button
+				class="ml-2 underline"
+				onclick={() => (store.error = null)}
+			>
+				dismiss
+			</button>
+		</div>
+	{/if}
+</main>

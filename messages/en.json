@@ -33,5 +33,10 @@
   "chat_left": "{name} left",
   "chat_no_org": "No organization found",
   "chat_new_messages": "New messages",
-  "chat_error_send": "Failed to send message"
+  "chat_error_send": "Failed to send message",
+  "chat_retry": "Retry",
+  "chat_failed": "Failed to send",
+  "chat_connection_closed": "Connection closed",
+  "chat_connection_failed": "Connection failed — please refresh",
+  "chat_loading": "Loading messages..."
 }

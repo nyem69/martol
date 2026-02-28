@@ -1,14 +1,31 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { DisplayMessage } from '$lib/stores/messages.svelte';
 	import { renderMarkdown } from '$lib/utils/markdown';
+	import * as m from '$lib/paraglide/messages';
 
-	let { message }: { message: DisplayMessage } = $props();
+	let {
+		message,
+		onRetry
+	}: {
+		message: DisplayMessage;
+		onRetry?: (localId: string) => void;
+	} = $props();
 
-	const timeStr = $derived(formatRelativeTime(message.timestamp));
+	let now = $state(Date.now());
+	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
 	const htmlBody = $derived(renderMarkdown(message.body));
 
-	function formatRelativeTime(iso: string): string {
-		const diff = Date.now() - new Date(iso).getTime();
+	// Tick every 30s to keep relative timestamps fresh
+	onMount(() => {
+		const interval = setInterval(() => {
+			now = Date.now();
+		}, 30_000);
+		return () => clearInterval(interval);
+	});
+
+	function formatRelativeTime(iso: string, _now: number): string {
+		const diff = _now - new Date(iso).getTime();
 		const seconds = Math.floor(diff / 1000);
 		if (seconds < 60) return 'now';
 		const minutes = Math.floor(seconds / 60);
@@ -28,7 +45,9 @@
 		class="max-w-[80%] rounded-lg px-3 py-2"
 		style="background: {message.isOwn
 			? 'var(--accent-muted)'
-			: 'var(--bg-surface)'}; border: 1px solid var(--border-subtle);"
+			: 'var(--bg-surface)'}; border: 1px solid {message.failed
+			? 'var(--danger)'
+			: 'var(--border-subtle)'};"
 	>
 		{#if !message.isOwn}
 			<div class="mb-1 flex items-center gap-2">
@@ -46,7 +65,21 @@
 		<article class="prose text-sm" style="color: var(--text);">
 			{@html htmlBody}
 		</article>
-		<div class="mt-1 text-right">
+		<div class="mt-1 flex items-center justify-end gap-2">
+			{#if message.failed}
+				<span class="text-[10px]" style="color: var(--danger);">
+					{m.chat_failed()}
+				</span>
+				{#if onRetry}
+					<button
+						class="text-[10px] underline"
+						style="color: var(--danger);"
+						onclick={() => onRetry(message.localId)}
+					>
+						{m.chat_retry()}
+					</button>
+				{/if}
+			{/if}
 			<span class="text-[10px]" style="color: var(--text-muted);">
 				{timeStr}
 			</span>
