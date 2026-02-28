@@ -92,6 +92,7 @@
 	}
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions — role="log" with tabindex is a focusable scrollable region; onkeydown for End key is standard a11y -->
 <div
 	class="relative flex-1 overflow-y-auto"
 	style="background: var(--bg);"
