@@ -60,7 +60,7 @@ new_classes = ["ChatRoom"]
 ENVIRONMENT = "production"
 APP_BASE_URL = "https://martol.plitix.com"
 
-EMAIL_FROM="noreply@martol.app"
+EMAIL_FROM="noreply@roadasset.co"
 EMAIL_NAME="Martol"
 
 [triggers]

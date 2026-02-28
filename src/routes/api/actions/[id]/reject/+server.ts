@@ -23,9 +23,15 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		error(400, 'Invalid action ID');
 	}
 
-	const orgId = locals.session.activeOrganizationId;
+	let orgId = locals.session.activeOrganizationId;
 	if (!orgId) {
-		error(400, 'No active organization');
+		const [firstMembership] = await locals.db
+			.select({ orgId: member.organizationId })
+			.from(member)
+			.where(eq(member.userId, locals.user.id))
+			.limit(1);
+		if (!firstMembership) error(400, 'No active organization');
+		orgId = firstMembership.orgId;
 	}
 
 	// Verify membership and role

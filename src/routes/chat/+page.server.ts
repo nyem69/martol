@@ -1,5 +1,6 @@
 import { redirect, error } from '@sveltejs/kit';
-import { user, member, organization } from '$lib/server/db/auth-schema';
+import { generateId } from 'better-auth';
+import { user, member, organization, session as sessionTable } from '$lib/server/db/auth-schema';
 import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -28,8 +29,8 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 			roomId = firstMembership.orgId;
 		} else {
 			// First-time user: auto-create a default room (organization)
-			const orgId = crypto.randomUUID();
-			const memberId = crypto.randomUUID();
+			const orgId = generateId();
+			const memberId = generateId();
 			const now = new Date();
 			const userName = locals.user.name || locals.user.email?.split('@')[0] || 'User';
 			const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
@@ -62,6 +63,15 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 
 	if (memberRecord) {
 		userRole = memberRecord.role;
+	}
+
+	// Ensure activeOrganizationId is set on the session (fixes actions/WS after org auto-creation)
+	if (locals.session.activeOrganizationId !== roomId) {
+		await db
+			.update(sessionTable)
+			.set({ activeOrganizationId: roomId })
+			.where(eq(sessionTable.id, locals.session.id));
+		locals.session.activeOrganizationId = roomId;
 	}
 
 	// Get org name for header

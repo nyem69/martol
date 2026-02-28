@@ -19,9 +19,16 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		error(503, 'Database unavailable');
 	}
 
-	const orgId = locals.session.activeOrganizationId;
+	let orgId = locals.session.activeOrganizationId;
 	if (!orgId) {
-		error(400, 'No active organization');
+		// Fallback: resolve from first membership
+		const [firstMembership] = await locals.db
+			.select({ orgId: member.organizationId })
+			.from(member)
+			.where(eq(member.userId, locals.user.id))
+			.limit(1);
+		if (!firstMembership) error(400, 'No active organization');
+		orgId = firstMembership.orgId;
 	}
 
 	// Verify membership and role
