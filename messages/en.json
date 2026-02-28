@@ -111,5 +111,13 @@
   "agent_setup_model": "Model override (optional)",
   "agent_setup_label": "Agent label for @mentions",
   "agent_setup_repo": "Repository",
-  "agent_setup_copied": "Copied!"
+  "agent_setup_copied": "Copied!",
+  "legal_title": "Legal",
+  "legal_terms": "Terms of Service",
+  "legal_privacy": "Privacy Policy",
+  "legal_anthropic_terms": "Anthropic Usage Policy",
+  "legal_anthropic_privacy": "Anthropic Privacy Policy",
+  "login_agree_prefix": "By signing in, you agree to the",
+  "login_agree_and": "and",
+  "login_agree_required": "You must agree to the terms to continue"
 }

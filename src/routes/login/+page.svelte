@@ -9,6 +9,7 @@
 	let step = $state<'email' | 'code'>('email');
 	let loading = $state(false);
 	let error = $state('');
+	let agreedToTerms = $state(false);
 
 	async function handleSendOtp() {
 		if (!email.trim()) return;
@@ -98,11 +99,29 @@
 					class="w-full rounded-md px-3 py-2.5 text-sm outline-none"
 					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 				/>
+				<!-- Terms agreement -->
+				<label class="mt-4 flex cursor-pointer items-start gap-2">
+					<input
+						type="checkbox"
+						bind:checked={agreedToTerms}
+						data-testid="terms-checkbox"
+						class="mt-0.5 shrink-0 rounded"
+						style="accent-color: var(--accent);"
+					/>
+					<span class="text-[11px] leading-tight" style="color: var(--text-muted);">
+						{m.login_agree_prefix()}
+						<a href="https://github.com/nyem69/martol/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="underline" style="color: var(--accent);">{m.legal_terms()}</a>,
+						<a href="https://github.com/nyem69/martol/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" class="underline" style="color: var(--accent);">{m.legal_privacy()}</a>,
+						{m.login_agree_and()}
+						<a href="https://www.anthropic.com/legal/aup" target="_blank" rel="noopener noreferrer" class="underline" style="color: var(--accent);">{m.legal_anthropic_terms()}</a>
+					</span>
+				</label>
+
 				<button
 					type="submit"
-					disabled={loading || !email.trim()}
+					disabled={loading || !email.trim() || !agreedToTerms}
 					data-testid="send-code-btn"
-					class="mt-4 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+					class="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
 					style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px;"
 				>
 					{#if loading}

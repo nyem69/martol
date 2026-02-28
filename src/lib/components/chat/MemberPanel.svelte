@@ -24,7 +24,8 @@
 		members: true,
 		guide: false,
 		theme: false,
-		agentSetup: false
+		agentSetup: false,
+		legal: false
 	});
 
 	// Copy-to-clipboard feedback
@@ -574,6 +575,73 @@
 						>
 							<ExternalLink size={11} />
 							{m.agent_setup_repo()}
+						</a>
+					</div>
+				</div>
+			</div>
+		<!-- ═══ LEGAL SECTION ═══ -->
+		<div style="border-bottom: 1px solid var(--border);">
+			<button
+				class="section-toggle flex w-full items-center justify-between px-4 py-2.5"
+				onclick={() => toggleSection('legal')}
+				aria-expanded={sectionsOpen.legal}
+			>
+				<span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
+					{m.legal_title()}
+				</span>
+				<span
+					class="transition-transform duration-150"
+					style="color: var(--text-muted); transform: rotate({sectionsOpen.legal ? '0' : '-90'}deg);"
+				>
+					<ChevronDown size={14} />
+				</span>
+			</button>
+
+			<div
+				class="section-body"
+				style="display: grid; grid-template-rows: {sectionsOpen.legal ? '1fr' : '0fr'}; transition: grid-template-rows 200ms ease;"
+			>
+				<div style="overflow: hidden;">
+					<div class="flex flex-col gap-1.5 px-4 pb-3">
+						<a
+							href="https://github.com/nyem69/martol/blob/main/LICENSE"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={11} />
+							{m.legal_terms()}
+						</a>
+						<a
+							href="https://github.com/nyem69/martol/blob/main/PRIVACY.md"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={11} />
+							{m.legal_privacy()}
+						</a>
+						<a
+							href="https://www.anthropic.com/legal/aup"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={11} />
+							{m.legal_anthropic_terms()}
+						</a>
+						<a
+							href="https://www.anthropic.com/legal/privacy"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={11} />
+							{m.legal_anthropic_privacy()}
 						</a>
 					</div>
 				</div>
