@@ -14,6 +14,12 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		error(503, 'Service unavailable');
 	}
 
+	// Guard against oversized payloads before parsing
+	const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
+	if (contentLength > 65536) {
+		return json({ ok: false, error: 'Request too large', code: 'payload_too_large' }, { status: 413 });
+	}
+
 	const kv = platform?.env?.CACHE;
 	const authResult = await authenticateAgent(request.headers.get('x-api-key'), locals.auth, locals.db, kv);
 

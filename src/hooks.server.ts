@@ -156,7 +156,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const csp = [
 			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline'",
+			"script-src 'self' 'unsafe-inline'", // Required for SvelteKit hydration; TODO: nonce-based CSP
 			"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
 			"img-src 'self' data: blob: https:",
 			"font-src 'self' data: https://cdn.jsdelivr.net",

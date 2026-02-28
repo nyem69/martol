@@ -6,7 +6,7 @@
  * Re-generate with: npx @better-auth/cli generate
  */
 
-import { pgTable, text, boolean, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, timestamp, integer, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // ── Core tables ──────────────────────────────────────────────────────
 
@@ -72,17 +72,23 @@ export const organization = pgTable('organization', {
 	metadata: text('metadata')
 });
 
-export const member = pgTable('member', {
-	id: text('id').primaryKey(),
-	organizationId: text('organizationId')
-		.notNull()
-		.references(() => organization.id),
-	userId: text('userId')
-		.notNull()
-		.references(() => user.id),
-	role: text('role').notNull(),
-	createdAt: timestamp('createdAt').notNull()
-});
+export const member = pgTable(
+	'member',
+	{
+		id: text('id').primaryKey(),
+		organizationId: text('organizationId')
+			.notNull()
+			.references(() => organization.id),
+		userId: text('userId')
+			.notNull()
+			.references(() => user.id),
+		role: text('role').notNull(),
+		createdAt: timestamp('createdAt').notNull()
+	},
+	(table) => [
+		uniqueIndex('idx_member_org_user').on(table.organizationId, table.userId)
+	]
+);
 
 export const invitation = pgTable('invitation', {
 	id: text('id').primaryKey(),

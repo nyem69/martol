@@ -73,7 +73,12 @@ export function createAuth(
 				disableSignUp: false,
 				sendVerificationOTP: async ({ email, otp }) => {
 					if (!emailConfig.resendApiKey) {
-						console.log(`[Auth] OTP for ${email}: ${otp} (no email configured)`);
+						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
+							console.warn(`[Auth] DEV ONLY — OTP for ${email}: ${otp}`);
+						} else {
+							console.error('[Auth] RESEND_API_KEY not configured — cannot send OTP');
+							throw new Error('Email service not configured');
+						}
 						return;
 					}
 
@@ -123,7 +128,8 @@ export function createAuth(
 			'http://127.0.0.1:5190',
 			// Capacitor schemes
 			'capacitor://martol.app',
-			'https://martol.app'
+			'https://martol.app',
+			'https://martol.plitix.com'
 		]
 	});
 

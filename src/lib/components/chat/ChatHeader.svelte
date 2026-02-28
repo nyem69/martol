@@ -5,8 +5,8 @@
 </script>
 
 <header
-	class="sticky top-0 z-10 flex items-center justify-between px-4 py-3"
-	style="background: var(--bg-elevated); border-bottom: 1px solid var(--border);"
+	class="z-10 flex shrink-0 items-center justify-between px-4 py-3"
+	style="background: var(--bg-elevated); border-bottom: 1px solid var(--border); padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));"
 >
 	<div class="flex items-center gap-2">
 		<span
@@ -20,14 +20,16 @@
 			{roomName}
 		</span>
 	</div>
-	<div class="flex items-center gap-1.5" aria-live="polite">
-		<span
-			class="inline-block h-2 w-2 rounded-full"
-			style="background: var(--success);"
-			aria-hidden="true"
-		></span>
-		<span class="text-xs" style="color: var(--text-muted);">
-			{m.chat_online({ count: String(onlineCount) })}
-		</span>
-	</div>
+	{#if onlineCount > 0}
+		<div class="flex items-center gap-1.5" aria-live="polite">
+			<span
+				class="inline-block h-2 w-2 rounded-full"
+				style="background: var(--success);"
+				aria-hidden="true"
+			></span>
+			<span class="text-xs" style="color: var(--text-muted);">
+				{m.chat_online({ count: String(onlineCount) })}
+			</span>
+		</div>
+	{/if}
 </header>

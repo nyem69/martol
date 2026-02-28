@@ -47,27 +47,40 @@ export const messages = pgTable(
 /**
  * Attachments — files uploaded with messages, stored in R2
  */
-export const attachments = pgTable('attachments', {
-	id: bigserial('id', { mode: 'number' }).primaryKey(),
-	messageId: bigint('message_id', { mode: 'number' }).notNull(),
-	orgId: text('org_id').notNull(),
-	filename: text('filename').notNull(),
-	r2Key: text('r2_key').notNull(),
-	contentType: text('content_type'),
-	sizeBytes: bigint('size_bytes', { mode: 'number' }),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const attachments = pgTable(
+	'attachments',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		messageId: bigint('message_id', { mode: 'number' }).notNull(),
+		orgId: text('org_id').notNull(),
+		filename: text('filename').notNull(),
+		r2Key: text('r2_key').notNull(),
+		contentType: text('content_type'),
+		sizeBytes: bigint('size_bytes', { mode: 'number' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_attachments_message_id').on(table.messageId),
+		index('idx_attachments_org_message').on(table.orgId, table.messageId)
+	]
+);
 
 /**
  * Todos — pinned messages as actionable items
  */
-export const todos = pgTable('todos', {
-	id: bigserial('id', { mode: 'number' }).primaryKey(),
-	messageId: bigint('message_id', { mode: 'number' }).notNull(),
-	orgId: text('org_id').notNull(),
-	status: text('status').notNull().default('todo').$type<'todo' | 'done'>(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const todos = pgTable(
+	'todos',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		messageId: bigint('message_id', { mode: 'number' }).notNull(),
+		orgId: text('org_id').notNull(),
+		status: text('status').notNull().default('todo').$type<'todo' | 'done'>(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_todos_org_status').on(table.orgId, table.status)
+	]
+);
 
 /**
  * Agent Room Bindings — links agent synthetic users to rooms (organizations)

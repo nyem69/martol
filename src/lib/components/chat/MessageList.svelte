@@ -96,6 +96,12 @@
 					</div>
 				{/each}
 			</div>
+		{:else if timeline.length === 0}
+			<div class="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+				<p class="text-sm" style="color: var(--text-muted);">
+					No messages yet. Start the conversation.
+				</p>
+			</div>
 		{/if}
 
 		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.data.id)}

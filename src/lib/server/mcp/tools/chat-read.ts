@@ -1,4 +1,4 @@
-import { eq, and, gt, desc, isNull, inArray } from 'drizzle-orm';
+import { eq, and, gt, desc, isNull, inArray, sql } from 'drizzle-orm';
 import { messages, agentCursors } from '$lib/server/db/schema';
 import { user } from '$lib/server/db/auth-schema';
 import type { AgentContext } from '../auth';
@@ -48,7 +48,11 @@ async function upsertCursor(db: any, orgId: string, agentUserId: string, lastRea
 		})
 		.onConflictDoUpdate({
 			target: [agentCursors.orgId, agentCursors.agentUserId],
-			set: { lastReadId, updatedAt: new Date() }
+			set: {
+				// Only advance cursor forward — prevents race condition on concurrent reads
+				lastReadId: sql`GREATEST(${agentCursors.lastReadId}, ${lastReadId})`,
+				updatedAt: new Date()
+			}
 		});
 }
 

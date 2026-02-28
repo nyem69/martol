@@ -20,9 +20,9 @@ const WS_ALLOWED_ORIGINS = new Set([
 ]);
 
 export const GET: RequestHandler = async ({ params, locals, platform, request }) => {
-	// 0. Origin check — prevent cross-site WebSocket hijacking
+	// 0. Origin check — prevent cross-site WebSocket hijacking (CSWSH)
 	const origin = request.headers.get('origin');
-	if (origin && !WS_ALLOWED_ORIGINS.has(origin)) {
+	if (!origin || !WS_ALLOWED_ORIGINS.has(origin)) {
 		error(403, 'Origin not allowed');
 	}
 

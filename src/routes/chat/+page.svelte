@@ -57,7 +57,7 @@
 
 	{#if store.error}
 		<div
-			class="absolute bottom-20 left-1/2 z-20 -translate-x-1/2 rounded-lg px-4 py-2 text-xs shadow-lg"
+			class="absolute top-16 left-1/2 z-20 -translate-x-1/2 rounded-lg px-4 py-2 text-xs shadow-lg"
 			style="background: var(--danger); color: var(--text);"
 			role="alert"
 		>
@@ -65,8 +65,9 @@
 			<button
 				class="ml-2 underline"
 				onclick={() => (store.error = null)}
+				aria-label="Dismiss error"
 			>
-				dismiss
+				Dismiss
 			</button>
 		</div>
 	{/if}

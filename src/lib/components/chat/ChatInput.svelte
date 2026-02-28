@@ -66,8 +66,8 @@
 </script>
 
 <div
-	class="px-4 pb-3 pt-2"
-	style="background: var(--bg-surface); border-top: 1px solid var(--border);"
+	class="px-4 pt-2"
+	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
 >
 	{#if typingText}
 		<div class="mb-1.5 text-xs" style="color: var(--text-muted);" aria-live="polite">
@@ -95,7 +95,7 @@
 			onclick={send}
 			disabled={!canSend}
 			data-testid="send-button"
-			class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-opacity"
+			class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
 			style="background: {canSend
 				? 'var(--accent)'
 				: 'var(--bg-elevated)'}; color: {canSend ? 'var(--bg)' : 'var(--text-muted)'};"
