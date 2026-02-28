@@ -217,5 +217,6 @@
 		open={memberPanelOpen}
 		onClose={() => (memberPanelOpen = false)}
 		onlineUsers={store.onlineUsers}
+		{userRole}
 	/>
 </main>
