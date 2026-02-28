@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import { user, member, organization } from '$lib/server/db/auth-schema';
-import { messages as messagesTable } from '$lib/server/db/schema';
-import { eq, and, desc, isNull, inArray } from 'drizzle-orm';
+import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
+import { eq, and, desc, isNull, inArray, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -82,6 +82,26 @@ export const load: PageServerLoad = async ({ locals }) => {
 		body: msg.body,
 		createdAt: msg.createdAt.toISOString()
 	}));
+
+	// Update read cursor to latest loaded message (non-blocking)
+	if (initialMessages.length > 0) {
+		const latestId = initialMessages[initialMessages.length - 1].dbId;
+		db.insert(readCursors)
+			.values({
+				orgId: roomId,
+				userId: locals.user.id,
+				lastReadMessageId: latestId,
+				updatedAt: new Date()
+			})
+			.onConflictDoUpdate({
+				target: [readCursors.orgId, readCursors.userId],
+				set: {
+					lastReadMessageId: sql`GREATEST(${readCursors.lastReadMessageId}, ${latestId})`,
+					updatedAt: new Date()
+				}
+			})
+			.catch((err: unknown) => console.error('[Chat] Read cursor update failed:', err));
+	}
 
 	return {
 		roomId,

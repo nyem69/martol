@@ -15,7 +15,8 @@ import type {
 	ErrorCode
 } from '../types/ws';
 import { createHyperdriveDb } from './db/hyperdrive';
-import { messages as messagesTable } from './db/schema';
+import { messages as messagesTable, readCursors, pendingActions } from './db/schema';
+import { eq, and, sql } from 'drizzle-orm';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -193,6 +194,10 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				this.handleTyping(ws, msg.active);
 				break;
 			case 'read':
+				await this.handleReadCursor(ws, msg.lastReadId);
+				break;
+			case 'command':
+				await this.handleCommand(ws, msg.name, msg.args);
 				break;
 			default:
 				this.sendError(ws, 'invalid_message', 'Unknown message type');
@@ -654,6 +659,294 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			{ type: 'typing', senderId: userId, senderName: name, active },
 			ws
 		);
+	}
+
+	// ── Read Cursor ──────────────────────────────────────────────────
+
+	private async handleReadCursor(ws: WebSocket, lastReadId: number): Promise<void> {
+		if (typeof lastReadId !== 'number' || !Number.isInteger(lastReadId) || lastReadId <= 0) {
+			return; // Silently ignore invalid read cursors
+		}
+
+		const tags = this.ctx.getTags(ws);
+		const userId = this.extractTag(tags, 'user:');
+		const orgId = this.extractTag(tags, 'org:');
+
+		if (!userId || !orgId) return;
+
+		// Persist to DB — use GREATEST to prevent backward cursor movement
+		try {
+			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
+			await connectPromise;
+			try {
+				await db
+					.insert(readCursors)
+					.values({
+						orgId,
+						userId,
+						lastReadMessageId: lastReadId,
+						updatedAt: new Date()
+					})
+					.onConflictDoUpdate({
+						target: [readCursors.orgId, readCursors.userId],
+						set: {
+							lastReadMessageId: sql`GREATEST(${readCursors.lastReadMessageId}, ${lastReadId})`,
+							updatedAt: new Date()
+						}
+					});
+			} finally {
+				try { await client.end(); } catch { /* already closed */ }
+			}
+		} catch (err) {
+			console.error('[ChatRoom] Read cursor update failed:', err);
+		}
+	}
+
+	// ── Command Handling ─────────────────────────────────────────────
+
+	private async handleCommand(ws: WebSocket, name: string, args: string): Promise<void> {
+		const tags = this.ctx.getTags(ws);
+		const userId = this.extractTag(tags, 'user:');
+		const role = this.extractTag(tags, 'role:');
+		const userName = this.extractTag(tags, 'name:');
+		const orgId = this.extractTag(tags, 'org:');
+
+		if (!userId || !role) {
+			this.sendError(ws, 'unauthorized', 'Missing user identity');
+			return;
+		}
+
+		switch (name) {
+			case 'clear':
+				if (role !== 'owner') {
+					this.sendError(ws, 'unauthorized', 'Only owner can clear messages');
+					return;
+				}
+				// Broadcast clear event to all clients
+				this.broadcast({ type: 'error', code: 'internal', message: 'Room cleared by owner' });
+				break;
+
+			case 'approve':
+			case 'reject': {
+				if (role !== 'owner' && role !== 'lead') {
+					this.sendError(ws, 'unauthorized', `Only owner or lead can ${name} actions`);
+					return;
+				}
+				const actionId = parseInt(args.trim(), 10);
+				if (isNaN(actionId) || actionId <= 0) {
+					this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
+					return;
+				}
+				await this.handleActionApproval(ws, orgId, userId, role, actionId, name);
+				break;
+			}
+
+			case 'actions': {
+				if (role !== 'owner' && role !== 'lead') {
+					this.sendError(ws, 'unauthorized', 'Only owner or lead can list actions');
+					return;
+				}
+				await this.handleListActions(ws, orgId);
+				break;
+			}
+
+			case 'continue':
+				if (role !== 'owner' && role !== 'lead') {
+					this.sendError(ws, 'unauthorized', 'Only owner or lead can resume');
+					return;
+				}
+				// Loop guard resume — broadcast a system message
+				this.broadcast({
+					type: 'message',
+					message: {
+						localId: `sys-${Date.now()}`,
+						serverSeqId: 0,
+						senderId: 'system',
+						senderRole: 'system',
+						senderName: 'System',
+						body: `${userName} resumed the loop guard`,
+						timestamp: new Date().toISOString()
+					}
+				});
+				break;
+
+			case 'whois': {
+				const target = args.trim();
+				if (!target) {
+					this.sendError(ws, 'invalid_message', 'Usage: /whois <name>');
+					return;
+				}
+				// Find online user matching the name
+				const sockets = this.ctx.getWebSockets();
+				let found = false;
+				for (const s of sockets) {
+					const sTags = this.ctx.getTags(s);
+					const sName = this.extractTag(sTags, 'name:');
+					if (sName.toLowerCase() === target.toLowerCase()) {
+						const sRole = this.extractTag(sTags, 'role:');
+						const sId = this.extractTag(sTags, 'user:');
+						this.safeSend(ws, {
+							type: 'message',
+							message: {
+								localId: `sys-${Date.now()}`,
+								serverSeqId: 0,
+								senderId: 'system',
+								senderRole: 'system',
+								senderName: 'System',
+								body: `${sName} — role: ${sRole}, id: ${sId}`,
+								timestamp: new Date().toISOString()
+							}
+						});
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					this.safeSend(ws, {
+						type: 'message',
+						message: {
+							localId: `sys-${Date.now()}`,
+							serverSeqId: 0,
+							senderId: 'system',
+							senderRole: 'system',
+							senderName: 'System',
+							body: `User "${target}" not found online`,
+							timestamp: new Date().toISOString()
+						}
+					});
+				}
+				break;
+			}
+
+			default:
+				this.sendError(ws, 'invalid_message', `Unknown command: /${name}`);
+		}
+	}
+
+	private async handleActionApproval(
+		ws: WebSocket,
+		orgId: string,
+		userId: string,
+		role: string,
+		actionId: number,
+		action: 'approve' | 'reject'
+	): Promise<void> {
+		try {
+			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
+			await connectPromise;
+			try {
+				const [existing] = await db
+					.select({
+						id: pendingActions.id,
+						status: pendingActions.status,
+						riskLevel: pendingActions.riskLevel
+					})
+					.from(pendingActions)
+					.where(and(eq(pendingActions.id, actionId), eq(pendingActions.orgId, orgId)))
+					.limit(1);
+
+				if (!existing) {
+					this.sendError(ws, 'invalid_message', `Action #${actionId} not found`);
+					return;
+				}
+				if (existing.status !== 'pending') {
+					this.sendError(ws, 'invalid_message', `Action #${actionId} already ${existing.status}`);
+					return;
+				}
+				if (action === 'approve' && role === 'lead' && existing.riskLevel === 'high') {
+					this.sendError(ws, 'unauthorized', 'Only owner can approve high-risk actions');
+					return;
+				}
+
+				const newStatus = action === 'approve' ? 'approved' : 'rejected';
+				await db
+					.update(pendingActions)
+					.set({
+						status: newStatus,
+						...(action === 'approve'
+							? { approvedBy: userId, approvedAt: new Date() }
+							: {})
+					})
+					.where(eq(pendingActions.id, actionId));
+
+				// Broadcast the status change to all connected clients
+				this.broadcast({
+					type: 'message',
+					message: {
+						localId: `sys-${Date.now()}`,
+						serverSeqId: 0,
+						senderId: 'system',
+						senderRole: 'system',
+						senderName: 'System',
+						body: `Action #${actionId} ${newStatus}`,
+						timestamp: new Date().toISOString()
+					}
+				});
+			} finally {
+				try { await client.end(); } catch { /* already closed */ }
+			}
+		} catch (err) {
+			console.error('[ChatRoom] Action approval failed:', err);
+			this.sendError(ws, 'internal', 'Failed to process action');
+		}
+	}
+
+	private async handleListActions(ws: WebSocket, orgId: string): Promise<void> {
+		try {
+			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
+			await connectPromise;
+			try {
+				const actions = await db
+					.select({
+						id: pendingActions.id,
+						actionType: pendingActions.actionType,
+						riskLevel: pendingActions.riskLevel,
+						description: pendingActions.description,
+						requestedBy: pendingActions.requestedBy,
+						createdAt: pendingActions.createdAt
+					})
+					.from(pendingActions)
+					.where(and(eq(pendingActions.orgId, orgId), eq(pendingActions.status, 'pending')))
+					.limit(20);
+
+				if (actions.length === 0) {
+					this.safeSend(ws, {
+						type: 'message',
+						message: {
+							localId: `sys-${Date.now()}`,
+							serverSeqId: 0,
+							senderId: 'system',
+							senderRole: 'system',
+							senderName: 'System',
+							body: 'No pending actions',
+							timestamp: new Date().toISOString()
+						}
+					});
+					return;
+				}
+
+				const lines = actions.map(
+					(a) => `#${a.id} [${a.riskLevel}] ${a.actionType}: ${a.description}`
+				);
+				this.safeSend(ws, {
+					type: 'message',
+					message: {
+						localId: `sys-${Date.now()}`,
+						serverSeqId: 0,
+						senderId: 'system',
+						senderRole: 'system',
+						senderName: 'System',
+						body: `**Pending actions:**\n${lines.join('\n')}`,
+						timestamp: new Date().toISOString()
+					}
+				});
+			} finally {
+				try { await client.end(); } catch { /* already closed */ }
+			}
+		} catch (err) {
+			console.error('[ChatRoom] List actions failed:', err);
+			this.sendError(ws, 'internal', 'Failed to list actions');
+		}
 	}
 
 	// ── Presence ──────────────────────────────────────────────────────
