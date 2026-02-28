@@ -55,7 +55,7 @@
 					{message.senderName}
 				</span>
 				<span
-					class="rounded px-1 py-0.5 text-[10px] uppercase"
+					class="rounded px-1 py-0.5 text-[11px] uppercase"
 					style="background: var(--bg-elevated); color: var(--text-muted); font-family: var(--font-mono);"
 				>
 					{message.senderRole}
@@ -66,13 +66,17 @@
 			{@html htmlBody}
 		</article>
 		<div class="mt-1 flex items-center justify-end gap-2">
-			{#if message.failed}
-				<span class="text-[10px]" style="color: var(--danger);">
+			{#if message.pending}
+				<span class="text-[11px] animate-pulse" style="color: var(--text-muted);">
+					Sending...
+				</span>
+			{:else if message.failed}
+				<span class="text-[11px]" style="color: var(--danger);">
 					{m.chat_failed()}
 				</span>
 				{#if onRetry}
 					<button
-						class="text-[10px] underline"
+						class="rounded px-2 py-1 text-xs underline"
 						style="color: var(--danger);"
 						onclick={() => onRetry(message.localId)}
 					>
@@ -80,9 +84,9 @@
 					</button>
 				{/if}
 			{/if}
-			<span class="text-[10px]" style="color: var(--text-muted);">
+			<time datetime={message.timestamp} class="text-[11px]" style="color: var(--text-muted);">
 				{timeStr}
-			</span>
+			</time>
 		</div>
 	</div>
 </div>

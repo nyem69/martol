@@ -20,13 +20,19 @@
 	let container: HTMLDivElement | undefined = $state();
 	let isAtBottom = $state(true);
 	let hasNewMessages = $state(false);
+	let scrollTicking = false;
 
 	function onScroll() {
-		if (!container) return;
-		const threshold = 100;
-		isAtBottom =
-			container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
-		if (isAtBottom) hasNewMessages = false;
+		if (scrollTicking) return;
+		scrollTicking = true;
+		requestAnimationFrame(() => {
+			if (!container) { scrollTicking = false; return; }
+			const threshold = 100;
+			isAtBottom =
+				container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+			if (isAtBottom) hasNewMessages = false;
+			scrollTicking = false;
+		});
 	}
 
 	function scrollToBottom() {
@@ -73,6 +79,7 @@
 	onscroll={onScroll}
 	role="log"
 	aria-live="polite"
+	aria-busy={loading}
 >
 	<div class="flex min-h-full flex-col justify-end py-4">
 		{#if loading}

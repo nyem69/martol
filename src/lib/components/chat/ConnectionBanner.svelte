@@ -26,8 +26,14 @@
 			{m.chat_reconnecting({ attempt: String(reconnectAttempt) })}
 		{:else if status === 'closed'}
 			{m.chat_connection_closed()}
+			<button onclick={() => window.location.reload()} class="ml-2 underline font-semibold">
+				Refresh
+			</button>
 		{:else if status === 'failed'}
 			{m.chat_connection_failed()}
+			<button onclick={() => window.location.reload()} class="ml-2 underline font-semibold">
+				Refresh
+			</button>
 		{/if}
 	</div>
 {/if}

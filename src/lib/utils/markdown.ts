@@ -16,9 +16,9 @@ const PURIFY_CONFIG: Config = {
 	ALLOWED_TAGS: [
 		'p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'blockquote',
 		'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'span'
+		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span'
 	],
-	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class'],
+	ALLOWED_ATTR: ['href', 'src', 'alt', 'title'],
 	ALLOW_DATA_ATTR: false
 };
 

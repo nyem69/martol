@@ -37,7 +37,7 @@
 	<title>Chat — Martol</title>
 </svelte:head>
 
-<main class="flex h-dvh flex-col">
+<main class="flex h-dvh flex-col" aria-label="Chat room: {roomName}">
 	<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
 	<ChatHeader roomName={roomName} onlineCount={store.onlineUsers.size} />
 

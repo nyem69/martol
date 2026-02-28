@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { tick } from 'svelte';
 	import { emailOtp, signIn } from '$lib/auth-client';
 
 	let email = $state('');
@@ -19,6 +20,8 @@
 				error = result.error.message || 'Failed to send code. Please try again.';
 			} else {
 				step = 'code';
+				await tick();
+				document.getElementById('code-input')?.focus();
 			}
 		} catch (e) {
 			error = 'Something went wrong. Please try again.';
@@ -46,10 +49,12 @@
 		}
 	}
 
-	function handleBack() {
+	async function handleBack() {
 		step = 'email';
 		code = '';
 		error = '';
+		await tick();
+		document.getElementById('email-input')?.focus();
 	}
 </script>
 
@@ -107,7 +112,7 @@
 			<div>
 				<button
 					onclick={handleBack}
-					class="mb-4 text-sm hover:underline"
+					class="mb-4 inline-flex items-center gap-1 rounded-md px-2 py-2 text-sm hover:underline"
 					style="color: var(--text-muted);"
 				>
 					&larr; Back
