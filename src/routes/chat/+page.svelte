@@ -1,56 +1,36 @@
 <script lang="ts">
+	import { MessagesStore } from '$lib/stores/messages.svelte';
+	import ConnectionBanner from '$lib/components/chat/ConnectionBanner.svelte';
+	import ChatHeader from '$lib/components/chat/ChatHeader.svelte';
+	import MessageList from '$lib/components/chat/MessageList.svelte';
+	import ChatInput from '$lib/components/chat/ChatInput.svelte';
+
 	let { data } = $props();
+
+	// These values are stable for the page lifetime (from server load)
+	const { roomId, userId, userName } = data;
+	const store = new MessagesStore(roomId, userId, userName);
+
+	$effect(() => {
+		store.connect();
+		return () => store.disconnect();
+	});
 </script>
 
 <svelte:head>
 	<title>Chat — Martol</title>
 </svelte:head>
 
-<div class="flex min-h-dvh flex-col">
-	<!-- Header -->
-	<header
-		class="flex items-center justify-between px-4 py-3"
-		style="background: var(--bg-surface); border-bottom: 1px solid var(--border);"
-	>
-		<h1
-			class="text-sm font-bold tracking-widest"
-			style="color: var(--accent); font-family: var(--font-mono);"
-		>
-			MARTOL
-		</h1>
-		<span class="text-xs" style="color: var(--text-muted);">
-			{data.user?.email ?? 'not signed in'}
-		</span>
-	</header>
+<div class="flex h-dvh flex-col">
+	<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
+	<ChatHeader roomName="Chat" onlineCount={store.onlineUsers.size} />
 
-	<!-- Chat area placeholder -->
-	<main class="flex flex-1 items-center justify-center px-4">
-		<div class="text-center">
-			<div
-				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg"
-				style="background: var(--bg-surface); border: 1px solid var(--border);"
-			>
-				<span class="text-2xl" style="color: var(--accent); font-family: var(--font-mono);"
-					>#</span
-				>
-			</div>
-			<h2 class="text-lg font-semibold" style="color: var(--text);">Martol Chat</h2>
-			<p class="mt-1 text-sm" style="color: var(--text-muted);">
-				Real-time AI collaboration — coming soon.
-			</p>
-		</div>
-	</main>
+	<MessageList messages={store.messages} systemEvents={store.systemEvents} />
 
-	<!-- Input placeholder -->
-	<div
-		class="px-4 py-3"
-		style="background: var(--bg-surface); border-top: 1px solid var(--border);"
-	>
-		<div
-			class="rounded-md px-3 py-2.5 text-sm"
-			style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
-		>
-			Type a message...
-		</div>
-	</div>
+	<ChatInput
+		onSend={(body) => store.sendMessage(body)}
+		onTyping={() => store.notifyTyping()}
+		disabled={store.ws.status !== 'connected'}
+		typingNames={store.typingNames}
+	/>
 </div>

@@ -20,5 +20,18 @@
   "auth_sign_out": "Sign out",
   "auth_check_email": "Check your email for a sign-in link or enter the 6-digit code below.",
   "error_generic": "Something went wrong. Please try again.",
-  "error_unauthorized": "You don't have permission to do that."
+  "error_unauthorized": "You don't have permission to do that.",
+  "chat_connecting": "Connecting...",
+  "chat_reconnecting": "Reconnecting (attempt {attempt})...",
+  "chat_send": "Send",
+  "chat_placeholder": "Type a message...",
+  "chat_typing_one": "{name} is typing...",
+  "chat_typing_two": "{name1} and {name2} are typing...",
+  "chat_typing_many": "{count} people are typing...",
+  "chat_online": "{count} online",
+  "chat_joined": "{name} joined",
+  "chat_left": "{name} left",
+  "chat_no_org": "No organization found",
+  "chat_new_messages": "New messages",
+  "chat_error_send": "Failed to send message"
 }
