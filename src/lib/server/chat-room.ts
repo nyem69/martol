@@ -7,16 +7,15 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { CloudflareEnv } from '../../app.d.ts';
 import type {
 	ClientMessage,
 	ServerMessage,
 	StoredMessage,
 	ServerMessagePayload,
 	ErrorCode
-} from '$lib/types/ws';
-import { createHyperdriveDb } from '$lib/server/db/hyperdrive';
-import { messages as messagesTable } from '$lib/server/db/schema';
+} from '../types/ws';
+import { createHyperdriveDb } from './db/hyperdrive';
+import { messages as messagesTable } from './db/schema';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -27,8 +26,11 @@ const FLUSH_INTERVAL_MS = 500;
 const FLUSH_BATCH_THRESHOLD = 10;
 const MAX_FLUSH_FAILURES = 3;
 const RATE_LIMIT_WINDOW_MS = 1000;
-const RATE_LIMIT_MAX = 50;
+const RATE_LIMIT_MAX_PER_USER = 10;
 const PAD_WIDTH = 20;
+const STORAGE_BATCH_LIMIT = 128;
+const MAX_LOCAL_ID_LENGTH = 64;
+const LOCAL_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 function padId(id: number): string {
 	return String(id).padStart(PAD_WIDTH, '0');
@@ -38,9 +40,36 @@ function storageKey(id: number): string {
 	return `msg:${padId(id)}`;
 }
 
+function measureBytes(value: unknown): number {
+	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+// ── Chunked Storage Helpers (DO batch ops limited to 128 keys) ──────
+
+async function batchGet<T>(
+	storage: DurableObjectStorage,
+	keys: string[]
+): Promise<Map<string, T>> {
+	const result = new Map<string, T>();
+	for (let i = 0; i < keys.length; i += STORAGE_BATCH_LIMIT) {
+		const chunk = keys.slice(i, i + STORAGE_BATCH_LIMIT);
+		const partial = await storage.get<T>(chunk);
+		for (const [k, v] of partial) {
+			result.set(k, v);
+		}
+	}
+	return result;
+}
+
+async function batchDelete(storage: DurableObjectStorage, keys: string[]): Promise<void> {
+	for (let i = 0; i < keys.length; i += STORAGE_BATCH_LIMIT) {
+		await storage.delete(keys.slice(i, i + STORAGE_BATCH_LIMIT));
+	}
+}
+
 // ── ChatRoom Durable Object ─────────────────────────────────────────
 
-export class ChatRoom extends DurableObject<CloudflareEnv> {
+export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// In-memory state (rebuilt from storage on wake)
 	private nextLocalId = 1;
 	private walByteSize = 0;
@@ -49,27 +78,26 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 	private flushFailures = 0;
 	private degraded = false;
 
-	// Rate limiting
-	private messageTimestamps: number[] = [];
+	// Per-user rate limiting
+	private userMessageTimestamps = new Map<string, number[]>();
 
-	constructor(ctx: DurableObjectState, env: CloudflareEnv) {
+	constructor(ctx: DurableObjectState, env: App.Platform['env']) {
 		super(ctx, env);
 
 		// Rebuild in-memory state from storage on every wake
 		this.ctx.blockConcurrencyWhile(async () => {
-			const nextId = await this.ctx.storage.get<number>('meta:nextId');
+			const [nextId, walBytes, walCount, unflushed, failures] = await Promise.all([
+				this.ctx.storage.get<number>('meta:nextId'),
+				this.ctx.storage.get<number>('meta:walByteSize'),
+				this.ctx.storage.get<number>('meta:walMessageCount'),
+				this.ctx.storage.get<number[]>('meta:unflushedIds'),
+				this.ctx.storage.get<number>('meta:flushFailures')
+			]);
+
 			this.nextLocalId = nextId ?? 1;
-
-			const walBytes = await this.ctx.storage.get<number>('meta:walByteSize');
 			this.walByteSize = walBytes ?? 0;
-
-			const walCount = await this.ctx.storage.get<number>('meta:walMessageCount');
 			this.walMessageCount = walCount ?? 0;
-
-			const unflushed = await this.ctx.storage.get<number[]>('meta:unflushedIds');
 			this.unflushedIds = unflushed ?? [];
-
-			const failures = await this.ctx.storage.get<number>('meta:flushFailures');
 			this.flushFailures = failures ?? 0;
 			this.degraded = this.flushFailures >= MAX_FLUSH_FAILURES;
 
@@ -77,7 +105,10 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 			if (this.unflushedIds.length > 0) {
 				const existing = await this.ctx.storage.getAlarm();
 				if (!existing) {
-					await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+					const delay = this.degraded
+						? Math.min(60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES), 3_600_000)
+						: FLUSH_INTERVAL_MS;
+					await this.ctx.storage.setAlarm(Date.now() + delay);
 				}
 			}
 		});
@@ -88,12 +119,10 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
-		// Only handle WebSocket upgrades
 		if (request.headers.get('Upgrade') !== 'websocket') {
 			return new Response('Expected WebSocket upgrade', { status: 426 });
 		}
 
-		// Extract user info from headers (set by the SvelteKit route)
 		const userId = request.headers.get('X-User-Id');
 		const userRole = request.headers.get('X-User-Role') ?? 'member';
 		const userName = request.headers.get('X-User-Name') ?? 'Unknown';
@@ -103,30 +132,35 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 			return new Response('Missing user identity', { status: 401 });
 		}
 
-		// Create WebSocket pair
+		// [C3] Persist orgId for alarm-triggered flush (when no sockets connected)
+		await this.ctx.storage.put('meta:orgId', orgId);
+
 		const pair = new WebSocketPair();
 		const [client, server] = [pair[0], pair[1]];
 
-		// Accept with Hibernation API — tags encode user metadata
+		// [H8] URI-encode tag values to prevent prefix collisions
 		this.ctx.acceptWebSocket(server, [
-			`user:${userId}`,
-			`role:${userRole}`,
-			`name:${userName}`,
-			`org:${orgId}`
+			`user:${encodeURIComponent(userId)}`,
+			`role:${encodeURIComponent(userRole)}`,
+			`name:${encodeURIComponent(userName)}`,
+			`org:${encodeURIComponent(orgId)}`
 		]);
 
-		// Broadcast presence to others
 		this.broadcast(
 			{ type: 'presence', senderId: userId, senderName: userName, status: 'online' },
 			server
 		);
 
-		// Delta sync: send missed messages if client provides lastKnownId
+		// [M5] Wrap delta sync in try/catch to prevent zombie sockets on failure
 		const lastKnownId = url.searchParams.get('lastKnownId');
 		if (lastKnownId) {
 			const id = parseInt(lastKnownId, 10);
 			if (!isNaN(id)) {
-				await this.sendDeltaSync(server, id);
+				try {
+					await this.sendDeltaSync(server, id);
+				} catch (err) {
+					console.error('[ChatRoom] Delta sync failed:', err);
+				}
 			}
 		}
 
@@ -154,14 +188,18 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 				this.handleTyping(ws, msg.active);
 				break;
 			case 'read':
-				// Read receipts — acknowledged, no broadcast needed for now
 				break;
 			default:
 				this.sendError(ws, 'invalid_message', 'Unknown message type');
 		}
 	}
 
-	async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+	async webSocketClose(
+		ws: WebSocket,
+		code: number,
+		reason: string,
+		wasClean: boolean
+	): Promise<void> {
 		this.broadcastPresenceOffline(ws);
 	}
 
@@ -185,20 +223,27 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 
 			if (this.flushFailures >= MAX_FLUSH_FAILURES) {
 				this.degraded = true;
-				console.error(`[ChatRoom] Degraded mode after ${MAX_FLUSH_FAILURES} flush failures`, err);
-				// Notify all connected clients
+				console.error(
+					`[ChatRoom] Degraded mode after ${this.flushFailures} flush failures`,
+					err
+				);
 				this.broadcast({
 					type: 'error',
 					code: 'degraded',
 					message: 'Room temporarily unavailable — messages paused'
 				});
-				return; // Don't reschedule
+				// [C4] Schedule retry with exponential backoff (self-healing)
+				const backoffMs = Math.min(
+					60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES),
+					3_600_000 // cap at 1 hour
+				);
+				await this.ctx.storage.setAlarm(Date.now() + backoffMs);
+				return;
 			}
 
 			console.error(`[ChatRoom] Flush failed (attempt ${this.flushFailures})`, err);
 		}
 
-		// Reschedule if there are still unflushed messages
 		if (this.unflushedIds.length > 0) {
 			await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
 		}
@@ -221,19 +266,31 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 			return;
 		}
 
-		// Viewers cannot send messages
 		if (role === 'viewer') {
 			this.sendError(ws, 'unauthorized', 'Viewers cannot send messages');
 			return;
 		}
 
-		// Degraded mode check
 		if (this.degraded) {
 			this.sendError(ws, 'degraded', 'Room is in degraded mode — messages paused');
 			return;
 		}
 
-		// Validate body
+		// [H4] Validate localId
+		if (
+			typeof msg.localId !== 'string' ||
+			msg.localId.length === 0 ||
+			msg.localId.length > MAX_LOCAL_ID_LENGTH ||
+			!LOCAL_ID_RE.test(msg.localId)
+		) {
+			this.sendError(
+				ws,
+				'invalid_message',
+				'Invalid localId (max 64 chars, alphanumeric/-/_)'
+			);
+			return;
+		}
+
 		if (!msg.body || typeof msg.body !== 'string') {
 			this.sendError(ws, 'invalid_message', 'Message body required');
 			return;
@@ -241,28 +298,34 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 
 		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
-			this.sendError(ws, 'invalid_message', `Message too large (max ${MAX_BODY_SIZE / 1024}KB)`);
+			this.sendError(
+				ws,
+				'invalid_message',
+				`Message too large (max ${MAX_BODY_SIZE / 1024}KB)`
+			);
 			return;
 		}
 
-		// Rate limiting
-		if (this.isRateLimited()) {
+		// [H1] Per-user rate limiting
+		if (this.isRateLimited(userId)) {
 			this.sendError(ws, 'rate_limited', 'Too many messages — slow down');
 			return;
 		}
 
-		// WAL capacity check
-		if (this.walMessageCount >= MAX_WAL_MESSAGES || this.walByteSize + bodyBytes > MAX_WAL_BYTES) {
+		if (
+			this.walMessageCount >= MAX_WAL_MESSAGES ||
+			this.walByteSize + bodyBytes > MAX_WAL_BYTES
+		) {
 			this.sendError(ws, 'room_full', 'Room buffer full — try again shortly');
 			return;
 		}
 
-		// Assign local monotonic ID
-		const localId = this.nextLocalId++;
+		const seqId = this.nextLocalId++;
 		const timestamp = new Date().toISOString();
 
 		const stored: StoredMessage = {
 			localId: msg.localId,
+			orgId, // [C3] Persist orgId per message for reliable flush
 			senderId: userId,
 			senderRole: role,
 			senderName: name,
@@ -272,26 +335,26 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 			flushed: false
 		};
 
-		// Estimate storage size
-		const entrySize = JSON.stringify(stored).length;
+		// [H5] Use byte count, not string length
+		const entrySize = measureBytes(stored);
 
-		// Write to DO transactional storage
-		await this.ctx.storage.put(storageKey(localId), stored);
-		this.unflushedIds.push(localId);
+		// [C1] Atomic write: message + metadata in a single storage.put()
+		this.unflushedIds.push(seqId);
 		this.walMessageCount++;
 		this.walByteSize += entrySize;
 
-		// Persist metadata
 		await this.ctx.storage.put({
+			[storageKey(seqId)]: stored,
 			'meta:nextId': this.nextLocalId,
 			'meta:walByteSize': this.walByteSize,
 			'meta:walMessageCount': this.walMessageCount,
 			'meta:unflushedIds': this.unflushedIds
 		});
 
-		// Broadcast to all connected clients
+		// [H7] Include serverSeqId for delta sync cursor
 		const payload: ServerMessagePayload = {
 			localId: msg.localId,
+			serverSeqId: seqId,
 			senderId: userId,
 			senderRole: role,
 			senderName: name,
@@ -302,16 +365,12 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 
 		this.broadcast({ type: 'message', message: payload });
 
-		// Schedule flush if needed
+		// Schedule flush
 		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
-			// Immediate flush
 			const existing = await this.ctx.storage.getAlarm();
-			if (existing) {
-				await this.ctx.storage.deleteAlarm();
-			}
+			if (existing) await this.ctx.storage.deleteAlarm();
 			await this.ctx.storage.setAlarm(Date.now());
 		} else if (this.unflushedIds.length === 1) {
-			// First unflushed message — schedule flush
 			const existing = await this.ctx.storage.getAlarm();
 			if (!existing) {
 				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
@@ -324,15 +383,15 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 	private async flushToDb(): Promise<void> {
 		if (this.unflushedIds.length === 0) return;
 
-		// Collect unflushed messages from storage
+		// [C5] Chunked batch get (DO storage limited to 128 keys per call)
 		const keys = this.unflushedIds.map(storageKey);
-		const entries = await this.ctx.storage.get<StoredMessage>(keys);
+		const entries = await batchGet<StoredMessage>(this.ctx.storage, keys);
 
-		const toFlush: Array<{ localId: number; stored: StoredMessage }> = [];
+		const toFlush: Array<{ seqId: number; stored: StoredMessage }> = [];
 		for (const id of this.unflushedIds) {
 			const stored = entries.get(storageKey(id));
 			if (stored && !stored.flushed) {
-				toFlush.push({ localId: id, stored });
+				toFlush.push({ seqId: id, stored });
 			}
 		}
 
@@ -342,79 +401,88 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 			return;
 		}
 
-		// Get org ID from first connected WebSocket's tags (or from stored messages context)
-		const orgId = this.getOrgId();
+		// [C3] Get orgId from stored messages (persisted at write time, not from sockets)
+		const orgId =
+			toFlush[0].stored.orgId ||
+			(await this.ctx.storage.get<string>('meta:orgId')) ||
+			this.ctx.id.name ||
+			'';
 
-		// Create Hyperdrive DB connection
 		const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
 		await connectPromise;
 
 		try {
-			// Multi-row INSERT with .returning() for DB-assigned IDs
-			const rows = toFlush.map(({ stored }) => ({
-				orgId,
-				senderId: stored.senderId,
-				senderRole: stored.senderRole as 'owner' | 'lead' | 'member' | 'viewer' | 'agent',
-				type: 'chat' as const,
-				body: stored.body,
-				replyTo: stored.replyTo ?? null,
-				createdAt: new Date(stored.timestamp)
-			}));
-
-			const inserted = await db.insert(messagesTable).values(rows).returning({
-				id: messagesTable.id,
-				createdAt: messagesTable.createdAt
-			});
-
-			// Build id_map and mark as flushed
+			// [C6] Individual inserts in a transaction for guaranteed ID correlation
 			const mappings: Array<{ localId: string; dbId: number }> = [];
 			const updates: Record<string, StoredMessage> = {};
 
-			for (let i = 0; i < toFlush.length; i++) {
-				const { localId, stored } = toFlush[i];
-				const dbRow = inserted[i];
-				stored.flushed = true;
-				stored.dbId = dbRow.id;
-				updates[storageKey(localId)] = stored;
-				mappings.push({ localId: stored.localId, dbId: dbRow.id });
-			}
+			await db.transaction(async (tx) => {
+				for (const { seqId, stored } of toFlush) {
+					const [inserted] = await tx
+						.insert(messagesTable)
+						.values({
+							orgId,
+							senderId: stored.senderId,
+							senderRole: stored.senderRole as
+								| 'owner'
+								| 'lead'
+								| 'member'
+								| 'viewer'
+								| 'agent',
+							type: 'chat' as const,
+							body: stored.body,
+							replyTo: stored.replyTo ?? null,
+							createdAt: new Date(stored.timestamp)
+						})
+						.returning({ id: messagesTable.id });
 
-			// Update storage: mark flushed + clear unflushed list
+					stored.flushed = true;
+					stored.dbId = inserted.id;
+					updates[storageKey(seqId)] = stored;
+					mappings.push({ localId: stored.localId, dbId: inserted.id });
+				}
+			});
+
 			await this.ctx.storage.put(updates);
 
-			// Remove flushed IDs from unflushed list
-			const flushedSet = new Set(toFlush.map((f) => f.localId));
+			const flushedSet = new Set(toFlush.map((f) => f.seqId));
 			this.unflushedIds = this.unflushedIds.filter((id) => !flushedSet.has(id));
 			await this.ctx.storage.put('meta:unflushedIds', this.unflushedIds);
 
-			// Broadcast id_map to all connected clients
 			if (mappings.length > 0) {
 				this.broadcast({ type: 'id_map', mappings });
 			}
 
-			// Prune old flushed entries (keep last 100 for reconnection)
 			await this.pruneOldEntries();
 		} finally {
-			await client.end();
+			// [H6] Wrap client.end() to prevent successful flush counted as failure
+			try {
+				await client.end();
+			} catch {
+				// Connection already closed
+			}
 		}
 	}
 
 	// ── Delta Sync ────────────────────────────────────────────────────
 
-	private async sendDeltaSync(ws: WebSocket, lastKnownId: number): Promise<void> {
-		// List all messages after the given ID
-		const afterKey = `msg:${padId(lastKnownId)}`;
+	private async sendDeltaSync(ws: WebSocket, lastKnownSeqId: number): Promise<void> {
+		// [H7] Use serverSeqId (DO-local counter) for delta sync cursor
+		const afterKey = `msg:${padId(lastKnownSeqId)}`;
 		const entries = await this.ctx.storage.list<StoredMessage>({
 			startAfter: afterKey,
-			prefix: 'msg:'
+			prefix: 'msg:',
+			limit: 200
 		});
 
 		if (entries.size === 0) return;
 
 		const history: ServerMessagePayload[] = [];
-		for (const stored of entries.values()) {
+		for (const [key, stored] of entries) {
+			const seqId = parseInt(key.slice(4), 10);
 			history.push({
 				localId: stored.localId,
+				serverSeqId: seqId,
 				senderId: stored.senderId,
 				senderRole: stored.senderRole,
 				senderName: stored.senderName,
@@ -438,7 +506,7 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 
 		this.broadcast(
 			{ type: 'typing', senderId: userId, senderName: name, active },
-			ws // exclude sender
+			ws
 		);
 	}
 
@@ -461,18 +529,20 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 		}
 	}
 
-	// ── Rate Limiting ─────────────────────────────────────────────────
+	// ── Rate Limiting (per-user) ──────────────────────────────────────
 
-	private isRateLimited(): boolean {
+	// [H1] Keyed by userId to prevent one user from silencing the room
+	private isRateLimited(userId: string): boolean {
 		const now = Date.now();
-		// Remove timestamps outside the window
-		this.messageTimestamps = this.messageTimestamps.filter(
+		const timestamps = (this.userMessageTimestamps.get(userId) ?? []).filter(
 			(t) => now - t < RATE_LIMIT_WINDOW_MS
 		);
-		if (this.messageTimestamps.length >= RATE_LIMIT_MAX) {
+		if (timestamps.length >= RATE_LIMIT_MAX_PER_USER) {
+			this.userMessageTimestamps.set(userId, timestamps);
 			return true;
 		}
-		this.messageTimestamps.push(now);
+		timestamps.push(now);
+		this.userMessageTimestamps.set(userId, timestamps);
 		return false;
 	}
 
@@ -486,7 +556,7 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 			try {
 				ws.send(json);
 			} catch {
-				// Socket dead — will be cleaned up by webSocketClose/Error
+				// Dead socket — cleaned up by webSocketClose/Error
 			}
 		}
 	}
@@ -495,7 +565,7 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 		try {
 			ws.send(JSON.stringify(msg));
 		} catch {
-			// Socket dead
+			// Dead socket
 		}
 	}
 
@@ -503,45 +573,34 @@ export class ChatRoom extends DurableObject<CloudflareEnv> {
 		this.safeSend(ws, { type: 'error', code, message });
 	}
 
+	// [H8] Decode URI-encoded tag values
 	private extractTag(tags: string[], prefix: string): string {
 		const tag = tags.find((t) => t.startsWith(prefix));
-		return tag ? tag.slice(prefix.length) : '';
+		return tag ? decodeURIComponent(tag.slice(prefix.length)) : '';
 	}
 
-	private getOrgId(): string {
-		// Try to get org ID from any connected WebSocket's tags
-		const sockets = this.ctx.getWebSockets();
-		for (const ws of sockets) {
-			try {
-				const tags = this.ctx.getTags(ws);
-				const orgId = this.extractTag(tags, 'org:');
-				if (orgId) return orgId;
-			} catch {
-				continue;
-			}
-		}
-		// Fallback: derive from DO name (the DO is named by orgId)
-		return this.ctx.id.name ?? this.ctx.id.toString();
-	}
-
+	// [C2] Only prune flushed entries; [M1] Use limit to avoid loading all into memory
 	private async pruneOldEntries(): Promise<void> {
-		// Keep at most 200 messages in DO storage for reconnection
-		const all = await this.ctx.storage.list<StoredMessage>({ prefix: 'msg:' });
+		const all = await this.ctx.storage.list<StoredMessage>({ prefix: 'msg:', limit: 500 });
 		if (all.size <= 200) return;
 
 		const keys = [...all.keys()];
-		const toDelete = keys.slice(0, keys.length - 200);
+		const toDelete = keys.slice(0, keys.length - 200).filter((key) => {
+			const stored = all.get(key);
+			return stored?.flushed === true;
+		});
 
-		// Calculate byte size reduction
+		if (toDelete.length === 0) return;
+
+		// [H5] Use byte measurement consistent with write path
 		let bytesRemoved = 0;
 		for (const key of toDelete) {
 			const stored = all.get(key);
-			if (stored) {
-				bytesRemoved += JSON.stringify(stored).length;
-			}
+			if (stored) bytesRemoved += measureBytes(stored);
 		}
 
-		await this.ctx.storage.delete(toDelete);
+		// [C5] Chunked delete
+		await batchDelete(this.ctx.storage, toDelete);
 		this.walMessageCount = Math.max(0, this.walMessageCount - toDelete.length);
 		this.walByteSize = Math.max(0, this.walByteSize - bytesRemoved);
 

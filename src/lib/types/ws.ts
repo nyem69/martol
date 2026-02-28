@@ -16,6 +16,7 @@ export type ClientMessage =
 
 export interface ServerMessagePayload {
 	localId: string;
+	serverSeqId: number;
 	senderId: string;
 	senderRole: string;
 	senderName: string;
@@ -44,6 +45,7 @@ export type ErrorCode =
 
 export interface StoredMessage {
 	localId: string;
+	orgId: string;
 	senderId: string;
 	senderRole: string;
 	senderName: string;

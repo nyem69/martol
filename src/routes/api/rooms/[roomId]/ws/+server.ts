@@ -26,6 +26,11 @@ export const GET: RequestHandler = async ({ params, locals, platform, request })
 
 	const { roomId } = params;
 
+	// Validate roomId format (Better Auth uses nanoid-style IDs)
+	if (!roomId || roomId.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(roomId)) {
+		error(400, 'Invalid room ID');
+	}
+
 	// 2. Verify org membership and get role
 	const [memberRecord] = await db
 		.select({ role: member.role })
