@@ -1,12 +1,12 @@
 <script lang="ts">
-	let { text, type = 'join' }: { text: string; type?: 'join' | 'leave' } = $props();
+	let { text, type = 'join' }: { text: string; type?: 'join' | 'leave' | 'clear' } = $props();
 </script>
 
 <div class="py-1 text-center" role="status">
 	<span
 		class="text-xs"
-		style="color: {type === 'leave' ? 'var(--danger)' : 'var(--success)'}; opacity: 0.8;"
+		style="color: {type === 'leave' ? 'var(--danger)' : type === 'clear' ? 'var(--text-muted)' : 'var(--success)'}; opacity: 0.8;"
 	>
-		{type === 'join' ? '+' : '−'} {text}
+		{type === 'join' ? '+' : type === 'clear' ? '⟳' : '−'} {text}
 	</span>
 </div>

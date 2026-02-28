@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { tick } from 'svelte';
 	import { emailOtp, signIn } from '$lib/auth-client';
+	import * as m from '$lib/paraglide/messages';
 
 	let email = $state('');
 	let code = $state('');
@@ -17,14 +18,14 @@
 		try {
 			const result = await emailOtp.sendVerificationOtp({ email: email.trim(), type: 'sign-in' });
 			if (result.error) {
-				error = result.error.message || 'Failed to send code. Please try again.';
+				error = result.error.message || m.login_otp_send_failed();
 			} else {
 				step = 'code';
 				await tick();
 				document.getElementById('code-input')?.focus();
 			}
 		} catch (e) {
-			error = 'Something went wrong. Please try again.';
+			error = m.error_generic();
 		} finally {
 			loading = false;
 		}
@@ -38,12 +39,12 @@
 		try {
 			const result = await signIn.emailOtp({ email: email.trim(), otp: code });
 			if (result.error) {
-				error = result.error.message || 'Invalid code. Please try again.';
+				error = result.error.message || m.login_code_invalid();
 			} else {
 				goto('/chat');
 			}
 		} catch (e) {
-			error = 'Something went wrong. Please try again.';
+			error = m.error_generic();
 		} finally {
 			loading = false;
 		}
@@ -59,7 +60,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign in — Martol</title>
+	<title>{m.auth_sign_in()} — {m.app_name()}</title>
 </svelte:head>
 
 <div class="flex min-h-dvh items-center justify-center px-4" style="background: var(--bg);">
@@ -76,7 +77,7 @@
 				MARTOL
 			</h1>
 			<p class="mt-2 text-sm" style="color: var(--text-muted);">
-				AI collaboration workspace
+				{m.login_subtitle()}
 			</p>
 		</div>
 
@@ -84,7 +85,7 @@
 			<!-- Email entry -->
 			<form onsubmit={(e) => { e.preventDefault(); handleSendOtp(); }}>
 				<label for="email-input" class="block text-sm font-medium mb-2" style="color: var(--text-muted);">
-					Email address
+					{m.login_email_label()}
 				</label>
 				<input
 					id="email-input"
@@ -106,9 +107,9 @@
 				>
 					{#if loading}
 						<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-						Sending...
+						{m.chat_sending()}
 					{:else}
-						Continue with email
+						{m.login_continue()}
 					{/if}
 				</button>
 			</form>
@@ -120,11 +121,11 @@
 					class="mb-4 inline-flex items-center gap-1 rounded-md px-2 py-2 text-sm hover:underline"
 					style="color: var(--text-muted);"
 				>
-					&larr; Back
+					&larr; {m.login_back()}
 				</button>
 
 				<p class="mb-4 text-sm" style="color: var(--text-muted);">
-					Check your email for a sign-in link or enter the 6-digit code below.
+					{m.auth_check_email()}
 				</p>
 
 				<form onsubmit={(e) => { e.preventDefault(); handleVerifyCode(); }}>
@@ -152,9 +153,9 @@
 					>
 						{#if loading}
 							<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-							Verifying...
+							{m.login_verifying()}
 						{:else}
-							Sign in
+							{m.auth_sign_in()}
 						{/if}
 					</button>
 				</form>

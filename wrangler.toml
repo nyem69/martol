@@ -62,3 +62,6 @@ APP_BASE_URL = "https://martol.plitix.com"
 
 EMAIL_FROM="noreply@martol.app"
 EMAIL_NAME="Martol"
+
+[triggers]
+crons = ["0 * * * *"]

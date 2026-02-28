@@ -28,7 +28,7 @@ export interface DisplayMessage {
 
 export interface SystemEvent {
 	id: string;
-	type: 'join' | 'leave';
+	type: 'join' | 'leave' | 'clear';
 	name: string;
 	timestamp: string;
 }
@@ -96,6 +96,9 @@ export class MessagesStore {
 				break;
 			case 'presence':
 				this.handlePresence(msg.senderId, msg.senderName, msg.status);
+				break;
+			case 'clear':
+				this.handleClear(msg.clearedBy);
 				break;
 			case 'error':
 				this.error = msg.message;
@@ -229,7 +232,17 @@ export class MessagesStore {
 		}
 	}
 
-	private addSystemEvent(type: 'join' | 'leave', name: string): void {
+	private handleClear(clearedBy: string): void {
+		this.messages = [];
+		// Clear all pending timers
+		for (const timer of this.pendingTimers.values()) {
+			clearTimeout(timer);
+		}
+		this.pendingTimers.clear();
+		this.addSystemEvent('clear', clearedBy);
+	}
+
+	private addSystemEvent(type: 'join' | 'leave' | 'clear', name: string): void {
 		this.systemEvents.push({
 			id: `sys-${++this.systemEventCounter}`,
 			type,

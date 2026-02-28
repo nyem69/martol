@@ -9,14 +9,20 @@
 		messages,
 		systemEvents,
 		loading = false,
+		loadingHistory = false,
+		hasMoreHistory = true,
 		onRetry,
-		onReply
+		onReply,
+		onLoadMore
 	}: {
 		messages: DisplayMessage[];
 		systemEvents: SystemEvent[];
 		loading?: boolean;
+		loadingHistory?: boolean;
+		hasMoreHistory?: boolean;
 		onRetry?: (localId: string) => void;
 		onReply?: (message: DisplayMessage) => void;
+		onLoadMore?: () => void;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -33,6 +39,12 @@
 			isAtBottom =
 				container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
 			if (isAtBottom) hasNewMessages = false;
+
+			// Pull-to-load: trigger when scrolled near the top
+			if (container.scrollTop < 80 && hasMoreHistory && !loadingHistory && onLoadMore) {
+				onLoadMore();
+			}
+
 			scrollTicking = false;
 		});
 	}
@@ -92,6 +104,14 @@
 	tabindex="-1"
 >
 	<div class="flex min-h-full flex-col justify-end py-4">
+		{#if loadingHistory}
+			<div class="flex justify-center py-2">
+				<span
+					class="inline-block h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent"
+					style="color: var(--text-muted);"
+				></span>
+			</div>
+		{/if}
 		{#if loading}
 			<div class="flex flex-col gap-3 px-4 py-2" aria-label={m.chat_loading()}>
 				{#each { length: 4 } as _}
@@ -116,7 +136,7 @@
 		{:else if timeline.length === 0}
 			<div class="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
 				<p class="text-sm" style="color: var(--text-muted);">
-					No messages yet. Start the conversation.
+					{m.chat_empty()}
 				</p>
 			</div>
 		{/if}
@@ -129,7 +149,9 @@
 				<SystemLine
 					text={event.type === 'join'
 						? m.chat_joined({ name: event.name })
-						: m.chat_left({ name: event.name })}
+						: event.type === 'clear'
+							? m.chat_cleared({ name: event.name })
+							: m.chat_left({ name: event.name })}
 					type={event.type}
 				/>
 			{/if}

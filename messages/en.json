@@ -68,5 +68,14 @@
   "chat_close": "Close",
   "chat_reply": "reply",
   "chat_slash_commands": "Slash commands",
-  "chat_mention_users": "Mention users"
+  "chat_mention_users": "Mention users",
+  "chat_empty": "No messages yet. Start the conversation.",
+  "chat_cleared": "{name} cleared the room",
+  "login_subtitle": "AI collaboration workspace",
+  "login_email_label": "Email address",
+  "login_continue": "Continue with email",
+  "login_verifying": "Verifying...",
+  "login_back": "Back",
+  "login_otp_send_failed": "Failed to send code. Please try again.",
+  "login_code_invalid": "Invalid code. Please try again."
 }
