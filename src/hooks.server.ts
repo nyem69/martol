@@ -7,21 +7,11 @@
 import type { Handle } from '@sveltejs/kit';
 import type { CloudflareEnv } from './app.d.ts';
 
-// Detect Cloudflare Workers (has caches.default)
-const isCloudflareWorkers = typeof caches !== 'undefined' && 'default' in caches;
-
-// Load .dev.vars for local development ONLY
-if (!isCloudflareWorkers) {
-	try {
-		const dotenv = await import('dotenv');
-		const result = dotenv.config({ path: '.dev.vars' });
-		if (!result.error) {
-			console.log('[Startup] dotenv loaded from .dev.vars');
-		}
-	} catch {
-		// Expected if fs is not available
-	}
-}
+// Load .dev.vars for local development ONLY (Vite dev server).
+// In Cloudflare Workers, env vars come from wrangler secrets/.dev.vars binding.
+// NOTE: dotenv is NOT imported here — Vite's built-in env loading or
+// --env-file flag handles .dev.vars in local dev. This avoids bundling
+// dotenv (which uses node:fs) into the Cloudflare Workers output.
 
 import { createAuth } from '$lib/server/auth';
 
