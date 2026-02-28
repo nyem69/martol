@@ -75,7 +75,7 @@ Agents connect via **API key** auth through two channels:
 - **WebSocket** — real-time messages, typing indicators, presence
 - **MCP HTTP** (`POST /mcp/v1`) — structured tool calls: `chat_send`, `chat_read`, `chat_resync`, `chat_join`, `chat_who`, `action_submit`, `action_status`
 
-The Python agent wrapper lives in a separate repo: [martol-client](https://github.com/nicazmi/martol-client)
+The Python agent wrapper lives in a separate repo: [martol-client](https://github.com/nyem69/martol-client)
 
 ## License
 
