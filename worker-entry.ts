@@ -4,6 +4,10 @@
  * Re-exports the SvelteKit worker (HTTP handler) and all Durable Object
  * classes so wrangler can discover them from a single entrypoint.
  *
+ * WebSocket upgrades are intercepted here before SvelteKit because
+ * SvelteKit's response pipeline strips the Cloudflare-specific `webSocket`
+ * property from the Response, breaking WS upgrades.
+ *
  * IMPORTANT: Do not import pg/drizzle at the top level — pg uses node:fs
  * which wrangler's bundler cannot resolve at the entry module scope.
  * Use dynamic import() inside handlers instead.
@@ -14,10 +18,34 @@ import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
 // Durable Object classes
 export { ChatRoom } from './src/lib/server/chat-room';
 
-// Combined worker: SvelteKit fetch + scheduled handler
+// Origins allowed for WebSocket upgrade (mirrors hooks.server.ts CORS list)
+const WS_ALLOWED_ORIGINS = new Set([
+	'http://localhost:5190',
+	'http://localhost:8787',
+	'http://127.0.0.1:5190',
+	'http://127.0.0.1:8787',
+	'capacitor://martol.app',
+	'https://martol.app',
+	'https://martol.plitix.com'
+]);
+
+const WS_ROUTE_RE = /^\/api\/rooms\/([^/]+)\/ws$/;
+
+// Combined worker: SvelteKit fetch + WebSocket upgrade + scheduled handler
 export default {
-	// HTTP handler — delegate to SvelteKit
-	fetch: svelteKitWorker.fetch,
+	async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {
+		// Intercept WebSocket upgrades — SvelteKit can't pass through WS responses
+		if (request.headers.get('Upgrade') === 'websocket') {
+			const url = new URL(request.url);
+			const match = url.pathname.match(WS_ROUTE_RE);
+			if (match) {
+				return handleWebSocketUpgrade(request, env, decodeURIComponent(match[1]));
+			}
+		}
+
+		// All other requests → SvelteKit
+		return svelteKitWorker.fetch(request, env, ctx);
+	},
 
 	// Cron Trigger: expire pending actions older than 24h
 	async scheduled(event: ScheduledEvent, env: Record<string, unknown>, ctx: ExecutionContext) {
@@ -27,8 +55,6 @@ export default {
 			return;
 		}
 
-		// Dynamic imports — avoids pulling pg (which uses node:fs) into the
-		// top-level module scope where wrangler's bundler can't resolve it.
 		const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
 		const { pendingActions } = await import('./src/lib/server/db/schema');
 		const { eq, and, lt } = await import('drizzle-orm');
@@ -59,3 +85,91 @@ export default {
 		}
 	}
 };
+
+/**
+ * Handle WebSocket upgrade directly at the Worker level.
+ *
+ * Auth: validates Better Auth session from cookie.
+ * Membership: verifies user belongs to the room (org).
+ * Then forwards the upgrade request to the ChatRoom Durable Object.
+ */
+async function handleWebSocketUpgrade(
+	request: Request,
+	env: Record<string, unknown>,
+	roomId: string
+): Promise<Response> {
+	// Validate roomId format
+	if (!roomId || roomId.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(roomId)) {
+		return new Response('Invalid room ID', { status: 400 });
+	}
+
+	// Origin check — prevent cross-site WebSocket hijacking
+	const origin = request.headers.get('origin');
+	if (!origin || !WS_ALLOWED_ORIGINS.has(origin)) {
+		return new Response('Origin not allowed', { status: 403 });
+	}
+
+	const hyperdrive = env.HYPERDRIVE as { connectionString: string };
+	if (!hyperdrive) {
+		return new Response('Service unavailable', { status: 503 });
+	}
+
+	// Dynamic imports to avoid top-level node:fs bundling
+	const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
+	const { createAuth } = await import('./src/lib/server/auth');
+	const { member } = await import('./src/lib/server/db/auth-schema');
+	const { eq, and } = await import('drizzle-orm');
+
+	const { db, client, connectPromise } = createHyperdriveDb(hyperdrive);
+	await connectPromise;
+
+	try {
+		// Validate session via Better Auth
+		const auth = createAuth(
+			db,
+			env.BETTER_AUTH_SECRET as string,
+			env.APP_BASE_URL as string || 'https://martol.plitix.com',
+			{
+				resendApiKey: env.RESEND_API_KEY as string,
+				emailFrom: (env.EMAIL_FROM as string) || 'noreply@martol.app',
+				emailName: (env.EMAIL_NAME as string) || 'Martol'
+			},
+			env.CACHE as KVNamespace
+		);
+
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session?.user || !session?.session) {
+			return new Response('Authentication required', { status: 401 });
+		}
+
+		// Verify org membership
+		const [memberRecord] = await db
+			.select({ role: member.role })
+			.from(member)
+			.where(and(eq(member.organizationId, roomId), eq(member.userId, session.user.id)))
+			.limit(1);
+
+		if (!memberRecord) {
+			return new Response('Not a member of this room', { status: 403 });
+		}
+
+		// Forward to ChatRoom Durable Object
+		const chatRoomNs = env.CHAT_ROOM as DurableObjectNamespace;
+		if (!chatRoomNs) {
+			return new Response('Real-time service unavailable', { status: 503 });
+		}
+
+		const doId = chatRoomNs.idFromName(roomId);
+		const stub = chatRoomNs.get(doId);
+
+		const headers = new Headers(request.headers);
+		headers.set('X-User-Id', session.user.id);
+		headers.set('X-User-Role', memberRecord.role);
+		headers.set('X-User-Name', session.user.name || session.user.email || 'Unknown');
+		headers.set('X-Org-Id', roomId);
+
+		return stub.fetch(new Request(request.url, { method: 'GET', headers }));
+	} finally {
+		try { await client.end(); } catch { /* already closed */ }
+	}
+}
