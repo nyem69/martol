@@ -13,23 +13,22 @@ import * as schema from './schema';
 
 /**
  * Create a Drizzle database instance via Hyperdrive.
- * Uses pg.Client (single connection per request) since Hyperdrive pools at origin.
  *
- * In local dev, wrangler passes the real connection string (with sslmode=require).
- * We strip sslmode from the URL and set ssl.rejectUnauthorized=false to handle
- * Aiven's certificate chain.
+ * Production: Hyperdrive rewrites the connection string to a local proxy and
+ * handles TLS at the proxy level → connect with ssl: false.
  *
- * In production Workers, Hyperdrive handles TLS at the proxy level.
+ * Wrangler dev: Same approach — connect to Hyperdrive local proxy with ssl: false.
+ * A local TLS proxy (scripts/pg-tls-proxy.mjs) bridges plaintext TCP to Aiven
+ * with TLS, since miniflare's cloudflare:sockets cannot do STARTTLS.
+ *
+ * @param hyperdrive - The Hyperdrive binding (provides connectionString)
  */
 export function createHyperdriveDb(hyperdrive: { connectionString: string }) {
-	const isCloudflareWorkers = typeof caches !== 'undefined' && 'default' in caches;
-
-	// Strip sslmode from connection string — we'll set SSL config explicitly
 	const connStr = hyperdrive.connectionString.replace(/[?&]sslmode=[^&]*/g, '');
 
 	const client = new pg.Client({
 		connectionString: connStr,
-		ssl: isCloudflareWorkers ? false : { rejectUnauthorized: false }
+		ssl: false
 	});
 
 	const connectPromise = client.connect();

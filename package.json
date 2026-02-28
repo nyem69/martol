@@ -13,7 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "cf:dev": "set -a && . ./.dev.vars && set +a && wrangler dev",
+    "cf:dev": "node scripts/pg-tls-proxy.mjs & set -a && . ./.dev.vars && set +a && CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=\"postgres://$PG_USER:$PG_PASSWORD@127.0.0.1:5434/$PG_DATABASE\" wrangler dev; kill %1 2>/dev/null",
     "cf:deploy": "wrangler deploy",
     "cap:build": "CAPACITOR=true vite build",
     "cap:sync": "CAPACITOR=true vite build && cap sync",

@@ -61,8 +61,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.db = null;
 
 	if (hasHyperdrive) {
-		// Production: Cloudflare Workers with Hyperdrive
+		// Cloudflare Workers with Hyperdrive (production & wrangler dev)
 		const env = platform!.env as CloudflareEnv;
+
 		const { createHyperdriveDb } = await import('$lib/server/db/hyperdrive');
 		const { db, client, connectPromise } = createHyperdriveDb(env.HYPERDRIVE);
 		await connectPromise;
