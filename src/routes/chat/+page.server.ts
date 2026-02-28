@@ -24,8 +24,33 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 			.where(eq(member.userId, locals.user.id))
 			.limit(1);
 
-		if (!firstMembership) error(404, 'No organization found');
-		roomId = firstMembership.orgId;
+		if (firstMembership) {
+			roomId = firstMembership.orgId;
+		} else {
+			// First-time user: auto-create a default room (organization)
+			const orgId = crypto.randomUUID();
+			const memberId = crypto.randomUUID();
+			const now = new Date();
+			const userName = locals.user.name || locals.user.email?.split('@')[0] || 'User';
+			const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
+
+			await db.insert(organization).values({
+				id: orgId,
+				name: `${userName}'s Room`,
+				slug,
+				createdAt: now
+			});
+			await db.insert(member).values({
+				id: memberId,
+				organizationId: orgId,
+				userId: locals.user.id,
+				role: 'owner',
+				createdAt: now
+			});
+
+			roomId = orgId;
+			userRole = 'owner';
+		}
 	}
 
 	// Get user's role in this org
