@@ -31,9 +31,9 @@
 </script>
 
 {#if open}
-	<!-- Backdrop (mobile only) -->
+	<!-- Backdrop -->
 	<button
-		class="fixed inset-0 z-30 bg-black/50 md:hidden"
+		class="fixed inset-0 z-30 bg-black/50"
 		onclick={onClose}
 		aria-label={m.chat_close_panel()}
 		tabindex="-1"
@@ -55,7 +55,7 @@
 			{m.chat_members()}
 		</span>
 		<button
-			class="rounded p-1 transition-opacity hover:opacity-70 md:hidden"
+			class="rounded p-1 transition-opacity hover:opacity-70"
 			style="color: var(--text-muted);"
 			onclick={onClose}
 			aria-label={m.chat_close_panel()}
