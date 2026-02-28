@@ -3,12 +3,13 @@
  *
  * Re-exports the SvelteKit worker (HTTP handler) and all Durable Object
  * classes so wrangler can discover them from a single entrypoint.
+ *
+ * IMPORTANT: Do not import pg/drizzle at the top level — pg uses node:fs
+ * which wrangler's bundler cannot resolve at the entry module scope.
+ * Use dynamic import() inside handlers instead.
  */
 
 import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
-import { createHyperdriveDb } from './src/lib/server/db/hyperdrive';
-import { pendingActions } from './src/lib/server/db/schema';
-import { eq, and, lt } from 'drizzle-orm';
 
 // Durable Object classes
 export { ChatRoom } from './src/lib/server/chat-room';
@@ -25,6 +26,12 @@ export default {
 			console.error('[Cron] HYPERDRIVE binding not available');
 			return;
 		}
+
+		// Dynamic imports — avoids pulling pg (which uses node:fs) into the
+		// top-level module scope where wrangler's bundler can't resolve it.
+		const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
+		const { pendingActions } = await import('./src/lib/server/db/schema');
+		const { eq, and, lt } = await import('drizzle-orm');
 
 		const { db, client, connectPromise } = createHyperdriveDb(hyperdrive);
 		await connectPromise;
