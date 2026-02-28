@@ -249,8 +249,8 @@
 				{disabled}
 				data-testid="chat-input"
 				aria-label={m.chat_placeholder()}
-				class="flex-1 resize-none border-0 bg-transparent text-sm leading-relaxed outline-none"
-				style="color: var(--text); font-family: var(--font-sans); max-height: 144px;"
+				class="flex-1 resize-none border-0 bg-transparent leading-relaxed outline-none"
+				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;"
 			></textarea>
 			<button
 				onclick={send}

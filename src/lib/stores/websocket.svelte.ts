@@ -38,7 +38,10 @@ export class WebSocketStore {
 		if (this.status === 'closed' || this.status === 'failed') return;
 
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const url = `${protocol}//${window.location.host}/api/rooms/${encodeURIComponent(this.roomId)}/ws?lastKnownId=${this.lastKnownId}`;
+		const base = `${protocol}//${window.location.host}/api/rooms/${encodeURIComponent(this.roomId)}/ws`;
+		// Only request delta sync when we have a real serverSeqId (from prior WS messages).
+		// lastKnownId=0 would trigger a full WAL dump, duplicating DB-loaded messages.
+		const url = this.lastKnownId > 0 ? `${base}?lastKnownId=${this.lastKnownId}` : base;
 
 		this.ws = new WebSocket(url);
 		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
