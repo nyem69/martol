@@ -30,7 +30,8 @@ const ALLOWED_ORIGINS = new Set([
 	'http://localhost:5190',
 	'http://127.0.0.1:5190',
 	'capacitor://martol.app',
-	'https://martol.app'
+	'https://martol.app',
+	'https://martol.plitix.com'
 ]);
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -60,6 +61,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.session = null;
 	event.locals.db = null;
 
+	// Track Hyperdrive client for cleanup after request
+	let hyperdriveClient: import('pg').Client | null = null;
+
 	if (hasHyperdrive) {
 		// Cloudflare Workers with Hyperdrive (production & wrangler dev)
 		const env = platform!.env as CloudflareEnv;
@@ -67,6 +71,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const { createHyperdriveDb } = await import('$lib/server/db/hyperdrive');
 		const { db, client, connectPromise } = createHyperdriveDb(env.HYPERDRIVE);
 		await connectPromise;
+		hyperdriveClient = client;
 
 		event.locals.db = db;
 
@@ -126,43 +131,49 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// Process the request
-	const response = await resolve(event);
+	// Process the request — ensure Hyperdrive client is closed after
+	try {
+		const response = await resolve(event);
 
-	// CORS headers on response
-	if (origin && ALLOWED_ORIGINS.has(origin)) {
-		response.headers.set('Access-Control-Allow-Origin', origin);
-		response.headers.set('Access-Control-Allow-Credentials', 'true');
+		// CORS headers on response
+		if (origin && ALLOWED_ORIGINS.has(origin)) {
+			response.headers.set('Access-Control-Allow-Origin', origin);
+			response.headers.set('Access-Control-Allow-Credentials', 'true');
+		}
+
+		// Security headers
+		response.headers.set('X-Content-Type-Options', 'nosniff');
+		response.headers.set('X-Frame-Options', 'DENY');
+		response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+		response.headers.set(
+			'Permissions-Policy',
+			'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+		);
+		response.headers.set(
+			'Strict-Transport-Security',
+			'max-age=63072000; includeSubDomains; preload'
+		);
+
+		const csp = [
+			"default-src 'self'",
+			"script-src 'self' 'unsafe-inline'",
+			"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+			"img-src 'self' data: blob: https:",
+			"font-src 'self' data: https://cdn.jsdelivr.net",
+			"connect-src 'self' https://martol.app wss://martol.app https://martol.plitix.com wss://martol.plitix.com",
+			"worker-src 'self' blob:",
+			"object-src 'none'",
+			"base-uri 'self'",
+			"form-action 'self'",
+			"frame-ancestors 'none'"
+		].join('; ');
+
+		response.headers.set('Content-Security-Policy', csp);
+
+		return response;
+	} finally {
+		if (hyperdriveClient) {
+			try { await hyperdriveClient.end(); } catch { /* already closed */ }
+		}
 	}
-
-	// Security headers
-	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('X-Frame-Options', 'DENY');
-	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-	response.headers.set(
-		'Permissions-Policy',
-		'camera=(), microphone=(), geolocation=(), interest-cohort=()'
-	);
-	response.headers.set(
-		'Strict-Transport-Security',
-		'max-age=63072000; includeSubDomains; preload'
-	);
-
-	const csp = [
-		"default-src 'self'",
-		"script-src 'self' 'unsafe-inline'",
-		"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-		"img-src 'self' data: blob: https:",
-		"font-src 'self' data: https://cdn.jsdelivr.net",
-		"connect-src 'self' https://martol.app wss://martol.app",
-		"worker-src 'self' blob:",
-		"object-src 'none'",
-		"base-uri 'self'",
-		"form-action 'self'",
-		"frame-ancestors 'none'"
-	].join('; ');
-
-	response.headers.set('Content-Security-Policy', csp);
-
-	return response;
 };

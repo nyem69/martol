@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm';
 import { agentRoomBindings } from '$lib/server/db/schema';
 import { user, member } from '$lib/server/db/auth-schema';
 import type { McpError } from '$lib/types/mcp';
+import type { HyperdriveDb } from '$lib/server/db/hyperdrive';
 
 export interface AgentContext {
 	agentUserId: string;
@@ -69,57 +70,44 @@ export async function authenticateAgent(
 		}
 	}
 
-	const [binding] = await db
+	// Single joined query instead of 3 sequential DB round-trips
+	const [result] = await db
 		.select({
 			orgId: agentRoomBindings.orgId,
 			label: agentRoomBindings.label,
-			model: agentRoomBindings.model
+			model: agentRoomBindings.model,
+			role: member.role,
+			name: user.name
 		})
 		.from(agentRoomBindings)
+		.innerJoin(
+			member,
+			and(
+				eq(member.organizationId, agentRoomBindings.orgId),
+				eq(member.userId, agentRoomBindings.agentUserId)
+			)
+		)
+		.innerJoin(user, eq(user.id, agentRoomBindings.agentUserId))
 		.where(eq(agentRoomBindings.agentUserId, agentUserId))
 		.limit(1);
 
-	if (!binding) {
+	if (!result) {
 		return {
 			ok: false,
 			status: 403,
-			error: { ok: false, error: 'Agent not bound to any room', code: 'agent_unbound' }
+			error: { ok: false, error: 'Agent not bound to any room or not a member', code: 'agent_unbound' }
 		};
 	}
-
-	const [memberRecord] = await db
-		.select({ role: member.role })
-		.from(member)
-		.where(and(eq(member.organizationId, binding.orgId), eq(member.userId, agentUserId)))
-		.limit(1);
-
-	if (!memberRecord) {
-		return {
-			ok: false,
-			status: 403,
-			error: {
-				ok: false,
-				error: 'Agent is not a member of the bound room',
-				code: 'agent_not_member'
-			}
-		};
-	}
-
-	const [agentUser] = await db
-		.select({ name: user.name })
-		.from(user)
-		.where(eq(user.id, agentUserId))
-		.limit(1);
 
 	return {
 		ok: true,
 		agent: {
 			agentUserId,
-			agentName: agentUser?.name ?? binding.label,
-			orgId: binding.orgId,
-			orgRole: memberRecord.role,
-			label: binding.label,
-			model: binding.model
+			agentName: result.name ?? result.label,
+			orgId: result.orgId,
+			orgRole: result.role,
+			label: result.label,
+			model: result.model
 		}
 	};
 }

@@ -56,7 +56,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 		switch (req.tool) {
 			case 'chat_send':
-				result = await chatSend(req.params, agent, locals.db);
+				result = await chatSend(req.params, agent, locals.db, platform ?? undefined);
 				break;
 			case 'chat_read':
 				result = await chatRead(req.params, agent, locals.db);

@@ -6,6 +6,7 @@
  */
 
 import type { ServerMessage, ServerMessagePayload } from '$lib/types/ws';
+import { SvelteMap } from 'svelte/reactivity';
 import { WebSocketStore } from './websocket.svelte';
 
 const MAX_SYSTEM_EVENTS = 100;
@@ -32,12 +33,10 @@ export interface SystemEvent {
 	timestamp: string;
 }
 
-let systemEventCounter = 0;
-
 export class MessagesStore {
 	messages = $state<DisplayMessage[]>([]);
-	typingUsers = $state(new Map<string, { name: string; timeout: ReturnType<typeof setTimeout> }>());
-	onlineUsers = $state(new Map<string, string>());
+	typingUsers = $state(new SvelteMap<string, { name: string; timeout: ReturnType<typeof setTimeout> }>());
+	onlineUsers = $state(new SvelteMap<string, string>());
 	lastServerSeqId = $state(0);
 	systemEvents = $state<SystemEvent[]>([]);
 	error = $state<string | null>(null);
@@ -50,6 +49,7 @@ export class MessagesStore {
 	private lastTypingSent = 0;
 	private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private systemEventCounter = 0;
 
 	constructor(
 		roomId: string,
@@ -231,7 +231,7 @@ export class MessagesStore {
 
 	private addSystemEvent(type: 'join' | 'leave', name: string): void {
 		this.systemEvents.push({
-			id: `sys-${++systemEventCounter}`,
+			id: `sys-${++this.systemEventCounter}`,
 			type,
 			name,
 			timestamp: new Date().toISOString()

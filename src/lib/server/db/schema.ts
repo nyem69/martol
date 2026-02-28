@@ -13,7 +13,8 @@ import {
 	bigint,
 	jsonb,
 	uniqueIndex,
-	index
+	index,
+	primaryKey
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -83,7 +84,10 @@ export const agentRoomBindings = pgTable(
 		color: text('color'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [uniqueIndex('idx_agent_room_bindings_org_label').on(table.orgId, table.label)]
+	(table) => [
+		uniqueIndex('idx_agent_room_bindings_org_label').on(table.orgId, table.label),
+		uniqueIndex('idx_agent_room_bindings_agent_user').on(table.agentUserId)
+	]
 );
 
 /**
@@ -98,8 +102,7 @@ export const agentCursors = pgTable(
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		// Composite primary key via unique index
-		uniqueIndex('agent_cursors_pkey').on(table.orgId, table.agentUserId)
+		primaryKey({ columns: [table.orgId, table.agentUserId] })
 	]
 );
 
@@ -114,7 +117,9 @@ export const readCursors = pgTable(
 		lastReadMessageId: bigint('last_read_message_id', { mode: 'number' }).notNull().default(0),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [uniqueIndex('read_cursors_pkey').on(table.orgId, table.userId)]
+	(table) => [
+		primaryKey({ columns: [table.orgId, table.userId] })
+	]
 );
 
 /**

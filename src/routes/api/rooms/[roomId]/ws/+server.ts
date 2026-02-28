@@ -14,7 +14,9 @@ import { eq, and } from 'drizzle-orm';
 const WS_ALLOWED_ORIGINS = new Set([
 	'http://localhost:5190',
 	'http://127.0.0.1:5190',
-	'https://martol.app'
+	'capacitor://martol.app',
+	'https://martol.app',
+	'https://martol.plitix.com'
 ]);
 
 export const GET: RequestHandler = async ({ params, locals, platform, request }) => {

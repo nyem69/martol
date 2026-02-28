@@ -114,10 +114,15 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		});
 	}
 
-	// ── WebSocket Upgrade ─────────────────────────────────────────────
+	// ── HTTP Entry Point ─────────────────────────────────────────────
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
+
+		// REST message ingest — used by MCP chat_send to route through the DO
+		if (request.method === 'POST' && url.pathname.endsWith('/ingest')) {
+			return this.handleRestIngest(request);
+		}
 
 		if (request.headers.get('Upgrade') !== 'websocket') {
 			return new Response('Expected WebSocket upgrade', { status: 426 });
@@ -291,6 +296,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return;
 		}
 
+		// Validate replyTo (untyped from JSON.parse — could be any type)
+		if (msg.replyTo !== undefined && msg.replyTo !== null) {
+			if (typeof msg.replyTo !== 'number' || !Number.isInteger(msg.replyTo) || msg.replyTo <= 0) {
+				this.sendError(ws, 'invalid_message', 'Invalid replyTo (must be a positive integer)');
+				return;
+			}
+		}
+
 		if (!msg.body || typeof msg.body !== 'string') {
 			this.sendError(ws, 'invalid_message', 'Message body required');
 			return;
@@ -376,6 +389,121 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
 			}
 		}
+	}
+
+	// ── REST Ingest (for MCP chat_send) ──────────────────────────────
+
+	private async handleRestIngest(request: Request): Promise<Response> {
+		let payload: {
+			localId: string;
+			senderId: string;
+			senderRole: string;
+			senderName: string;
+			orgId: string;
+			body: string;
+			replyTo?: number;
+		};
+
+		try {
+			payload = await request.json();
+		} catch {
+			return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
+		}
+
+		// Validate required fields
+		if (!payload.localId || !payload.senderId || !payload.body || !payload.orgId) {
+			return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 });
+		}
+
+		if (typeof payload.body !== 'string') {
+			return new Response(JSON.stringify({ error: 'Body must be a string' }), { status: 400 });
+		}
+
+		const bodyBytes = new TextEncoder().encode(payload.body).byteLength;
+		if (bodyBytes > MAX_BODY_SIZE) {
+			return new Response(JSON.stringify({ error: 'Message too large' }), { status: 413 });
+		}
+
+		if (this.degraded) {
+			return new Response(JSON.stringify({ error: 'Room in degraded mode' }), { status: 503 });
+		}
+
+		if (
+			this.walMessageCount >= MAX_WAL_MESSAGES ||
+			this.walByteSize + bodyBytes > MAX_WAL_BYTES
+		) {
+			return new Response(JSON.stringify({ error: 'Room buffer full' }), { status: 429 });
+		}
+
+		// Validate replyTo
+		if (payload.replyTo !== undefined && payload.replyTo !== null) {
+			if (typeof payload.replyTo !== 'number' || !Number.isInteger(payload.replyTo) || payload.replyTo <= 0) {
+				return new Response(JSON.stringify({ error: 'Invalid replyTo' }), { status: 400 });
+			}
+		}
+
+		// Persist orgId for flush
+		await this.ctx.storage.put('meta:orgId', payload.orgId);
+
+		const seqId = this.nextLocalId++;
+		const timestamp = new Date().toISOString();
+
+		const stored: StoredMessage = {
+			localId: payload.localId,
+			orgId: payload.orgId,
+			senderId: payload.senderId,
+			senderRole: payload.senderRole || 'agent',
+			senderName: payload.senderName || 'Agent',
+			body: payload.body,
+			replyTo: payload.replyTo,
+			timestamp,
+			flushed: false
+		};
+
+		const entrySize = measureBytes(stored);
+
+		this.unflushedIds.push(seqId);
+		this.walMessageCount++;
+		this.walByteSize += entrySize;
+
+		await this.ctx.storage.put({
+			[storageKey(seqId)]: stored,
+			'meta:nextId': this.nextLocalId,
+			'meta:walByteSize': this.walByteSize,
+			'meta:walMessageCount': this.walMessageCount,
+			'meta:unflushedIds': this.unflushedIds
+		});
+
+		// Broadcast to all connected WebSocket clients
+		const broadcastPayload: ServerMessagePayload = {
+			localId: payload.localId,
+			serverSeqId: seqId,
+			senderId: payload.senderId,
+			senderRole: payload.senderRole || 'agent',
+			senderName: payload.senderName || 'Agent',
+			body: payload.body,
+			replyTo: payload.replyTo,
+			timestamp
+		};
+
+		this.broadcast({ type: 'message', message: broadcastPayload });
+
+		// Schedule flush
+		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (existing) await this.ctx.storage.deleteAlarm();
+			await this.ctx.storage.setAlarm(Date.now());
+		} else if (this.unflushedIds.length === 1) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (!existing) {
+				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+			}
+		}
+
+		return new Response(
+			JSON.stringify({ ok: true, serverSeqId: seqId, timestamp }),
+			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+		);
 	}
 
 	// ── Flush to PostgreSQL ───────────────────────────────────────────
