@@ -84,9 +84,18 @@
 	--warning: oklch(0.75 0.15 65);
 	--info: oklch(0.65 0.12 240);
 
+	/* Own-message bubble */
+	--bubble-own: oklch(0.55 0.10 65);
+	--bubble-own-text: oklch(0.92 0.01 260);
+
 	/* Fonts */
 	--font-mono: "Geist Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
 	--font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Smooth theme transitions */
+:root {
+	transition: background-color 300ms ease, color 300ms ease;
 }
 
 /* Base styles */

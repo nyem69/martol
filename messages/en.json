@@ -89,5 +89,13 @@
   "guide_slash_command": "Open commands",
   "guide_markdown": "Markdown supported",
   "guide_reply": "Hover message to reply",
-  "guide_scroll_history": "Scroll up to load history"
+  "guide_scroll_history": "Scroll up to load history",
+  "theme_title": "Theme",
+  "theme_forge": "Forge",
+  "theme_obsidian": "Obsidian",
+  "theme_parchment": "Parchment",
+  "theme_neon": "Neon Foundry",
+  "theme_patina": "Patina",
+  "theme_daybreak": "Daybreak",
+  "panel_title": "Panel"
 }

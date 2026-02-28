@@ -45,7 +45,7 @@
 	<div
 		class="max-w-[80%] rounded-lg px-3 py-2"
 		style="background: {message.isOwn
-			? 'var(--accent-muted)'
+			? 'var(--bubble-own)'
 			: 'var(--bg-surface)'}; border: 1px solid {message.failed
 			? 'var(--danger)'
 			: 'var(--border-subtle)'};"
@@ -63,12 +63,12 @@
 				</span>
 			</div>
 		{/if}
-		<article class="prose text-sm" style="color: var(--text);">
+		<article class="prose text-sm" style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};">
 			{@html htmlBody}
 		</article>
 		<div class="mt-1 flex items-center justify-end gap-2">
 			{#if message.pending}
-				<span class="text-[11px] animate-pulse" style="color: var(--text-muted);">
+				<span class="text-[11px] animate-pulse" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 70%, transparent)' : 'var(--text-muted)'};">
 					{m.chat_sending()}
 				</span>
 			{:else if message.failed}
@@ -87,14 +87,14 @@
 			{:else if onReply && message.dbId}
 				<button
 					class="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
-					style="color: var(--text-muted);"
+					style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
 					onclick={() => onReply(message)}
 					aria-label={m.chat_reply_to({ name: message.senderName })}
 				>
 					{m.chat_reply()}
 				</button>
 			{/if}
-			<time datetime={message.timestamp} class="text-[11px]" style="color: var(--text-muted);">
+			<time datetime={message.timestamp} class="text-[11px]" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};">
 				{timeStr}
 			</time>
 		</div>
