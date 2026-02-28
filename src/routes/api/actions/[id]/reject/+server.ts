@@ -41,6 +41,9 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	if (memberRecord.role !== 'owner' && memberRecord.role !== 'lead') {
 		error(403, 'Only owner or lead can reject actions');
 	}
+	// [I5] Product decision: leads can reject any risk level (unlike approve,
+	// which restricts leads from approving high-risk). Rejection is safe — it
+	// blocks the action rather than authorizing it.
 
 	// Fetch the action
 	const [action] = await locals.db

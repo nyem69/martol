@@ -4,7 +4,7 @@ import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, platform }) => {
 	if (!locals.user || !locals.session) redirect(302, '/login');
 
 	const db = locals.db;
@@ -84,9 +84,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}));
 
 	// Update read cursor to latest loaded message (non-blocking)
+	// [I4] Use waitUntil to keep worker alive until cursor update completes
 	if (initialMessages.length > 0) {
 		const latestId = initialMessages[initialMessages.length - 1].dbId;
-		db.insert(readCursors)
+		const cursorPromise = db
+			.insert(readCursors)
 			.values({
 				orgId: roomId,
 				userId: locals.user.id,
@@ -101,6 +103,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 				}
 			})
 			.catch((err: unknown) => console.error('[Chat] Read cursor update failed:', err));
+
+		platform?.context?.waitUntil(cursorPromise);
 	}
 
 	return {

@@ -32,6 +32,7 @@ export type ServerMessage =
 	| { type: 'presence'; senderId: string; senderName: string; status: 'online' | 'offline' }
 	| { type: 'history'; messages: ServerMessagePayload[] }
 	| { type: 'id_map'; mappings: Array<{ localId: string; dbId: number }> }
+	| { type: 'clear'; clearedBy: string }
 	| { type: 'error'; code: ErrorCode; message: string };
 
 export type ErrorCode =

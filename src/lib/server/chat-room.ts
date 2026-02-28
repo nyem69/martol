@@ -16,7 +16,7 @@ import type {
 } from '../types/ws';
 import { createHyperdriveDb } from './db/hyperdrive';
 import { messages as messagesTable, readCursors, pendingActions } from './db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -81,6 +81,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// Per-user rate limiting
 	private userMessageTimestamps = new Map<string, number[]>();
+
+	// Debounced read cursor updates — flushed alongside WAL or on 5s timeout
+	private pendingReadCursors = new Map<string, { orgId: string; userId: string; lastReadId: number }>();
 
 	constructor(ctx: DurableObjectState, env: App.Platform['env']) {
 		super(ctx, env);
@@ -220,7 +223,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// ── Alarm: Batch Flush to DB ──────────────────────────────────────
 
 	async alarm(): Promise<void> {
-		if (this.unflushedIds.length === 0) return;
+		// Flush read cursors even if no WAL messages
+		if (this.unflushedIds.length === 0) {
+			if (this.pendingReadCursors.size > 0) {
+				try {
+					await this.withDb((db) => this.flushReadCursors(db));
+				} catch (err) {
+					console.error('[ChatRoom] Read cursor flush failed:', err);
+				}
+			}
+			return;
+		}
 
 		try {
 			await this.flushToDb();
@@ -605,6 +618,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			}
 
 			await this.pruneOldEntries();
+
+			// Piggyback read cursor flush on same connection
+			await this.flushReadCursors(db);
 		} finally {
 			// [H6] Wrap client.end() to prevent successful flush counted as failure
 			try {
@@ -661,6 +677,18 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		);
 	}
 
+	// ── DB Helper ────────────────────────────────────────────────────
+
+	private async withDb<T>(fn: (db: any) => Promise<T>): Promise<T> {
+		const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
+		await connectPromise;
+		try {
+			return await fn(db);
+		} finally {
+			try { await client.end(); } catch { /* already closed */ }
+		}
+	}
+
 	// ── Read Cursor ──────────────────────────────────────────────────
 
 	private async handleReadCursor(ws: WebSocket, lastReadId: number): Promise<void> {
@@ -674,37 +702,56 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 		if (!userId || !orgId) return;
 
-		// Persist to DB — use GREATEST to prevent backward cursor movement
-		try {
-			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
-			await connectPromise;
-			try {
-				await db
-					.insert(readCursors)
-					.values({
-						orgId,
-						userId,
-						lastReadMessageId: lastReadId,
-						updatedAt: new Date()
-					})
-					.onConflictDoUpdate({
-						target: [readCursors.orgId, readCursors.userId],
-						set: {
-							lastReadMessageId: sql`GREATEST(${readCursors.lastReadMessageId}, ${lastReadId})`,
-							updatedAt: new Date()
-						}
-					});
-			} finally {
-				try { await client.end(); } catch { /* already closed */ }
+		// Debounce: store in memory, flush alongside WAL in alarm handler
+		const key = `${orgId}:${userId}`;
+		const existing = this.pendingReadCursors.get(key);
+		if (!existing || lastReadId > existing.lastReadId) {
+			this.pendingReadCursors.set(key, { orgId, userId, lastReadId });
+		}
+
+		// Schedule alarm for cursor flush if no WAL messages pending (5s debounce)
+		if (this.unflushedIds.length === 0) {
+			const existingAlarm = await this.ctx.storage.getAlarm();
+			if (!existingAlarm) {
+				await this.ctx.storage.setAlarm(Date.now() + 5000);
 			}
-		} catch (err) {
-			console.error('[ChatRoom] Read cursor update failed:', err);
+		}
+	}
+
+	/** Flush debounced read cursors to DB — called from alarm handler */
+	private async flushReadCursors(db: any): Promise<void> {
+		if (this.pendingReadCursors.size === 0) return;
+
+		const cursors = [...this.pendingReadCursors.values()];
+		this.pendingReadCursors.clear();
+
+		for (const { orgId, userId, lastReadId } of cursors) {
+			await db
+				.insert(readCursors)
+				.values({ orgId, userId, lastReadMessageId: lastReadId, updatedAt: new Date() })
+				.onConflictDoUpdate({
+					target: [readCursors.orgId, readCursors.userId],
+					set: {
+						lastReadMessageId: sql`GREATEST(${readCursors.lastReadMessageId}, ${lastReadId})`,
+						updatedAt: new Date()
+					}
+				});
 		}
 	}
 
 	// ── Command Handling ─────────────────────────────────────────────
 
 	private async handleCommand(ws: WebSocket, name: string, args: string): Promise<void> {
+		// Validate command name and args
+		if (typeof name !== 'string' || name.length === 0 || name.length > 32 || !/^[a-z]+$/.test(name)) {
+			this.sendError(ws, 'invalid_message', 'Invalid command name');
+			return;
+		}
+		if (typeof args !== 'string' || args.length > 512) {
+			this.sendError(ws, 'invalid_message', 'Command args too long (max 512 chars)');
+			return;
+		}
+
 		const tags = this.ctx.getTags(ws);
 		const userId = this.extractTag(tags, 'user:');
 		const role = this.extractTag(tags, 'role:');
@@ -722,8 +769,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					this.sendError(ws, 'unauthorized', 'Only owner can clear messages');
 					return;
 				}
-				// Broadcast clear event to all clients
-				this.broadcast({ type: 'error', code: 'internal', message: 'Room cleared by owner' });
+				await this.handleClearRoom(orgId, userName);
 				break;
 
 			case 'approve':
@@ -832,9 +878,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		action: 'approve' | 'reject'
 	): Promise<void> {
 		try {
-			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
-			await connectPromise;
-			try {
+			await this.withDb(async (db) => {
 				const [existing] = await db
 					.select({
 						id: pendingActions.id,
@@ -869,7 +913,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					})
 					.where(eq(pendingActions.id, actionId));
 
-				// Broadcast the status change to all connected clients
+				// [I6] System messages use serverSeqId: 0 — ephemeral, not persisted
+				// through WAL. Important status changes are queryable via /api/actions.
 				this.broadcast({
 					type: 'message',
 					message: {
@@ -882,9 +927,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 						timestamp: new Date().toISOString()
 					}
 				});
-			} finally {
-				try { await client.end(); } catch { /* already closed */ }
-			}
+			});
 		} catch (err) {
 			console.error('[ChatRoom] Action approval failed:', err);
 			this.sendError(ws, 'internal', 'Failed to process action');
@@ -893,9 +936,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	private async handleListActions(ws: WebSocket, orgId: string): Promise<void> {
 		try {
-			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
-			await connectPromise;
-			try {
+			await this.withDb(async (db) => {
 				const actions = await db
 					.select({
 						id: pendingActions.id,
@@ -907,6 +948,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					})
 					.from(pendingActions)
 					.where(and(eq(pendingActions.orgId, orgId), eq(pendingActions.status, 'pending')))
+					.orderBy(desc(pendingActions.createdAt))
 					.limit(20);
 
 				if (actions.length === 0) {
@@ -926,7 +968,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				}
 
 				const lines = actions.map(
-					(a) => `#${a.id} [${a.riskLevel}] ${a.actionType}: ${a.description}`
+					(a: typeof actions[number]) => `#${a.id} [${a.riskLevel}] ${a.actionType}: ${a.description}`
 				);
 				this.safeSend(ws, {
 					type: 'message',
@@ -940,12 +982,44 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 						timestamp: new Date().toISOString()
 					}
 				});
-			} finally {
-				try { await client.end(); } catch { /* already closed */ }
-			}
+			});
 		} catch (err) {
 			console.error('[ChatRoom] List actions failed:', err);
 			this.sendError(ws, 'internal', 'Failed to list actions');
+		}
+	}
+
+	// ── Clear Room ───────────────────────────────────────────────────
+
+	private async handleClearRoom(orgId: string, clearedBy: string): Promise<void> {
+		try {
+			// Soft-delete messages in DB
+			await this.withDb(async (db) => {
+				await db
+					.update(messagesTable)
+					.set({ deletedAt: new Date() })
+					.where(and(eq(messagesTable.orgId, orgId), isNull(messagesTable.deletedAt)));
+			});
+
+			// Clear WAL storage
+			const walKeys = await this.ctx.storage.list({ prefix: 'msg:' });
+			if (walKeys.size > 0) {
+				await batchDelete(this.ctx.storage, [...walKeys.keys()]);
+			}
+
+			// Reset WAL counters
+			this.unflushedIds = [];
+			this.walMessageCount = 0;
+			this.walByteSize = 0;
+			await this.ctx.storage.put({
+				'meta:unflushedIds': [],
+				'meta:walMessageCount': 0,
+				'meta:walByteSize': 0
+			});
+
+			this.broadcast({ type: 'clear', clearedBy });
+		} catch (err) {
+			console.error('[ChatRoom] Clear room failed:', err);
 		}
 	}
 
