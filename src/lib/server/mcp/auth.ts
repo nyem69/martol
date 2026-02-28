@@ -17,12 +17,11 @@ type AuthResult =
 	| { ok: false; status: number; error: McpError };
 
 export async function authenticateAgent(
-	request: Request,
+	apiKeyHeader: string | null,
 	auth: any,
 	db: any,
 	kv?: KVNamespace
 ): Promise<AuthResult> {
-	const apiKeyHeader = request.headers.get('x-api-key');
 	if (!apiKeyHeader) {
 		return {
 			ok: false,

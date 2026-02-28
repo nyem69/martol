@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { messages, pendingActions, agentCursors } from '$lib/server/db/schema';
 import { member } from '$lib/server/db/auth-schema';
 import type { AgentContext } from '../auth';
@@ -15,11 +15,23 @@ type ActionType =
 type RiskLevel = 'low' | 'medium' | 'high';
 type ApprovalOutcome = 'direct' | 'lead_approve' | 'owner_approve' | 'rejected';
 
+/** Server-authoritative risk mapping — never trust agent-supplied risk_level */
+const ACTION_RISK_MAP: Record<ActionType, RiskLevel> = {
+	question_answer: 'low',
+	code_review: 'low',
+	code_write: 'medium',
+	code_modify: 'high',
+	code_delete: 'high',
+	deploy: 'high',
+	config_change: 'high'
+};
+
 function getApprovalOutcome(
 	actionType: ActionType,
 	riskLevel: RiskLevel,
 	senderRole: string
 ): ApprovalOutcome {
+	if (senderRole === 'viewer') return 'rejected';
 	if (senderRole === 'owner') return 'direct';
 
 	if (riskLevel === 'low') return 'direct';
@@ -62,7 +74,7 @@ export async function actionSubmit(
 			orgId: messages.orgId
 		})
 		.from(messages)
-		.where(and(eq(messages.id, params.trigger_message_id), eq(messages.orgId, agent.orgId)))
+		.where(and(eq(messages.id, params.trigger_message_id), eq(messages.orgId, agent.orgId), isNull(messages.deletedAt)))
 		.limit(1);
 
 	if (!triggerMsg) {
@@ -105,13 +117,14 @@ export async function actionSubmit(
 		};
 	}
 
-	// 4. Check risk_level × sender_role against the approval matrix
-	const outcome = getApprovalOutcome(params.action_type, params.risk_level, triggerMsg.senderRole);
+	// 4. Server-derive risk level — never trust agent's claimed value
+	const serverRisk = ACTION_RISK_MAP[params.action_type];
+	const outcome = getApprovalOutcome(params.action_type, serverRisk, triggerMsg.senderRole);
 
 	if (outcome === 'rejected') {
 		return {
 			ok: false,
-			error: `Action ${params.action_type} with risk ${params.risk_level} rejected for role ${triggerMsg.senderRole}`,
+			error: `Action ${params.action_type} with risk ${serverRisk} rejected for role ${triggerMsg.senderRole}`,
 			code: 'action_rejected'
 		};
 	}
@@ -127,9 +140,12 @@ export async function actionSubmit(
 			requestedRole: triggerMsg.senderRole,
 			agentUserId: agent.agentUserId,
 			actionType: params.action_type,
-			riskLevel: params.risk_level,
+			riskLevel: serverRisk,
 			description: params.description,
-			payloadJson: params.payload ?? null,
+			payloadJson: {
+				...(params.payload ?? {}),
+				_claimed_risk_level: params.risk_level
+			},
 			status,
 			approvedBy: outcome === 'direct' ? 'system' : null,
 			approvedAt: outcome === 'direct' ? new Date() : null

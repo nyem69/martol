@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { messages } from '$lib/server/db/schema';
 import type { AgentContext } from '../auth';
 import type { ChatSendResult, McpResponse } from '$lib/types/mcp';
@@ -12,7 +12,7 @@ export async function chatSend(
 		const [replyMsg] = await db
 			.select({ id: messages.id })
 			.from(messages)
-			.where(and(eq(messages.id, params.replyTo), eq(messages.orgId, agent.orgId)))
+			.where(and(eq(messages.id, params.replyTo), eq(messages.orgId, agent.orgId), isNull(messages.deletedAt)))
 			.limit(1);
 
 		if (!replyMsg) {

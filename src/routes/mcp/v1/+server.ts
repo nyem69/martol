@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	const kv = platform?.env?.CACHE;
-	const authResult = await authenticateAgent(request, locals.auth, locals.db, kv);
+	const authResult = await authenticateAgent(request.headers.get('x-api-key'), locals.auth, locals.db, kv);
 
 	if (!authResult.ok) {
 		return json(authResult.error, { status: authResult.status });
@@ -76,6 +76,13 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			case 'action_status':
 				result = await actionStatus(req.params, agent, locals.db);
 				break;
+			default: {
+				const _exhaustive: never = req;
+				return json(
+					{ ok: false, error: `Unknown tool: ${(req as any).tool}`, code: 'unknown_tool' },
+					{ status: 400 }
+				);
+			}
 		}
 
 		const status = result.ok ? 200 : (result as any).code === 'action_rejected' ? 403 : 400;
