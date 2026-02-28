@@ -408,11 +408,86 @@
 			>
 				<div style="overflow: hidden;">
 					<div class="px-4 pb-3">
-						<p class="mb-3 text-[11px]" style="color: var(--text-muted);">
-							{m.agent_setup_desc()}
-						</p>
+						<!-- Step 1: Clone -->
+						<div class="mb-2">
+							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								1. Clone
+							</h4>
+							<div class="code-block">
+								<div class="flex items-center justify-between">
+									<code>git clone https://github.com/nyem69/martol-client.git</code>
+									<button
+										class="copy-btn"
+										onclick={() => copyToClipboard('git clone https://github.com/nyem69/martol-client.git && cd martol-client', 'clone')}
+										aria-label="Copy"
+									>
+										{#if copiedField === 'clone'}
+											<Check size={10} />
+										{:else}
+											<Copy size={10} />
+										{/if}
+									</button>
+								</div>
+							</div>
+						</div>
 
-						<!-- Parameters -->
+						<!-- Step 2: Install -->
+						<div class="mb-2">
+							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								2. {m.agent_setup_install()}
+							</h4>
+							<div class="code-block">
+								<div class="flex items-center justify-between">
+									<code>pip install -r requirements.txt</code>
+									<button
+										class="copy-btn"
+										onclick={() => copyToClipboard('pip install -r requirements.txt', 'install')}
+										aria-label="Copy"
+									>
+										{#if copiedField === 'install'}
+											<Check size={10} />
+										{:else}
+											<Copy size={10} />
+										{/if}
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Step 3: Configure -->
+						<div class="mb-2">
+							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								3. {m.agent_setup_configure()}
+							</h4>
+							<div class="code-block">
+								<code>cp .env.example .env</code>
+							</div>
+						</div>
+
+						<!-- Step 4: Run -->
+						<div class="mb-3">
+							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								4. {m.agent_setup_run()}
+							</h4>
+							<div class="code-block">
+								<div class="flex items-center justify-between">
+									<code>python -m martol_agent</code>
+									<button
+										class="copy-btn"
+										onclick={() => copyToClipboard('python -m martol_agent', 'run')}
+										aria-label="Copy"
+									>
+										{#if copiedField === 'run'}
+											<Check size={10} />
+										{:else}
+											<Copy size={10} />
+										{/if}
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Parameters reference -->
 						<div class="mb-3">
 							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
 								{m.agent_setup_params()}
@@ -486,65 +561,6 @@
 							<div class="param-row">
 								<code class="param-label">AGENT_LABEL</code>
 								<div class="param-desc">{m.agent_setup_label()}</div>
-							</div>
-						</div>
-
-						<!-- Quick start steps -->
-						<div class="mb-3">
-							<!-- Step 1: Install -->
-							<div class="mb-2">
-								<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-									1. {m.agent_setup_install()}
-								</h4>
-								<div class="code-block">
-									<div class="flex items-center justify-between">
-										<code>pip install -r requirements.txt</code>
-										<button
-											class="copy-btn"
-											onclick={() => copyToClipboard('git clone https://github.com/nyem69/martol-client.git && cd martol-client && pip install -r requirements.txt', 'install')}
-											aria-label="Copy"
-										>
-											{#if copiedField === 'install'}
-												<Check size={10} />
-											{:else}
-												<Copy size={10} />
-											{/if}
-										</button>
-									</div>
-								</div>
-							</div>
-
-							<!-- Step 2: Configure -->
-							<div class="mb-2">
-								<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-									2. {m.agent_setup_configure()}
-								</h4>
-								<div class="code-block">
-									<code>cp .env.example .env</code>
-								</div>
-							</div>
-
-							<!-- Step 3: Run -->
-							<div class="mb-2">
-								<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-									3. {m.agent_setup_run()}
-								</h4>
-								<div class="code-block">
-									<div class="flex items-center justify-between">
-										<code>python -m martol_agent</code>
-										<button
-											class="copy-btn"
-											onclick={() => copyToClipboard('python -m martol_agent', 'run')}
-											aria-label="Copy"
-										>
-											{#if copiedField === 'run'}
-												<Check size={10} />
-											{:else}
-												<Copy size={10} />
-											{/if}
-										</button>
-									</div>
-								</div>
 							</div>
 						</div>
 
