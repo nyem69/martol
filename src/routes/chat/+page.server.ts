@@ -1,8 +1,8 @@
 import { redirect, error } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
-import { user, member, organization, session as sessionTable } from '$lib/server/db/auth-schema';
-import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
-import { eq, and, desc, isNull, inArray, sql } from 'drizzle-orm';
+import { user, member, organization, invitation, session as sessionTable } from '$lib/server/db/auth-schema';
+import { messages as messagesTable, readCursors, agentRoomBindings } from '$lib/server/db/schema';
+import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -28,29 +28,66 @@ export const load: PageServerLoad = async ({ locals }) => {
 		if (firstMembership) {
 			roomId = firstMembership.orgId;
 		} else {
-			// First-time user: auto-create a default room (organization)
-			const orgId = generateId();
-			const memberId = generateId();
-			const now = new Date();
-			const userName = locals.user.name || locals.user.email?.split('@')[0] || 'User';
-			const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
+			// Check for pending invitations before auto-creating a room
+			const [pendingInvite] = await db
+				.select({
+					id: invitation.id,
+					organizationId: invitation.organizationId,
+					role: invitation.role
+				})
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.email, locals.user.email!),
+						eq(invitation.status, 'pending'),
+						gt(invitation.expiresAt, new Date())
+					)
+				)
+				.limit(1);
 
-			await db.insert(organization).values({
-				id: orgId,
-				name: `${userName}'s Room`,
-				slug,
-				createdAt: now
-			});
-			await db.insert(member).values({
-				id: memberId,
-				organizationId: orgId,
-				userId: locals.user.id,
-				role: 'owner',
-				createdAt: now
-			});
+			if (pendingInvite) {
+				// Accept the invitation: add user as member and mark invitation as accepted
+				const memberId = generateId();
+				const now = new Date();
+				await db.insert(member).values({
+					id: memberId,
+					organizationId: pendingInvite.organizationId,
+					userId: locals.user.id,
+					role: pendingInvite.role || 'member',
+					createdAt: now
+				});
+				await db
+					.update(invitation)
+					.set({ status: 'accepted' })
+					.where(eq(invitation.id, pendingInvite.id));
 
-			roomId = orgId;
-			userRole = 'owner';
+				roomId = pendingInvite.organizationId;
+				userRole = pendingInvite.role || 'member';
+			} else {
+				// Organic user: auto-create a default room (organization)
+				const orgId = generateId();
+				const memberId = generateId();
+				const now = new Date();
+				const userName = locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`;
+				const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
+
+				await db.insert(organization).values({
+					id: orgId,
+					name: `${userName}'s Room`,
+					slug,
+					createdAt: now
+				});
+				await db.insert(member).values({
+					id: memberId,
+					organizationId: orgId,
+					userId: locals.user.id,
+					role: 'owner',
+					createdAt: now
+				});
+
+				roomId = orgId;
+				userRole = 'owner';
+			}
 		}
 	}
 
@@ -139,12 +176,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.catch((err: unknown) => console.error('[Chat] Read cursor update failed:', err));
 	}
 
+	// Check if this room has any registered agents
+	const [agentBinding] = await db
+		.select({ id: agentRoomBindings.id })
+		.from(agentRoomBindings)
+		.where(eq(agentRoomBindings.orgId, roomId))
+		.limit(1);
+	const hasAgents = !!agentBinding;
+
 	return {
 		roomId,
 		userId: locals.user.id,
-		userName: locals.user.name || locals.user.email || 'Unknown',
+		userName: locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`,
 		userRole,
 		roomName: org?.name || 'Chat',
-		initialMessages
+		initialMessages,
+		hasAgents
 	};
 };

@@ -2,12 +2,13 @@
  * Better Auth Configuration — Martol
  *
  * Connects to PostgreSQL via Hyperdrive (production) or direct pool (local dev).
- * Plugins: emailOTP, organization (rooms = orgs), apiKey (agent auth).
+ * Plugins: emailOTP, organization (rooms = orgs), apiKey (agent auth),
+ *          twoFactor, passkey.
  */
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { emailOTP, organization, apiKey } from 'better-auth/plugins';
+import { emailOTP, organization, apiKey, twoFactor } from 'better-auth/plugins';
 import { sendEmail, otpEmailTemplate } from '$lib/server/email';
 import * as authSchema from '$lib/server/db/auth-schema';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -47,7 +48,7 @@ function createKVStorage(kv?: KVNamespace): KVSecondaryStorage | undefined {
  * @param secret - Better Auth secret for session encryption
  * @param baseURL - Application base URL (for callbacks and magic links)
  * @param emailConfig - Resend email configuration
- * @param kv - Optional Cloudflare KV for session cache
+ * @param kv - Optional Cloudflare KV for session cache and magic link tokens
  */
 export function createAuth(
 	db: NodePgDatabase<any>,
@@ -82,8 +83,23 @@ export function createAuth(
 						return;
 					}
 
-					const magicUrl = `${baseURL}/api/auth/verify-otp?email=${encodeURIComponent(email)}&code=${otp}`;
+					// Use opaque token via KV instead of raw OTP in URL
+					let magicUrl: string;
+					if (kv) {
+						const magicToken = crypto.randomUUID();
+						await kv.put(
+							`magic:${magicToken}`,
+							JSON.stringify({ email, otp }),
+							{ expirationTtl: 60 * 5 } // 5-minute TTL
+						);
+						magicUrl = `${baseURL}/api/auth/magic?token=${magicToken}`;
+					} else {
+						// Dev fallback — no KV available
+						magicUrl = `${baseURL}/api/auth/verify-otp?email=${encodeURIComponent(email)}&code=${otp}`;
+					}
+
 					const appName = emailConfig.emailName || 'Martol';
+					// OTP NOT in email subject line (security: visible on lock screens)
 					const { subject, html } = otpEmailTemplate(magicUrl, otp, appName);
 
 					const result = await sendEmail(
@@ -106,15 +122,51 @@ export function createAuth(
 			organization(),
 
 			// Agent authentication via API keys
-			apiKey()
+			apiKey(),
+
+			// Two-factor authentication (TOTP + backup codes)
+			twoFactor({
+				issuer: 'Martol',
+				backupCodes: {
+					length: 10, // characters per code
+					count: 8 // number of codes
+				}
+			})
+			// Passkey plugin will be added when available (P1)
 		],
+
+		// NO emailAndPassword — agents created via direct DB insert
+		// emailAndPassword creates hidden auth bypass (exposes public sign-up/sign-in endpoints)
+
+		user: {
+			additionalFields: {
+				username: { type: 'string', unique: true, required: false },
+				displayName: { type: 'string', required: false },
+				ageVerifiedAt: { type: 'date', required: false }
+			}
+		},
 
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days
 			updateAge: 60 * 60 * 24, // Refresh every 24 hours
 			cookieCache: {
 				enabled: true,
-				maxAge: 60 * 30 // 30 minutes
+				maxAge: 60 * 5 // 5 minutes (reduced from 30 for faster revocation)
+			}
+		},
+
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => {
+						// Auto-generate username if not set (e.g. user-3f82d9a1)
+						if (!user.username) {
+							const random = crypto.randomUUID().slice(0, 8);
+							return { data: { ...user, username: `user-${random}` } };
+						}
+						return { data: user };
+					}
+				}
 			}
 		},
 

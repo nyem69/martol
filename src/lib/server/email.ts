@@ -70,7 +70,7 @@ export function otpEmailTemplate(
 	appName: string
 ): { subject: string; html: string } {
 	return {
-		subject: `Sign in to ${appName} — Code: ${otpCode}`,
+		subject: `Sign in to ${appName}`,
 		html: `
 <!DOCTYPE html>
 <html>

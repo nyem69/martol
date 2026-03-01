@@ -7,10 +7,12 @@
 
 import {
 	pgTable,
+	serial,
 	bigserial,
 	text,
 	timestamp,
 	bigint,
+	integer,
 	jsonb,
 	uniqueIndex,
 	index,
@@ -191,4 +193,150 @@ export const roleAudit = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [index('idx_role_audit_org').on(table.orgId, table.createdAt)]
+);
+
+// ── Auth & Onboarding (docs/003-Auth.md) ────────────────────────────
+
+/**
+ * Username History — tracks username changes for impersonation prevention.
+ * Old usernames held for 90 days after change.
+ */
+export const usernameHistory = pgTable(
+	'username_history',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		userId: text('user_id').notNull(),
+		oldUsername: text('old_username').notNull(),
+		newUsername: text('new_username').notNull(),
+		changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+		releasedAt: timestamp('released_at', { withTimezone: true }) // changedAt + 90 days
+	},
+	(table) => [
+		index('idx_username_history_user').on(table.userId),
+		index('idx_username_history_old').on(table.oldUsername)
+	]
+);
+
+/**
+ * Terms Versions — versioned legal documents (ToS, Privacy Policy, AUP).
+ * Re-acceptance prompted when version changes.
+ */
+export const termsVersions = pgTable('terms_versions', {
+	id: serial('id').primaryKey(),
+	version: text('version').notNull().unique(),
+	type: text('type').notNull().$type<'tos' | 'privacy' | 'aup'>(),
+	summary: text('summary').notNull(),
+	url: text('url').notNull(),
+	effectiveAt: timestamp('effective_at', { withTimezone: true }).notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
+ * Terms Acceptances — audit trail of user consent.
+ * Records IP, user agent, timestamp per acceptance.
+ */
+export const termsAcceptances = pgTable(
+	'terms_acceptances',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		userId: text('user_id').notNull(),
+		termsVersionId: integer('terms_version_id').notNull(),
+		ipAddress: text('ip_address'),
+		userAgent: text('user_agent'),
+		acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_terms_acceptances_user_version').on(table.userId, table.termsVersionId),
+		index('idx_terms_acceptances_user').on(table.userId)
+	]
+);
+
+/**
+ * Account Audit — append-only log of account-level events.
+ * Tracks email changes, 2FA changes, username changes, logins, OTP events.
+ */
+export const accountAudit = pgTable(
+	'account_audit',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		userId: text('user_id').notNull(),
+		action: text('action')
+			.notNull()
+			.$type<
+				| 'email_change'
+				| 'email_revert'
+				| '2fa_enable'
+				| '2fa_disable'
+				| 'username_change'
+				| 'account_delete'
+				| 'login_success'
+				| 'login_failed'
+				| 'otp_sent'
+				| 'otp_failed'
+			>(),
+		oldValue: text('old_value'),
+		newValue: text('new_value'),
+		ipAddress: text('ip_address'),
+		userAgent: text('user_agent'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_account_audit_user').on(table.userId, table.createdAt),
+		index('idx_account_audit_action').on(table.action, table.createdAt)
+	]
+);
+
+/**
+ * Content Reports — user-submitted content moderation reports.
+ * Reports go to room owner + platform admin queue.
+ */
+export const contentReports = pgTable(
+	'content_reports',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		orgId: text('org_id').notNull(),
+		messageId: bigint('message_id', { mode: 'number' }),
+		reporterId: text('reporter_id').notNull(),
+		reason: text('reason')
+			.notNull()
+			.$type<'csam' | 'nsfw' | 'spam' | 'scam' | 'harassment' | 'other'>(),
+		details: text('details'),
+		status: text('status')
+			.notNull()
+			.default('pending')
+			.$type<'pending' | 'reviewed' | 'actioned' | 'dismissed'>(),
+		reviewedBy: text('reviewed_by'),
+		reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+		actionTaken: text('action_taken'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_content_reports_org').on(table.orgId, table.status),
+		index('idx_content_reports_message').on(table.messageId)
+	]
+);
+
+/**
+ * User Sanctions — moderation actions applied to users.
+ * Types: warning, mute (timed), suspend, ban.
+ */
+export const userSanctions = pgTable(
+	'user_sanctions',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		userId: text('user_id').notNull(),
+		sanctionType: text('sanction_type')
+			.notNull()
+			.$type<'warning' | 'mute' | 'suspend' | 'ban'>(),
+		reason: text('reason').notNull(),
+		reportId: bigint('report_id', { mode: 'number' }),
+		issuedBy: text('issued_by').notNull(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }),
+		revokedAt: timestamp('revoked_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_user_sanctions_user').on(table.userId),
+		index('idx_user_sanctions_active').on(table.userId, table.sanctionType)
+	]
 );

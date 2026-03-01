@@ -163,10 +163,37 @@ async function handleWebSocketUpgrade(
 		const stub = chatRoomNs.get(doId);
 
 		const headers = new Headers(request.headers);
-		headers.set('X-User-Id', session.user.id);
-		headers.set('X-User-Role', memberRecord.role);
-		headers.set('X-User-Name', session.user.name || session.user.email || 'Unknown');
-		headers.set('X-Org-Id', roomId);
+
+		const userId = session.user.id;
+		const role = memberRecord.role;
+		const userName = session.user.name || session.user.username || `User-${session.user.id.slice(0, 6)}`;
+
+		// HMAC-sign identity payload to prevent header spoofing
+		const signingKey = env.BETTER_AUTH_SECRET as string;
+		if (!signingKey) {
+			return new Response('Signing key unavailable', { status: 503 });
+		}
+
+		const identityPayload = JSON.stringify({
+			userId,
+			role,
+			userName,
+			orgId: roomId,
+			timestamp: Date.now()
+		});
+
+		const key = await crypto.subtle.importKey(
+			'raw',
+			new TextEncoder().encode(signingKey),
+			{ name: 'HMAC', hash: 'SHA-256' },
+			false,
+			['sign']
+		);
+		const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(identityPayload));
+		const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+		headers.set('X-Identity', identityPayload);
+		headers.set('X-Identity-Sig', signature);
 
 		return stub.fetch(new Request(request.url, { method: 'GET', headers }));
 	} finally {

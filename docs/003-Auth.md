@@ -941,29 +941,29 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 
 ### P0 — Blockers (must complete before any public access)
 
-- [ ] Draft and publish Terms of Service (engage legal counsel)
-- [ ] Draft and publish Privacy Policy with all GDPR Art. 13 + CCPA disclosures
-- [ ] Execute DPAs with Cloudflare, Aiven, Resend, Anthropic
-- [ ] Complete Record of Processing Activities (ROPA)
-- [ ] Complete Data Protection Impact Assessment (DPIA)
-- [ ] Implement `terms_acceptances` table with server-side recording (separate ToS + Privacy checkboxes)
-- [ ] Implement age gate as first screen, before email collection (DOB verified, not stored)
-- [ ] Auto-generate username at signup (`user-{random}`)
-- [ ] Fix auto-create room: conditional on invite status (invited → land in invited room, organic → create personal room)
-- [ ] Feature-flag image uploads — disable `/api/upload` endpoint until NCMEC + scanning operational
-- [ ] Fix magic link (opaque token, remove OTP from subject)
-- [ ] Remove `emailAndPassword: { enabled: true }` — use direct DB insert for agents
-- [ ] Implement user reporting UI and `content_reports` table
-- [ ] Add OTP rate limiting (per-email: 3/15min, per-IP: 10/hr, global: 100/min)
-- [ ] Integrate Cloudflare Turnstile on login page (invisible mode, server-side validation)
-- [ ] Add honeypot field to login form
-- [ ] Add consistent responses for OTP send (same response whether email exists or not)
-- [ ] Block disposable email domains (denylist)
-- [ ] Add OTP verification attempt limit (5 per generation) and account lockout (15min after 3 failures)
-- [ ] Reduce cookie cache to 5 minutes
-- [ ] Fix email leak in WebSocket X-User-Name header
-- [ ] Sign WebSocket identity headers with HMAC
-- [ ] Add AI processing disclosure modal (shown at first room entry with agents)
+- [ ] Draft and publish Terms of Service (engage legal counsel) ⚠️ REQUIRES LEGAL
+- [ ] Draft and publish Privacy Policy with all GDPR Art. 13 + CCPA disclosures ⚠️ REQUIRES LEGAL
+- [ ] Execute DPAs with Cloudflare, Aiven, Resend, Anthropic ⚠️ REQUIRES LEGAL
+- [ ] Complete Record of Processing Activities (ROPA) ⚠️ REQUIRES LEGAL
+- [ ] Complete Data Protection Impact Assessment (DPIA) ⚠️ REQUIRES LEGAL
+- [x] Implement `terms_acceptances` table with server-side recording (separate ToS + Privacy checkboxes)
+- [x] Implement age gate as first screen, before email collection (DOB verified, not stored)
+- [x] Auto-generate username at signup (`user-{random}`)
+- [x] Fix auto-create room: conditional on invite status (invited → land in invited room, organic → create personal room)
+- [x] Feature-flag image uploads — disable `/api/upload` endpoint until NCMEC + scanning operational
+- [x] Fix magic link (opaque token, remove OTP from subject)
+- [x] Remove `emailAndPassword: { enabled: true }` — use direct DB insert for agents
+- [x] Implement user reporting UI and `content_reports` table
+- [x] Add OTP rate limiting (per-email: 3/15min, per-IP: 10/hr, global: 100/min)
+- [ ] Integrate Cloudflare Turnstile on login page (invisible mode, server-side validation) ⚠️ NEEDS TURNSTILE_SECRET_KEY
+- [x] Add honeypot field to login form
+- [x] Add consistent responses for OTP send (same response whether email exists or not)
+- [x] Block disposable email domains (denylist)
+- [x] Add OTP verification attempt limit (5 per generation) and account lockout (15min after 3 failures)
+- [x] Reduce cookie cache to 5 minutes
+- [x] Fix email leak in WebSocket X-User-Name header
+- [x] Sign WebSocket identity headers with HMAC
+- [x] Add AI processing disclosure modal (shown at first room entry with agents)
 
 ### P1 — Within 30 days of launch
 
@@ -972,8 +972,8 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 - [ ] Add image scanning pipeline (Cloudflare Images CSAM detection)
 - [ ] Implement international data transfer mechanisms (SCCs)
 - [ ] Add cookie consent mechanism for EU users
-- [ ] Implement 2FA (twoFactor + passkey Better Auth plugins)
-- [ ] Add `account_audit` logging for auth events
+- [ ] Implement 2FA UI (twoFactor plugin configured, passkey pending plugin availability)
+- [x] Add `account_audit` table (schema created, logging hooks P1)
 - [ ] Implement session listing and remote logout in settings
 - [ ] Migrate CSP to nonce-based (remove `unsafe-inline`)
 - [ ] Atomic agent creation with transaction rollback

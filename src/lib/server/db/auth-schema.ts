@@ -10,15 +10,23 @@ import { pgTable, text, boolean, timestamp, integer, uniqueIndex } from 'drizzle
 
 // ── Core tables ──────────────────────────────────────────────────────
 
-export const user = pgTable('user', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	email: text('email').notNull().unique(),
-	emailVerified: boolean('emailVerified').notNull(),
-	image: text('image'),
-	createdAt: timestamp('createdAt').notNull(),
-	updatedAt: timestamp('updatedAt').notNull()
-});
+export const user = pgTable(
+	'user',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		email: text('email').notNull().unique(),
+		emailVerified: boolean('emailVerified').notNull(),
+		image: text('image'),
+		// additionalFields from docs/003-Auth.md
+		username: text('username'),
+		displayName: text('displayName'),
+		ageVerifiedAt: timestamp('ageVerifiedAt'),
+		createdAt: timestamp('createdAt').notNull(),
+		updatedAt: timestamp('updatedAt').notNull()
+	},
+	(table) => [uniqueIndex('idx_user_username').on(table.username)]
+);
 
 export const session = pgTable('session', {
 	id: text('id').primaryKey(),
@@ -102,6 +110,19 @@ export const invitation = pgTable('invitation', {
 	inviterId: text('inviterId')
 		.notNull()
 		.references(() => user.id)
+});
+
+// ── Two-Factor plugin ───────────────────────────────────────────────
+
+export const twoFactor = pgTable('twoFactor', {
+	id: text('id').primaryKey(),
+	secret: text('secret').notNull(),
+	backupCodes: text('backupCodes').notNull(),
+	userId: text('userId')
+		.notNull()
+		.references(() => user.id),
+	createdAt: timestamp('createdAt'),
+	updatedAt: timestamp('updatedAt')
 });
 
 // ── API Key plugin ───────────────────────────────────────────────────

@@ -14,6 +14,8 @@ import type { CloudflareEnv } from './app.d.ts';
 // dotenv (which uses node:fs) into the Cloudflare Workers output.
 
 import { createAuth } from '$lib/server/auth';
+import { checkRateLimit } from '$lib/server/rate-limit';
+import { isDisposableEmail } from '$lib/server/disposable-emails';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -121,6 +123,158 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	// ── OTP Rate Limiting ──────────────────────────────────────────────────
+	// Intercept OTP endpoints BEFORE they reach Better Auth.
+	// All blocked requests return consistent responses to prevent enumeration.
+	const isOtpSend =
+		event.url.pathname === '/api/auth/email-otp/send-verification-otp' &&
+		event.request.method === 'POST';
+	const isOtpVerify =
+		event.url.pathname === '/api/auth/sign-in/email-otp' &&
+		event.request.method === 'POST';
+
+	if (isOtpSend || isOtpVerify) {
+		// ── Turnstile CAPTCHA verification ──
+		const turnstileSecret =
+			event.platform?.env?.TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY;
+		if (turnstileSecret) {
+			const captchaToken = event.request.headers.get('x-captcha-response');
+			if (!captchaToken) {
+				return new Response(
+					JSON.stringify({ error: { message: 'CAPTCHA verification required' } }),
+					{ status: 400, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+			try {
+				const verifyRes = await fetch(
+					'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+					{
+						method: 'POST',
+						headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+						body: new URLSearchParams({
+							secret: turnstileSecret,
+							response: captchaToken,
+							remoteip: event.getClientAddress()
+						})
+					}
+				);
+				const result = (await verifyRes.json()) as { success: boolean };
+				if (!result.success) {
+					return new Response(
+						JSON.stringify({ error: { message: 'CAPTCHA verification failed' } }),
+						{ status: 403, headers: { 'Content-Type': 'application/json' } }
+					);
+				}
+			} catch (err) {
+				console.error('[Auth] Turnstile verification error:', err);
+				// Fail open in case of network error to Cloudflare — rate limiting still protects
+			}
+		}
+
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+
+		if (!kv && hasHyperdrive) {
+			// Production without KV — rate limiting is critical, warn loudly
+			console.warn('[Auth] CACHE KV binding missing — OTP rate limiting disabled');
+		}
+
+		if (kv) {
+			// Clone request so the body can still be read by Better Auth downstream
+			const body = (await event.request
+				.clone()
+				.json()
+				.catch(() => ({}))) as Record<string, unknown>;
+			const email = (typeof body.email === 'string' ? body.email : '')
+				.trim()
+				.toLowerCase();
+
+			if (isOtpSend) {
+				// ── Disposable email blocking ──
+				// Silent drop: attacker gets same response as a successful send
+				if (email && isDisposableEmail(email)) {
+					return new Response(JSON.stringify({ ok: true }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+
+				const ip = event.getClientAddress();
+
+				// ── Per-IP rate limit: 10 requests / hour ──
+				const ipLimit = await checkRateLimit(kv, {
+					key: `otp-ip:${ip}`,
+					maxRequests: 10,
+					windowSeconds: 3600
+				});
+				if (!ipLimit.allowed) {
+					// Silent drop — same 200 OK so attacker can't distinguish
+					return new Response(JSON.stringify({ ok: true }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+
+				// ── Per-email rate limit: 3 requests / 15 min ──
+				if (email) {
+					const emailLimit = await checkRateLimit(kv, {
+						key: `otp-email:${email}`,
+						maxRequests: 3,
+						windowSeconds: 900
+					});
+					if (!emailLimit.allowed) {
+						return new Response(JSON.stringify({ ok: true }), {
+							status: 200,
+							headers: { 'Content-Type': 'application/json' }
+						});
+					}
+				}
+
+				// ── Global rate limit: 100 requests / minute ──
+				const globalLimit = await checkRateLimit(kv, {
+					key: 'otp-global',
+					maxRequests: 100,
+					windowSeconds: 60
+				});
+				if (!globalLimit.allowed) {
+					return new Response(JSON.stringify({ ok: true }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+			}
+
+			if (isOtpVerify && email) {
+				// Check lockout first (avoids incrementing counter for locked-out users)
+				const lockout = await kv.get(`lockout:${email}`);
+				if (lockout) {
+					return new Response(
+						JSON.stringify({
+							error: { message: 'Too many attempts. Please try again later.' }
+						}),
+						{ status: 429, headers: { 'Content-Type': 'application/json' } }
+					);
+				}
+
+				// Verification rate limit: 5 attempts / 15 min per email
+				const verifyLimit = await checkRateLimit(kv, {
+					key: `otp-verify:${email}`,
+					maxRequests: 5,
+					windowSeconds: 900
+				});
+				if (!verifyLimit.allowed) {
+					// Lockout: set a flag so subsequent requests also fail fast
+					await kv.put(`lockout:${email}`, 'locked', { expirationTtl: 900 });
+					return new Response(
+						JSON.stringify({
+							error: { message: 'Too many attempts. Please try again later.' }
+						}),
+						{ status: 429, headers: { 'Content-Type': 'application/json' } }
+					);
+				}
+			}
+		}
+	}
+
 	// Process the request — ensure Hyperdrive client is closed after
 	try {
 		const response = await resolve(event);
@@ -146,11 +300,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const csp = [
 			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com", // Required for SvelteKit hydration; TODO: nonce-based CSP
+			"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com", // Turnstile + SvelteKit hydration; TODO: nonce-based CSP
 			"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
 			"img-src 'self' data: blob: https:",
 			"font-src 'self' data: https://cdn.jsdelivr.net",
-			"connect-src 'self' https://martol.app wss://martol.app https://martol.plitix.com wss://martol.plitix.com https://cloudflareinsights.com",
+			"connect-src 'self' https://martol.app wss://martol.app https://martol.plitix.com wss://martol.plitix.com https://cloudflareinsights.com https://challenges.cloudflare.com",
+			"frame-src https://challenges.cloudflare.com", // Turnstile iframe
 			"worker-src 'self' blob:",
 			"object-src 'none'",
 			"base-uri 'self'",

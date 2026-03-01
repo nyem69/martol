@@ -132,10 +132,55 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response('Expected WebSocket upgrade', { status: 426 });
 		}
 
-		const userId = request.headers.get('X-User-Id');
-		const userRole = request.headers.get('X-User-Role') ?? 'member';
-		const userName = request.headers.get('X-User-Name') ?? 'Unknown';
-		const orgId = request.headers.get('X-Org-Id') ?? '';
+		// Verify HMAC-signed identity headers
+		const identityPayload = request.headers.get('X-Identity');
+		const identitySig = request.headers.get('X-Identity-Sig');
+
+		if (!identityPayload || !identitySig) {
+			return new Response('Missing signed identity', { status: 401 });
+		}
+
+		const signingKey = this.env.BETTER_AUTH_SECRET;
+		if (!signingKey) {
+			return new Response('Signing key unavailable', { status: 503 });
+		}
+
+		let parsedIdentity: { userId: string; role: string; userName: string; orgId: string; timestamp: number };
+		try {
+			parsedIdentity = JSON.parse(identityPayload);
+		} catch {
+			return new Response('Invalid identity payload', { status: 400 });
+		}
+
+		// Verify HMAC signature
+		const key = await crypto.subtle.importKey(
+			'raw',
+			new TextEncoder().encode(signingKey),
+			{ name: 'HMAC', hash: 'SHA-256' },
+			false,
+			['verify']
+		);
+		const sigBytes = Uint8Array.from(atob(identitySig), (c) => c.charCodeAt(0));
+		const valid = await crypto.subtle.verify(
+			'HMAC',
+			key,
+			sigBytes,
+			new TextEncoder().encode(identityPayload)
+		);
+
+		if (!valid) {
+			return new Response('Invalid identity signature', { status: 403 });
+		}
+
+		// Reject stale signatures (older than 60 seconds)
+		if (Date.now() - parsedIdentity.timestamp > 60_000) {
+			return new Response('Identity signature expired', { status: 403 });
+		}
+
+		const userId = parsedIdentity.userId;
+		const userRole = parsedIdentity.role;
+		const userName = parsedIdentity.userName;
+		const orgId = parsedIdentity.orgId;
 
 		if (!userId) {
 			return new Response('Missing user identity', { status: 401 });

@@ -13,6 +13,7 @@
 		hasMoreHistory = true,
 		onRetry,
 		onReply,
+		onReport,
 		onLoadMore
 	}: {
 		messages: DisplayMessage[];
@@ -22,6 +23,7 @@
 		hasMoreHistory?: boolean;
 		onRetry?: (localId: string) => void;
 		onReply?: (message: DisplayMessage) => void;
+		onReport?: (messageId: number, messageBody: string) => void;
 		onLoadMore?: () => void;
 	} = $props();
 
@@ -144,7 +146,7 @@
 
 		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.data.id)}
 			{#if item.kind === 'message'}
-				<MessageBubble message={item.data} {onRetry} {onReply} />
+				<MessageBubble message={item.data} {onRetry} {onReply} {onReport} />
 			{:else}
 				{@const event = item.data}
 				<SystemLine

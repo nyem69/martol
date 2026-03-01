@@ -65,13 +65,40 @@ export const GET: RequestHandler = async ({ params, locals, platform, request })
 	const doId = platform.env.CHAT_ROOM.idFromName(roomId);
 	const stub = platform.env.CHAT_ROOM.get(doId);
 
-	// 4. Forward request to DO with user info in headers
+	// 4. Forward request to DO with signed identity headers
 	const doUrl = new URL(request.url);
 	const headers = new Headers(request.headers);
-	headers.set('X-User-Id', user.id);
-	headers.set('X-User-Role', memberRecord.role);
-	headers.set('X-User-Name', user.name || user.email || 'Unknown');
-	headers.set('X-Org-Id', roomId);
+
+	const userId = user.id;
+	const role = memberRecord.role;
+	const userName = user.name || user.username || `User-${user.id.slice(0, 6)}`;
+
+	// HMAC-sign identity payload to prevent header spoofing
+	const signingKey = platform?.env?.BETTER_AUTH_SECRET;
+	if (!signingKey) {
+		error(503, 'Signing key unavailable');
+	}
+
+	const identityPayload = JSON.stringify({
+		userId,
+		role,
+		userName,
+		orgId: roomId,
+		timestamp: Date.now()
+	});
+
+	const key = await crypto.subtle.importKey(
+		'raw',
+		new TextEncoder().encode(signingKey),
+		{ name: 'HMAC', hash: 'SHA-256' },
+		false,
+		['sign']
+	);
+	const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(identityPayload));
+	const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+	headers.set('X-Identity', identityPayload);
+	headers.set('X-Identity-Sig', signature);
 
 	const doRequest = new Request(doUrl.toString(), {
 		method: 'GET',

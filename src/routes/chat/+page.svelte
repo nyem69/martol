@@ -9,12 +9,17 @@
 	import ChatInput from '$lib/components/chat/ChatInput.svelte';
 	import MemberPanel from '$lib/components/chat/MemberPanel.svelte';
 	import PendingActionLine from '$lib/components/chat/PendingActionLine.svelte';
+	import AIDisclosureModal from '$lib/components/chat/AIDisclosureModal.svelte';
+	import ReportModal from '$lib/components/chat/ReportModal.svelte';
 
 	let { data } = $props();
 
 	// These values are stable for the page lifetime (server load runs once, no invalidation).
 	// svelte-ignore state_referenced_locally — intentional: capturing initial snapshot for store.
-	const { roomId, userId, userName, userRole, roomName, initialMessages } = data;
+	const { roomId, userId, userName, userRole, roomName, initialMessages, hasAgents } = data;
+
+	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
+	let showAIDisclosure = $state(false);
 
 	// Convert DB messages to DisplayMessage format
 	const dbMessages: DisplayMessage[] = initialMessages.map((msg: (typeof initialMessages)[number]) => ({
@@ -34,6 +39,7 @@
 
 	let memberPanelOpen = $state(false);
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
+	let reportTarget = $state<{ messageId: number; messageBody: string } | null>(null);
 	let pendingActions = $state<PendingAction[]>([]);
 	let loadingHistory = $state(false);
 	let hasMoreHistory = $state(initialMessages.length >= 50);
@@ -136,9 +142,17 @@
 		replyTo = { dbId: message.dbId, senderName: message.senderName, body: message.body };
 	}
 
+	function handleReport(messageId: number, messageBody: string) {
+		reportTarget = { messageId, messageBody };
+	}
+
 	onMount(() => {
 		store.connect();
 		loadPendingActions();
+		// Show AI disclosure if room has agents and user hasn't acknowledged
+		if (hasAgents && !localStorage.getItem(`ai-disclosed-${roomId}`)) {
+			showAIDisclosure = true;
+		}
 		return () => store.disconnect();
 	});
 </script>
@@ -164,6 +178,7 @@
 			{hasMoreHistory}
 			onRetry={(localId) => store.retrySend(localId)}
 			onReply={handleReply}
+			onReport={handleReport}
 			onLoadMore={loadMoreHistory}
 		/>
 
@@ -221,3 +236,18 @@
 		{roomId}
 	/>
 </main>
+
+{#if showAIDisclosure}
+	<AIDisclosureModal
+		{roomId}
+		onAcknowledge={() => (showAIDisclosure = false)}
+	/>
+{/if}
+
+{#if reportTarget}
+	<ReportModal
+		messageId={reportTarget.messageId}
+		messageBody={reportTarget.messageBody}
+		onClose={() => (reportTarget = null)}
+	/>
+{/if}

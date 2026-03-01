@@ -7,7 +7,7 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
-import { member, user, apikey } from '$lib/server/db/auth-schema';
+import { member, user, account, apikey } from '$lib/server/db/auth-schema';
 import { agentRoomBindings } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -78,28 +78,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		error(409, 'An agent with this label already exists in this room');
 	}
 
-	// 1. Create synthetic agent user via Better Auth
-	const randomId = crypto.randomUUID().slice(0, 12);
-	const agentEmail = `agent-${randomId}@martol.local`;
-	const agentPassword = crypto.randomUUID();
+	// 1. Create synthetic agent user via direct DB insert
+	const agentUserId = crypto.randomUUID();
+	const agentEmail = `agent-${crypto.randomUUID().slice(0, 12)}@agent.invalid`;
 
-	let signUpResult: any;
 	try {
-		signUpResult = await locals.auth.api.signUpEmail({
-			body: {
-				name: label,
-				email: agentEmail,
-				password: agentPassword
-			}
+		await locals.db.insert(user).values({
+			id: agentUserId,
+			name: label,
+			email: agentEmail,
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+
+		// Create account record for Better Auth consistency
+		await locals.db.insert(account).values({
+			id: crypto.randomUUID(),
+			accountId: agentUserId,
+			providerId: 'agent',
+			userId: agentUserId,
+			createdAt: new Date(),
+			updatedAt: new Date()
 		});
 	} catch (e: any) {
-		console.error('[Agents] signUpEmail failed:', e);
-		error(500, 'Failed to create agent user');
-	}
-
-	const agentUserId = signUpResult?.user?.id ?? signUpResult?.id;
-	if (!agentUserId) {
-		console.error('[Agents] signUpEmail returned no user ID:', signUpResult);
+		console.error('[Agents] agent user insert failed:', e);
 		error(500, 'Failed to create agent user');
 	}
 

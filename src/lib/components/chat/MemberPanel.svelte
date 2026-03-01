@@ -797,33 +797,24 @@
 				<div style="overflow: hidden;">
 					<div class="flex flex-col gap-1.5 px-4 pb-3">
 						<a
-							href="https://github.com/nyem69/martol/blob/main/LICENSE"
-							target="_blank"
-							rel="noopener noreferrer"
+							href="/legal/terms"
 							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
 							style="color: var(--accent);"
 						>
-							<ExternalLink size={11} />
 							{m.legal_terms()}
 						</a>
 						<a
-							href="https://github.com/nyem69/martol/blob/main/PRIVACY.md"
-							target="_blank"
-							rel="noopener noreferrer"
+							href="/legal/privacy"
 							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
 							style="color: var(--accent);"
 						>
-							<ExternalLink size={11} />
 							{m.legal_privacy()}
 						</a>
 						<a
-							href="https://www.anthropic.com/legal/aup"
-							target="_blank"
-							rel="noopener noreferrer"
+							href="/legal/aup"
 							class="inline-flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-80"
 							style="color: var(--accent);"
 						>
-							<ExternalLink size={11} />
 							{m.legal_anthropic_terms()}
 						</a>
 						<a

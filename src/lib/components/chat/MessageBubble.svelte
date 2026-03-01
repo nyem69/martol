@@ -2,15 +2,18 @@
 	import type { DisplayMessage } from '$lib/stores/messages.svelte';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import * as m from '$lib/paraglide/messages';
+	import { Flag } from '@lucide/svelte';
 
 	let {
 		message,
 		onRetry,
-		onReply
+		onReply,
+		onReport
 	}: {
 		message: DisplayMessage;
 		onRetry?: (localId: string) => void;
 		onReply?: (message: DisplayMessage) => void;
+		onReport?: (messageId: number, messageBody: string) => void;
 	} = $props();
 
 	let now = $state(Date.now());
@@ -84,15 +87,28 @@
 						{m.chat_retry()}
 					</button>
 				{/if}
-			{:else if onReply && message.dbId}
-				<button
-					class="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
-					style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
-					onclick={() => onReply(message)}
-					aria-label={m.chat_reply_to({ name: message.senderName })}
-				>
-					{m.chat_reply()}
-				</button>
+			{:else if message.dbId}
+				{#if onReply}
+					<button
+						class="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+						style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
+						onclick={() => onReply(message)}
+						aria-label={m.chat_reply_to({ name: message.senderName })}
+					>
+						{m.chat_reply()}
+					</button>
+				{/if}
+				{#if onReport && !message.isOwn}
+					<button
+						class="opacity-0 transition-opacity group-hover:opacity-100"
+						style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
+						onclick={() => onReport(message.dbId!, message.body)}
+						aria-label={m.report_title()}
+						data-testid="report-button"
+					>
+						<Flag size={12} />
+					</button>
+				{/if}
 			{/if}
 			<time datetime={message.timestamp} class="text-[11px]" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};">
 				{timeStr}
