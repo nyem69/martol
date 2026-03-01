@@ -13,3 +13,6 @@ drizzle/meta/
 *.local
 .vercel
 .output
+
+
+docs/prompt
