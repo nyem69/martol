@@ -191,5 +191,6 @@
   "chat_invite_send": "Send invite",
   "chat_invite_sending": "Sending...",
   "chat_invite_success": "Invitation sent",
-  "chat_invite_error": "Failed to send invitation"
+  "chat_invite_error": "Failed to send invitation",
+  "chat_invite_resend": "Resend"
 }

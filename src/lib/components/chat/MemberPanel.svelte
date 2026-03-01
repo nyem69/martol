@@ -183,6 +183,8 @@
 	let inviteRole = $state('member');
 	let inviteLoading = $state(false);
 	let inviteStatus = $state<{ type: 'success' | 'error'; message: string } | null>(null);
+	let sentEmails = $state(new Set<string>());
+	const isResend = $derived(sentEmails.has(inviteEmail.trim().toLowerCase()));
 
 	async function sendInvite() {
 		const email = inviteEmail.trim();
@@ -199,7 +201,7 @@
 				inviteStatus = { type: 'error', message: res.error.message || m.chat_invite_error() };
 			} else {
 				inviteStatus = { type: 'success', message: m.chat_invite_success() };
-				inviteEmail = '';
+				sentEmails.add(email.toLowerCase());
 			}
 		} catch {
 			inviteStatus = { type: 'error', message: m.chat_invite_error() };
@@ -395,12 +397,15 @@
 									<button
 										type="submit"
 										class="agent-btn"
-										disabled={inviteLoading || !inviteEmail.trim()}
+										disabled={inviteLoading || !inviteEmail.trim() || (inviteStatus?.type === 'success' && !isResend)}
 										data-testid="invite-send-btn"
 									>
 										{#if inviteLoading}
 											<Loader size={11} class="animate-spin" />
 											{m.chat_invite_sending()}
+										{:else if isResend}
+											<Send size={11} />
+											{m.chat_invite_resend()}
 										{:else}
 											<Send size={11} />
 											{m.chat_invite_send()}
