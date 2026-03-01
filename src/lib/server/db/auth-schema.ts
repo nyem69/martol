@@ -109,7 +109,8 @@ export const invitation = pgTable('invitation', {
 	expiresAt: timestamp('expiresAt').notNull(),
 	inviterId: text('inviterId')
 		.notNull()
-		.references(() => user.id)
+		.references(() => user.id),
+	createdAt: timestamp('createdAt').notNull().defaultNow()
 });
 
 // ── Two-Factor plugin ───────────────────────────────────────────────
