@@ -1,8 +1,10 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader } from '@lucide/svelte';
+	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader, LogOut } from '@lucide/svelte';
 	import { getAvailableCommands } from '$lib/chat/commands';
 	import { themeStore, THEMES } from '$lib/stores/theme.svelte';
+	import { signOut } from '$lib/auth-client';
+	import { goto } from '$app/navigation';
 	import type { SvelteMap } from 'svelte/reactivity';
 
 	let {
@@ -173,6 +175,18 @@
 			.map(([id, name]) => ({ id, name }))
 			.sort((a, b) => a.name.localeCompare(b.name))
 	);
+
+	let loggingOut = $state(false);
+
+	async function handleLogout() {
+		loggingOut = true;
+		try {
+			await signOut();
+			goto('/login');
+		} catch {
+			loggingOut = false;
+		}
+	}
 </script>
 
 {#if open}
@@ -826,6 +840,27 @@
 				</div>
 			</div>
 		</div>
+	</div>
+
+	<!-- Logout button pinned to bottom -->
+	<div
+		class="px-4 py-3"
+		style="border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
+	>
+		<button
+			class="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
+			style="background: color-mix(in oklch, var(--error) 12%, transparent); color: var(--error); font-family: var(--font-mono);"
+			onclick={handleLogout}
+			disabled={loggingOut}
+			data-testid="logout-btn"
+		>
+			{#if loggingOut}
+				<Loader size={14} class="animate-spin" />
+			{:else}
+				<LogOut size={14} />
+			{/if}
+			{m.auth_sign_out()}
+		</button>
 	</div>
 </aside>
 
