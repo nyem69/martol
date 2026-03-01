@@ -592,11 +592,6 @@
 													{/if}
 												</div>
 											</div>
-											{#if agent.keyStart}
-												<div class="text-[9px]" style="color: var(--text-muted); font-family: var(--font-mono);">
-													{m.agent_key_prefix()}: {agent.keyStart}
-												</div>
-											{/if}
 										</div>
 									{/each}
 								</div>
