@@ -30,49 +30,79 @@ Key decisions made during the design process and review:
 | Decision | Rationale |
 |---|---|
 | **Do not store DOB** | Bcrypt-hashed DOB has only ~36K possible values — brute-forced in seconds. Store only `age_verified_at` timestamp after verification. |
-| **Globally unique username** | Prevents impersonation, enables @mentions. Email never exposed to other users. |
-| **Passkey-preferred 2FA** | Zero cost (WebAuthn is browser-native). TOTP as fallback. Mandatory for room owners. |
+| **Globally unique username, auto-generated at signup** | Prevents impersonation, enables @mentions. Auto-generated at signup (e.g. `user-3f82d`) to reduce friction; users personalize later via inline prompt or settings. |
+| **Passkey-preferred 2FA** | Zero cost (WebAuthn is browser-native). TOTP as fallback. Mandatory for room owners at room creation. |
 | **72-hour email undo** (not 14-day) | Shorter window reduces ambiguous account state. New email is primary immediately. |
 | **Better Auth plugins + Cloudflare native** | Minimize custom auth code (highest security risk). Use battle-tested plugins for auth, Cloudflare services for moderation. |
 | **Honest moderation layers** | Launch with what's real (WAF, validation, user reporting), not aspirational (6 layers). Add automated scanning before enabling image uploads. |
-| **Minimum age 16 globally** | Matches strictest EU member states. Avoids COPPA parental consent complexity. |
+| **Minimum age 16** | Matches strictest EU member states. Avoids COPPA parental consent complexity. Enforced as technical minimum; legal docs use jurisdiction-aware language. |
+| **Age gate before email collection** | DOB entry happens before email, so no personal data is processed for underage users. |
+| **Image uploads feature-flagged** | Upload endpoint disabled until NCMEC registration + image scanning pipeline are operational. |
 | **Agent users via direct DB insert** | Do not use `signUpEmail` (requires `emailAndPassword: enabled` which creates a hidden auth bypass). Insert synthetic user directly via Drizzle. |
 
 ---
 
 ## Onboarding Flow
 
-### First-Time User
+### First-Time User (organic signup)
 
 ```
 [Landing / Login page]
     |
     v
-[Enter email]
+[Age gate: DOB entry]  <-- BEFORE email, no personal data collected yet
+    |  - Under 16 → BLOCKED immediately, no data retained
+    |
+    v
+[Enter email + Terms acceptance]
+    |  - ToS checkbox (versioned, recorded server-side)
+    |  - Privacy Policy checkbox (separate, GDPR granular consent)
     |
     v
 [Email OTP] (6-digit code + magic link)
     |
     v
-[Age + Terms screen]  <-- combined to reduce friction
-    |  - Date of birth entry (verified server-side, NOT stored)
-    |  - Under 16 → BLOCKED, no data retained
-    |  - Terms acceptance checkbox (versioned, recorded server-side)
+[Chat — with auto-generated username (e.g. user-3f82d)]
+    |  - Inline banner: "Personalize your username" (dismissible)
+    |  - Auto-create personal room (user becomes owner)
+```
+
+### First-Time User (invited)
+
+```
+[Invitation link] --> [Age gate + Terms] --> [Email OTP]
     |
     v
-[Choose username]  (3-32 chars, globally unique)
-    |  - Optional: set display name (2-64 chars)
+[Land directly in invited room]
+    |  - No personal room auto-created
+    |  - Inline banner: "Personalize your username"
+```
+
+### Room Creation (triggers 2FA requirement)
+
+```
+User creates a room (becomes owner)
     |
     v
-[2FA prompt]  (non-blocking — can skip, enable later)
-    |  - "Secure your account with passkey or authenticator app"
-    |  - Skip button available
+[2FA setup required]
+    |  - "Room owners must enable 2FA to protect this room"
+    |  - Passkey or TOTP — no skip option
+    |  - Backup codes shown and acknowledged
     |
     v
-[Auto-create first room]
+[Room created]
+```
+
+### AI Processing Disclosure (first room entry)
+
+```
+User enters a room with AI agents for the first time
     |
     v
-[Chat — with welcome system message]
+[Modal: AI Processing Notice]
+    |  - "Messages in this room may be processed by [Provider Name]"
+    |  - Link to provider's privacy policy
+    |  - "I understand" button (recorded in terms_acceptances)
 ```
 
 ### Returning User
@@ -95,20 +125,24 @@ Key decisions made during the design process and review:
 
 ### Key Design Points
 
-- **Age gate before terms** — if user is underage, reject before collecting any data (GDPR Article 8, COPPA compliance)
-- **Age + terms on one screen** — reduces onboarding steps from 5+ to 3 (email → OTP → age+terms+username)
+- **Age gate before email** — DOB entry happens first. If underage, no personal data is ever collected (GDPR Article 8, COPPA compliance). No data retained for blocked users.
+- **Separate ToS and Privacy checkboxes** — GDPR requires granular consent. Two checkboxes, not one bundled agreement.
 - **Terms versioned** — stored in DB with acceptance timestamp, IP, user agent. Re-prompted on version change.
-- **2FA prompt is non-blocking** — shown but skippable. Users can enable later in settings.
-- **Re-acceptance flow** — when terms version changes, returning users see the age+terms screen again before accessing chat
+- **Username auto-generated** — `user-{random}` assigned at signup to eliminate creative friction. Users personalize later via inline prompt or settings. Global uniqueness preserved.
+- **2FA enforced at room creation** — not optional for owners. Triggered when a user creates their first room (organic) or any subsequent room. No skip option.
+- **Invited users skip room creation** — land directly in invited room. No unwanted personal room.
+- **AI processing disclosure** — explicit modal shown when user first enters a room with AI agents. Recorded as consent.
+- **Re-acceptance flow** — when terms version changes, returning users see the terms screen again before accessing chat.
 
 ### Friction Mitigation
 
-The onboarding has 3 mandatory screens after email entry:
-1. OTP verification (proves email ownership)
-2. Age gate + terms (legal requirement, combined into one screen)
-3. Username selection (identity requirement)
+Organic signup has 2 mandatory screens before chat:
+1. Age gate (DOB entry, no data stored)
+2. Email + terms + OTP
 
-This is the minimum viable onboarding for a global SaaS platform with regulatory obligations.
+That's it. Username is auto-generated, 2FA is deferred until room creation, and the user is in chat immediately after OTP verification.
+
+Invited users also see 2 screens: age gate + email/terms/OTP, then land in the invited room.
 
 ---
 
@@ -120,18 +154,20 @@ Better Auth's `user` table extended via `additionalFields`:
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
-| `username` | TEXT | UNIQUE, NOT NULL (after onboarding) | 3-32 chars, `[a-zA-Z0-9_]`, case-insensitive uniqueness |
+| `username` | TEXT | UNIQUE, NOT NULL | 3-32 chars, `[a-zA-Z0-9_]`, case-insensitive uniqueness. Auto-generated at signup. |
 | `displayName` | TEXT | nullable, max 64 chars | Free-form, can contain unicode. Changeable anytime. |
-| `ageVerifiedAt` | TIMESTAMP | NOT NULL (after onboarding) | When age gate was passed. No DOB stored. |
+| `ageVerifiedAt` | TIMESTAMP | NOT NULL | When age gate was passed. No DOB stored. |
 
 ### Username Rules
 
+- **Auto-generated at signup**: `user-{random8}` (e.g. `user-3f82d9a1`). User can personalize later.
 - **Globally unique**, case-insensitive (stored lowercase, displayed as entered)
 - **3-32 characters**: letters, digits, underscore only
 - **Reserved words blocked**: `admin`, `system`, `agent`, `bot`, `martol`, `support`, `help`, `sales`, `null`, `undefined`, `deleted`, etc.
 - **Changes allowed** with **90-day cooldown**
 - **Old username held** in `username_history` table for **90 days** (prevents impersonation)
 - **Displayed in chat** as the nick color system already supports
+- **Inline personalization prompt**: after first login, a dismissible banner says "Personalize your username" linking to settings
 
 ### Email Privacy
 
@@ -197,7 +233,7 @@ Email OTP verified
 | **Recovery email** | Optional secondary email for 2FA bypass. Must be verified. Provides alternative recovery path. |
 | **No SMS** | Zero cost, no carrier dependency |
 | **Optional for most users** | Can enable/disable in settings |
-| **Mandatory for room owners** | Enforced when user creates a room or is promoted to owner. Must have at least one 2FA method registered. |
+| **Mandatory for room owners** | Enforced at room creation — no skip. If promoted to owner of existing room, must set up 2FA before exercising owner privileges. |
 | **Cost** | $0 — TOTP is algorithmic, passkeys are browser-native WebAuthn |
 
 ### Owner Lockout Prevention
@@ -287,21 +323,20 @@ Every email change logged in `account_audit` table:
 ### Flow
 
 ```
-First-time signup (after email OTP verified)
+[Landing page — BEFORE email entry]
     |
     v
-[Date of birth entry — combined with terms acceptance screen]
+[Date of birth entry]
     |
     +--> Under 16 --> BLOCKED
     |                  "You must be at least 16 to use this service"
     |                  Generic message (does not reveal exact threshold)
-    |                  No account created
-    |                  Email and DOB immediately purged — no data retained
+    |                  No email collected, no account created, no data retained
     |
-    +--> 16+ --> ALLOWED
+    +--> 16+ --> ALLOWED, proceed to email + terms
     |
     v
-[Store ONLY: age_verified_at timestamp]
+[Store ONLY: age_verified_at timestamp on user record after account creation]
 [DOB is NOT stored in any form]
 ```
 
@@ -309,14 +344,14 @@ First-time signup (after email OTP verified)
 
 | Decision | Rationale |
 |---|---|
-| **Minimum age: 16 globally** | Matches strictest EU member states. Avoids jurisdiction-specific complexity. |
+| **Age gate before email collection** | DOB entry is the first screen. No personal data (email, name) is collected until age is verified. If underage, nothing is stored. This is the correct GDPR posture. |
+| **Minimum age: 16** | Matches strictest EU member states. Enforced as technical minimum. Legal documents use jurisdiction-aware language ("must meet minimum age in your jurisdiction, currently 16 in supported regions"). |
 | **DOB not stored** | Only ~36K possible values — bcrypt hash is trivially brute-forced. GDPR data minimization (Art. 5(1)(c)) requires not storing data beyond its purpose. |
 | **Store only `age_verified_at`** | Proves age gate was passed without retaining sensitive data |
 | **Generic rejection message** | Does not reveal the exact age threshold (prevents gaming) |
 | **DOB not editable** | Collected once at signup, verified once, discarded |
-| **GeoIP hint** | Use `cf-ipcountry` header to display appropriate age context in UI, but enforce 16 as global minimum |
+| **GeoIP hint** | Use `cf-ipcountry` header to display appropriate age context in UI, but enforce 16 as technical minimum |
 | **No real ID verification** | Self-declared, same standard as Discord/Reddit/GitHub. Architecture supports adding stronger verification later if regulations require it. |
-| **Age gate before email collection** (future improvement) | Currently after OTP (email already in system). Ideally, move age gate before email entry to avoid retaining data of minors. |
 
 ---
 
@@ -865,9 +900,11 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 - [ ] Execute DPAs with Cloudflare, Aiven, Resend, Anthropic
 - [ ] Complete Record of Processing Activities (ROPA)
 - [ ] Complete Data Protection Impact Assessment (DPIA)
-- [ ] Implement `terms_acceptances` table with server-side recording
-- [ ] Implement age gate in onboarding flow (DOB verified, not stored)
-- [ ] Implement username selection in onboarding
+- [ ] Implement `terms_acceptances` table with server-side recording (separate ToS + Privacy checkboxes)
+- [ ] Implement age gate as first screen, before email collection (DOB verified, not stored)
+- [ ] Auto-generate username at signup (`user-{random}`)
+- [ ] Fix auto-create room: conditional on invite status (invited → land in invited room, organic → create personal room)
+- [ ] Feature-flag image uploads — disable `/api/upload` endpoint until NCMEC + scanning operational
 - [ ] Fix magic link (opaque token, remove OTP from subject)
 - [ ] Remove `emailAndPassword: { enabled: true }` — use direct DB insert for agents
 - [ ] Implement user reporting UI and `content_reports` table
@@ -875,6 +912,7 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 - [ ] Reduce cookie cache to 5 minutes
 - [ ] Fix email leak in WebSocket X-User-Name header
 - [ ] Sign WebSocket identity headers with HMAC
+- [ ] Add AI processing disclosure modal (shown at first room entry with agents)
 
 ### P1 — Within 30 days of launch
 
