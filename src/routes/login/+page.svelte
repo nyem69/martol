@@ -35,8 +35,11 @@
 
 	function renderTurnstile(node: HTMLElement) {
 		if (!turnstileSiteKey || typeof window === 'undefined') return;
-		// window.turnstile may load after the component — wait for it
+		let timerId: ReturnType<typeof setTimeout> | null = null;
+		let destroyed = false;
+
 		const tryRender = () => {
+			if (destroyed) return;
 			if ((window as any).turnstile) {
 				turnstileWidgetId = (window as any).turnstile.render(node, {
 					sitekey: turnstileSiteKey,
@@ -45,13 +48,15 @@
 					size: 'flexible'
 				});
 			} else {
-				setTimeout(tryRender, 100);
+				timerId = setTimeout(tryRender, 100);
 			}
 		};
 		tryRender();
 
 		return {
 			destroy() {
+				destroyed = true;
+				if (timerId !== null) clearTimeout(timerId);
 				if (turnstileWidgetId != null && (window as any).turnstile) {
 					(window as any).turnstile.remove(turnstileWidgetId);
 				}
@@ -143,16 +148,7 @@
 		error = '';
 
 		try {
-			const fetchHeaders: Record<string, string> = {};
-			if (turnstileToken) {
-				fetchHeaders['x-captcha-response'] = turnstileToken;
-			}
-
-			const result = await signIn.emailOtp({
-				email: email.trim(),
-				otp: code,
-				fetchOptions: { headers: fetchHeaders }
-			});
+			const result = await signIn.emailOtp({ email: email.trim(), otp: code });
 			if (result.error) {
 				error = result.error.message || m.login_code_invalid();
 			} else {
@@ -161,7 +157,7 @@
 					await fetch('/api/terms', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ types: ['tos', 'privacy'] })
+						body: JSON.stringify({ types: ['tos', 'privacy', 'aup'] })
 					});
 				} catch {
 					// Non-blocking — terms acceptance is best-effort during login
@@ -354,7 +350,7 @@
 							{m.login_privacy_label()}
 							<a href="/legal/privacy" class="underline" style="color: var(--accent);">{m.legal_privacy()}</a>
 							{m.login_agree_and()}
-							<a href="/legal/aup" class="underline" style="color: var(--accent);">{m.legal_anthropic_terms()}</a>
+							<a href="/legal/aup" class="underline" style="color: var(--accent);">{m.legal_aup()}</a>
 						</span>
 					</label>
 

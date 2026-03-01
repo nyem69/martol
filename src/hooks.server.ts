@@ -133,8 +133,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.url.pathname === '/api/auth/sign-in/email-otp' &&
 		event.request.method === 'POST';
 
-	if (isOtpSend || isOtpVerify) {
-		// ── Turnstile CAPTCHA verification ──
+	// ── Turnstile CAPTCHA verification (OTP send only) ──
+	// Turnstile tokens are single-use. Enforce only on send, not verify.
+	// Verify is already protected by OTP secret + 5-attempt lockout.
+	if (isOtpSend) {
 		const turnstileSecret =
 			event.platform?.env?.TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY;
 		if (turnstileSecret) {
@@ -170,7 +172,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 				// Fail open in case of network error to Cloudflare — rate limiting still protects
 			}
 		}
+	}
 
+	if (isOtpSend || isOtpVerify) {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
 
 		if (!kv && hasHyperdrive) {

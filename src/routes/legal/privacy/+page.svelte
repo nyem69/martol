@@ -74,6 +74,8 @@
 		<li><strong>Deletion</strong> — request deletion of your account and data.</li>
 		<li><strong>Portability</strong> — request your data in a machine-readable format.</li>
 		<li><strong>Objection</strong> — object to processing based on legitimate interest.</li>
+		<li><strong>Restriction</strong> — request that we restrict processing of your data (e.g., during dispute resolution).</li>
+		<li><strong>Complaint</strong> — lodge a complaint with your local data protection supervisory authority.</li>
 	</ul>
 	<p>
 		To exercise these rights, contact us at
@@ -105,69 +107,3 @@
 		<a href="mailto:nyem69@users.noreply.github.com">nyem69@users.noreply.github.com</a>.
 	</p>
 </article>
-
-<style>
-	.legal-content {
-		color: var(--text);
-		line-height: 1.7;
-	}
-
-	.legal-content h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: var(--accent);
-		font-family: var(--font-mono);
-		letter-spacing: 0.05em;
-		margin-bottom: 0.25rem;
-	}
-
-	.legal-content .last-updated {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		margin-bottom: 1.5rem;
-	}
-
-	.legal-content h2 {
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--text);
-		margin-top: 1.5rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.legal-content p {
-		font-size: 0.875rem;
-		color: var(--text-muted);
-		margin-bottom: 0.75rem;
-	}
-
-	.legal-content ul {
-		font-size: 0.875rem;
-		color: var(--text-muted);
-		margin-bottom: 0.75rem;
-		padding-left: 1.25rem;
-		list-style: disc;
-	}
-
-	.legal-content li {
-		margin-bottom: 0.25rem;
-	}
-
-	.legal-content a {
-		color: var(--accent);
-		text-decoration: underline;
-	}
-
-	.legal-content a:hover {
-		opacity: 0.8;
-	}
-
-	.legal-content code {
-		font-family: var(--font-mono);
-		font-size: 0.8125rem;
-		color: var(--accent);
-		background: var(--bg);
-		padding: 0.125rem 0.375rem;
-		border-radius: 0.25rem;
-	}
-</style>

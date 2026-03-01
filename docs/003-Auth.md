@@ -559,7 +559,7 @@ Required clauses:
 12. Termination — grounds, data handling post-termination
 13. Third-party services disclosure
 
-**Note:** The current terms link points to the MIT LICENSE on GitHub. This is a software license, not a Terms of Service. These are legally distinct. Must create a separate ToS for the hosted SaaS.
+**Status:** Draft ToS created at `/legal/terms`. Covers acceptance, service description, eligibility, content ownership, prohibited conduct, AI agents, termination, disclaimers, liability, governing law. Needs legal counsel review before launch.
 
 #### Privacy Policy (must create before launch)
 
@@ -941,8 +941,8 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 
 ### P0 — Blockers (must complete before any public access)
 
-- [ ] Draft and publish Terms of Service (engage legal counsel) ⚠️ REQUIRES LEGAL
-- [ ] Draft and publish Privacy Policy with all GDPR Art. 13 + CCPA disclosures ⚠️ REQUIRES LEGAL
+- [x] Draft Terms of Service, Privacy Policy, and AUP as in-app pages (`/legal/terms`, `/legal/privacy`, `/legal/aup`) — ⚠️ STILL NEEDS LEGAL COUNSEL REVIEW
+- [ ] Have legal counsel review and finalize ToS, Privacy Policy, AUP ⚠️ REQUIRES LEGAL
 - [ ] Execute DPAs with Cloudflare, Aiven, Resend, Anthropic ⚠️ REQUIRES LEGAL
 - [ ] Complete Record of Processing Activities (ROPA) ⚠️ REQUIRES LEGAL
 - [ ] Complete Data Protection Impact Assessment (DPIA) ⚠️ REQUIRES LEGAL
@@ -955,7 +955,7 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 - [x] Remove `emailAndPassword: { enabled: true }` — use direct DB insert for agents
 - [x] Implement user reporting UI and `content_reports` table
 - [x] Add OTP rate limiting (per-email: 3/15min, per-IP: 10/hr, global: 100/min)
-- [ ] Integrate Cloudflare Turnstile on login page (invisible mode, server-side validation) ⚠️ NEEDS TURNSTILE_SECRET_KEY
+- [x] Integrate Cloudflare Turnstile on login page (widget in email step, server-side validation in hooks.server.ts)
 - [x] Add honeypot field to login form
 - [x] Add consistent responses for OTP send (same response whether email exists or not)
 - [x] Block disposable email domains (denylist)

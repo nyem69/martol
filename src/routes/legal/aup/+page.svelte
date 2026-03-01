@@ -3,11 +3,11 @@
 </script>
 
 <svelte:head>
-	<title>{m.legal_anthropic_terms()} — {m.app_name()}</title>
+	<title>{m.legal_aup()} — {m.app_name()}</title>
 </svelte:head>
 
 <article class="legal-content">
-	<h1>{m.legal_anthropic_terms()}</h1>
+	<h1>{m.legal_aup()}</h1>
 	<p class="last-updated">Last updated: 2026-03-01</p>
 
 	<h2>1. Purpose</h2>
@@ -86,60 +86,3 @@
 		<a href="mailto:nyem69@users.noreply.github.com">nyem69@users.noreply.github.com</a>.
 	</p>
 </article>
-
-<style>
-	.legal-content {
-		color: var(--text);
-		line-height: 1.7;
-	}
-
-	.legal-content h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: var(--accent);
-		font-family: var(--font-mono);
-		letter-spacing: 0.05em;
-		margin-bottom: 0.25rem;
-	}
-
-	.legal-content .last-updated {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		margin-bottom: 1.5rem;
-	}
-
-	.legal-content h2 {
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--text);
-		margin-top: 1.5rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.legal-content p {
-		font-size: 0.875rem;
-		color: var(--text-muted);
-		margin-bottom: 0.75rem;
-	}
-
-	.legal-content ul {
-		font-size: 0.875rem;
-		color: var(--text-muted);
-		margin-bottom: 0.75rem;
-		padding-left: 1.25rem;
-		list-style: disc;
-	}
-
-	.legal-content li {
-		margin-bottom: 0.25rem;
-	}
-
-	.legal-content a {
-		color: var(--accent);
-		text-decoration: underline;
-	}
-
-	.legal-content a:hover {
-		opacity: 0.8;
-	}
-</style>
