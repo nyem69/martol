@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { member, user, organization } from '$lib/server/db/auth-schema';
-import { agentRoomBindings } from '$lib/server/db/schema';
 import type { AgentContext } from '../auth';
 import type { ChatWhoResult, ChatWhoMember, McpResponse } from '$lib/types/mcp';
 
@@ -24,18 +23,11 @@ export async function chatWho(
 		.innerJoin(user, eq(member.userId, user.id))
 		.where(eq(member.organizationId, agent.orgId));
 
-	const agentBindings = await db
-		.select({ agentUserId: agentRoomBindings.agentUserId })
-		.from(agentRoomBindings)
-		.where(eq(agentRoomBindings.orgId, agent.orgId));
-
-	const agentUserIds = new Set(agentBindings.map((b: any) => b.agentUserId));
-
 	const result: ChatWhoMember[] = members.map((m: any) => ({
 		user_id: m.userId,
 		name: m.name,
 		role: m.role,
-		is_agent: agentUserIds.has(m.userId)
+		is_agent: m.role === 'agent'
 	}));
 
 	return {

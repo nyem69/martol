@@ -99,9 +99,8 @@
 	];
 
 	// ── Agent key management state ──
-	let registeredAgents = $state<Array<{id: number, label: string, model: string, keyStart: string | null, createdAt: string | null}>>([]);
-	let newLabel = $state('');
-	let newModel = $state('claude-sonnet-4-20250514');
+	let registeredAgents = $state<Array<{agentUserId: string, name: string, keyStart: string | null, createdAt: string | null}>>([]);
+	let newAgentName = $state('');
 	let generatedKey = $state<string | null>(null);
 	let agentLoading = $state(false);
 	let agentError = $state('');
@@ -126,7 +125,7 @@
 			const res = await fetch('/api/agents', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ label: newLabel, model: newModel })
+				body: JSON.stringify({ name: newAgentName })
 			});
 			const data: { ok?: boolean; data?: { key?: string }; message?: string; error?: string } = await res.json();
 			if (!res.ok || !data.ok) {
@@ -134,7 +133,7 @@
 				return;
 			}
 			generatedKey = data.data?.key ?? null;
-			newLabel = '';
+			newAgentName = '';
 			await fetchAgents();
 		} catch {
 			agentError = 'Network error';
@@ -143,13 +142,13 @@
 		}
 	}
 
-	async function revokeAgent(id: number) {
+	async function revokeAgent(agentUserId: string) {
 		if (!confirm(m.agent_revoke_confirm())) return;
 		try {
-			const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' });
+			const res = await fetch(`/api/agents/${agentUserId}`, { method: 'DELETE' });
 			const data: { ok?: boolean } = await res.json();
 			if (data.ok) {
-				registeredAgents = registeredAgents.filter((a) => a.id !== id);
+				registeredAgents = registeredAgents.filter((a) => a.agentUserId !== agentUserId);
 			}
 		} catch { /* silent */ }
 	}
@@ -653,22 +652,15 @@
 								<div class="mb-2 flex flex-col gap-1.5">
 									<input
 										type="text"
-										bind:value={newLabel}
+										bind:value={newAgentName}
 										placeholder={m.agent_label_placeholder()}
 										class="agent-input"
-										data-testid="agent-label-input"
-									/>
-									<input
-										type="text"
-										bind:value={newModel}
-										placeholder={m.agent_model_placeholder()}
-										class="agent-input"
-										data-testid="agent-model-input"
+										data-testid="agent-name-input"
 									/>
 									<button
 										class="agent-btn"
 										onclick={createAgent}
-										disabled={agentLoading || !newLabel.trim()}
+										disabled={agentLoading || !newAgentName.trim()}
 										data-testid="agent-generate-btn"
 									>
 										{#if agentLoading}
@@ -725,26 +717,23 @@
 								</p>
 							{:else}
 								<div class="flex flex-col gap-1.5">
-									{#each registeredAgents as agent (agent.id)}
+									{#each registeredAgents as agent (agent.agentUserId)}
 										<div class="rounded p-1.5" style="background: var(--bg); border: 1px solid var(--border);">
 											<div class="flex items-center justify-between">
 												<span class="text-[11px] font-semibold" style="color: var(--text); font-family: var(--font-mono);">
-													{agent.label}
+													{agent.name}
 												</span>
 												{#if canManageAgents}
 													<button
 														class="rounded p-0.5 transition-colors hover:opacity-80"
 														style="color: var(--error);"
-														onclick={() => revokeAgent(agent.id)}
+														onclick={() => revokeAgent(agent.agentUserId)}
 														aria-label={m.agent_revoke()}
 														data-testid="agent-revoke-btn"
 													>
 														<Trash2 size={11} />
 													</button>
 												{/if}
-											</div>
-											<div class="text-[9px]" style="color: var(--text-muted);">
-												{agent.model}
 											</div>
 											{#if agent.keyStart}
 												<div class="text-[9px]" style="color: var(--text-muted); font-family: var(--font-mono);">

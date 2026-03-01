@@ -36,7 +36,7 @@ export async function chatJoin(
 		senderId: agent.agentUserId,
 		senderRole: 'agent' as const,
 		type: 'join' as const,
-		body: `${agent.label} joined the room`
+		body: `${agent.agentName} joined the room`
 	});
 
 	return {

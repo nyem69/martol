@@ -2,14 +2,14 @@
  * DELETE /api/agents/[id] — Revoke an agent key and remove the agent
  *
  * Auth: session-based, owner/lead only.
- * Deletes: apikey row, agent_room_bindings row, member row.
+ * [id] = agentUserId (text)
+ * Deletes: apikey row, member row.
  * Optionally sets KV revoked flag for real-time revocation.
  */
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { member, apikey } from '$lib/server/db/auth-schema';
-import { agentRoomBindings } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
@@ -45,30 +45,21 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 		error(403, 'Only owner or lead can revoke agent keys');
 	}
 
-	// Find the binding and verify it belongs to this org
-	const bindingId = Number(params.id);
-	if (!Number.isFinite(bindingId)) {
+	// [id] = agentUserId — verify the agent belongs to this room
+	const agentUserId = params.id;
+	if (!agentUserId) {
 		error(400, 'Invalid agent ID');
 	}
 
-	const [binding] = await locals.db
-		.select({
-			id: agentRoomBindings.id,
-			orgId: agentRoomBindings.orgId,
-			agentUserId: agentRoomBindings.agentUserId
-		})
-		.from(agentRoomBindings)
-		.where(eq(agentRoomBindings.id, bindingId))
+	const [agentMember] = await locals.db
+		.select({ role: member.role })
+		.from(member)
+		.where(and(eq(member.organizationId, orgId), eq(member.userId, agentUserId), eq(member.role, 'agent')))
 		.limit(1);
 
-	if (!binding) {
-		error(404, 'Agent not found');
+	if (!agentMember) {
+		error(404, 'Agent not found in this room');
 	}
-	if (binding.orgId !== orgId) {
-		error(403, 'Agent does not belong to this room');
-	}
-
-	const agentUserId = binding.agentUserId;
 
 	// Find and delete API key(s) for this agent user
 	const keys = await locals.db
@@ -88,16 +79,12 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 		}
 	}
 
-	// Delete in order: apikey → agent_room_bindings → member
+	// Delete in order: apikey → member
 	if (keys.length > 0) {
 		await locals.db
 			.delete(apikey)
 			.where(eq(apikey.userId, agentUserId));
 	}
-
-	await locals.db
-		.delete(agentRoomBindings)
-		.where(eq(agentRoomBindings.id, bindingId));
 
 	await locals.db
 		.delete(member)

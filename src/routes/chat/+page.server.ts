@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
 import { user, member, organization, invitation, session as sessionTable } from '$lib/server/db/auth-schema';
-import { messages as messagesTable, readCursors, agentRoomBindings } from '$lib/server/db/schema';
+import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
@@ -177,12 +177,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	// Check if this room has any registered agents
-	const [agentBinding] = await db
-		.select({ id: agentRoomBindings.id })
-		.from(agentRoomBindings)
-		.where(eq(agentRoomBindings.orgId, roomId))
+	const [agentMember] = await db
+		.select({ id: member.id })
+		.from(member)
+		.where(and(eq(member.organizationId, roomId), eq(member.role, 'agent')))
 		.limit(1);
-	const hasAgents = !!agentBinding;
+	const hasAgents = !!agentMember;
 
 	return {
 		roomId,

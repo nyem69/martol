@@ -3,15 +3,15 @@
  * GET  /api/agents — List agents for the user's active room
  *
  * Auth: session-based, owner/lead only.
+ *
+ * Simplified: server creates user + membership + key.
+ * Label and model are client-side config (set via --label and --model flags).
  */
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { member, user, account, apikey } from '$lib/server/db/auth-schema';
-import { agentRoomBindings } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
-
-const LABEL_RE = /^[a-zA-Z0-9_:-]{2,32}$/;
 
 /** Resolve orgId + verify owner/lead role */
 async function resolveOrgAndRole(locals: App.Locals) {
@@ -53,44 +53,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const orgId = await resolveOrgAndRole(locals);
 
 	const body = await request.json().catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>;
-	if (typeof body.label !== 'string' || typeof body.model !== 'string') {
-		error(400, 'Missing label or model');
+	const name = typeof body.name === 'string' ? body.name.trim() : '';
+
+	if (!name || name.length < 2 || name.length > 64) {
+		error(400, 'Name must be 2-64 characters');
 	}
 
-	const label = (body.label as string).trim();
-	const model = (body.model as string).trim();
-
-	if (!LABEL_RE.test(label)) {
-		error(400, 'Label must be 2-32 chars: letters, digits, _ : -');
-	}
-	if (model.length < 2 || model.length > 128) {
-		error(400, 'Model must be 2-128 characters');
-	}
-
-	// Check label uniqueness within org
-	const [existing] = await locals.db
-		.select({ id: agentRoomBindings.id })
-		.from(agentRoomBindings)
-		.where(and(eq(agentRoomBindings.orgId, orgId), eq(agentRoomBindings.label, label)))
-		.limit(1);
-
-	if (existing) {
-		error(409, 'An agent with this label already exists in this room');
-	}
-
-	// Create agent atomically — all 4 steps in a single transaction.
-	// If any step fails, everything rolls back (no orphaned users).
+	// Create agent atomically — user + account + membership in a single transaction.
 	const agentUserId = crypto.randomUUID();
 	const agentEmail = `agent-${crypto.randomUUID().slice(0, 12)}@agent.invalid`;
 	const memberId = crypto.randomUUID();
 
-	let bindingId: number;
 	try {
-		bindingId = await locals.db.transaction(async (tx: typeof locals.db) => {
+		await locals.db.transaction(async (tx: typeof locals.db) => {
 			// 1. Create synthetic agent user
 			await tx.insert(user).values({
 				id: agentUserId,
-				name: label,
+				name,
 				email: agentEmail,
 				emailVerified: true,
 				createdAt: new Date(),
@@ -115,48 +94,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				role: 'agent',
 				createdAt: new Date()
 			});
-
-			// 4. Create agent_room_binding
-			const [binding] = await tx
-				.insert(agentRoomBindings)
-				.values({ orgId, agentUserId, label, model })
-				.returning({ id: agentRoomBindings.id });
-
-			return binding.id;
 		});
 	} catch (e: any) {
 		console.error('[Agents] transaction failed (rolled back):', e);
 		error(500, 'Failed to create agent');
 	}
 
-	// 5. Create API key via Better Auth (outside transaction — uses Better Auth's own DB connection)
+	// 4. Create API key via Better Auth (outside transaction — uses Better Auth's own DB connection)
 	let keyResult: any;
 	try {
 		keyResult = await locals.auth.api.createApiKey({
 			body: {
-				name: `${label} agent key`,
+				name: `${name} agent key`,
 				prefix: 'mtl',
 				userId: agentUserId
 			}
 		});
 	} catch (e: any) {
-		// Transaction already committed — agent exists but has no key.
-		// This is acceptable: admin can revoke and recreate.
 		console.error('[Agents] createApiKey failed (agent created without key):', e);
 		error(500, 'Agent created but API key generation failed. Please revoke and try again.');
 	}
 
 	const fullKey = keyResult?.key;
-	const keyStart = keyResult?.start ?? (typeof fullKey === 'string' ? fullKey.slice(0, 8) + '...' : null);
 
 	return json({
 		ok: true,
 		data: {
-			id: bindingId!,
-			label,
-			model,
-			key: fullKey,
-			keyStart
+			agentUserId,
+			name,
+			key: fullKey
 		}
 	});
 };
@@ -191,28 +157,25 @@ export const GET: RequestHandler = async ({ locals }) => {
 		error(403, 'Not a member of this room');
 	}
 
-	// Query agent bindings joined with apikey for key prefix
+	// Query agent members joined with apikey for key prefix
 	const agents = await locals.db
 		.select({
-			id: agentRoomBindings.id,
-			label: agentRoomBindings.label,
-			model: agentRoomBindings.model,
-			agentUserId: agentRoomBindings.agentUserId,
-			createdAt: agentRoomBindings.createdAt,
+			agentUserId: member.userId,
+			name: user.name,
+			createdAt: member.createdAt,
 			keyStart: apikey.start
 		})
-		.from(agentRoomBindings)
-		.leftJoin(apikey, eq(apikey.userId, agentRoomBindings.agentUserId))
-		.where(eq(agentRoomBindings.orgId, orgId))
-		.orderBy(agentRoomBindings.createdAt);
+		.from(member)
+		.innerJoin(user, eq(user.id, member.userId))
+		.leftJoin(apikey, eq(apikey.userId, member.userId))
+		.where(and(eq(member.organizationId, orgId), eq(member.role, 'agent')))
+		.orderBy(member.createdAt);
 
 	return json({
 		ok: true,
 		data: agents.map((a: typeof agents[number]) => ({
-			id: a.id,
-			label: a.label,
-			model: a.model,
 			agentUserId: a.agentUserId,
+			name: a.name,
 			keyStart: a.keyStart ?? null,
 			createdAt: a.createdAt?.toISOString() ?? null
 		}))

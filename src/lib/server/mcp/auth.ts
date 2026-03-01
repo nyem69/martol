@@ -1,15 +1,17 @@
 import { eq, and } from 'drizzle-orm';
-import { agentRoomBindings } from '$lib/server/db/schema';
 import { user, member } from '$lib/server/db/auth-schema';
-import type { McpError } from '$lib/types/mcp';
 
 export interface AgentContext {
 	agentUserId: string;
 	agentName: string;
 	orgId: string;
 	orgRole: string;
-	label: string;
-	model: string;
+}
+
+interface McpError {
+	ok: false;
+	error: string;
+	code: string;
 }
 
 type AuthResult =
@@ -70,32 +72,23 @@ export async function authenticateAgent(
 		}
 	}
 
-	// Single joined query instead of 3 sequential DB round-trips
+	// Single joined query: member + user to resolve agent context
 	const [result] = await db
 		.select({
-			orgId: agentRoomBindings.orgId,
-			label: agentRoomBindings.label,
-			model: agentRoomBindings.model,
+			orgId: member.organizationId,
 			role: member.role,
 			name: user.name
 		})
-		.from(agentRoomBindings)
-		.innerJoin(
-			member,
-			and(
-				eq(member.organizationId, agentRoomBindings.orgId),
-				eq(member.userId, agentRoomBindings.agentUserId)
-			)
-		)
-		.innerJoin(user, eq(user.id, agentRoomBindings.agentUserId))
-		.where(eq(agentRoomBindings.agentUserId, agentUserId))
+		.from(member)
+		.innerJoin(user, eq(user.id, member.userId))
+		.where(and(eq(member.userId, agentUserId), eq(member.role, 'agent')))
 		.limit(1);
 
 	if (!result) {
 		return {
 			ok: false,
 			status: 403,
-			error: { ok: false, error: 'Agent not bound to any room or not a member', code: 'agent_unbound' }
+			error: { ok: false, error: 'Agent not a member of any room', code: 'agent_unbound' }
 		};
 	}
 
@@ -103,11 +96,9 @@ export async function authenticateAgent(
 		ok: true,
 		agent: {
 			agentUserId,
-			agentName: result.name ?? result.label,
+			agentName: result.name ?? `Agent-${agentUserId.slice(0, 6)}`,
 			orgId: result.orgId,
-			orgRole: result.role,
-			label: result.label,
-			model: result.model
+			orgRole: result.role
 		}
 	};
 }

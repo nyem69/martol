@@ -12,9 +12,7 @@ function mockAgent(overrides?: Partial<AgentContext>): AgentContext {
 		agentUserId: 'agent-1',
 		agentName: 'claude:backend',
 		orgId: 'org-1',
-		label: 'claude:backend',
-		model: 'claude-sonnet-4-6',
-		orgRole: 'member',
+		orgRole: 'agent',
 		...overrides
 	};
 }

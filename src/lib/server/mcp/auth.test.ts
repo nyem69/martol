@@ -125,7 +125,7 @@ describe('authenticateAgent', () => {
 		}
 	});
 
-	it('succeeds with valid key and binding', async () => {
+	it('succeeds with valid key and agent membership', async () => {
 		const auth = {
 			api: {
 				verifyApiKey: vi.fn().mockResolvedValue({
@@ -136,9 +136,7 @@ describe('authenticateAgent', () => {
 		};
 		const db = createMockDb({
 			orgId: 'org-1',
-			label: 'claude:backend',
-			model: 'claude-sonnet-4-6',
-			role: 'member',
+			role: 'agent',
 			name: 'Claude Backend'
 		});
 		const kv = { get: vi.fn().mockResolvedValue(null) } as unknown as KVNamespace;
@@ -150,12 +148,11 @@ describe('authenticateAgent', () => {
 			expect(result.agent.agentUserId).toBe('agent-1');
 			expect(result.agent.agentName).toBe('Claude Backend');
 			expect(result.agent.orgId).toBe('org-1');
-			expect(result.agent.label).toBe('claude:backend');
-			expect(result.agent.model).toBe('claude-sonnet-4-6');
+			expect(result.agent.orgRole).toBe('agent');
 		}
 	});
 
-	it('uses label as fallback name when user name is null', async () => {
+	it('uses fallback name when user name is null', async () => {
 		const auth = {
 			api: {
 				verifyApiKey: vi.fn().mockResolvedValue({
@@ -166,9 +163,7 @@ describe('authenticateAgent', () => {
 		};
 		const db = createMockDb({
 			orgId: 'org-1',
-			label: 'claude:backend',
-			model: 'claude-sonnet-4-6',
-			role: 'member',
+			role: 'agent',
 			name: null
 		});
 		const kv = { get: vi.fn().mockResolvedValue(null) } as unknown as KVNamespace;
@@ -177,7 +172,7 @@ describe('authenticateAgent', () => {
 
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.agent.agentName).toBe('claude:backend');
+			expect(result.agent.agentName).toBe('Agent-agent-');
 		}
 	});
 });
