@@ -78,68 +78,58 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		error(409, 'An agent with this label already exists in this room');
 	}
 
-	// 1. Create synthetic agent user via direct DB insert
+	// Create agent atomically — all 4 steps in a single transaction.
+	// If any step fails, everything rolls back (no orphaned users).
 	const agentUserId = crypto.randomUUID();
 	const agentEmail = `agent-${crypto.randomUUID().slice(0, 12)}@agent.invalid`;
-
-	try {
-		await locals.db.insert(user).values({
-			id: agentUserId,
-			name: label,
-			email: agentEmail,
-			emailVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date()
-		});
-
-		// Create account record for Better Auth consistency
-		await locals.db.insert(account).values({
-			id: crypto.randomUUID(),
-			accountId: agentUserId,
-			providerId: 'agent',
-			userId: agentUserId,
-			createdAt: new Date(),
-			updatedAt: new Date()
-		});
-	} catch (e: any) {
-		console.error('[Agents] agent user insert failed:', e);
-		error(500, 'Failed to create agent user');
-	}
-
-	// 2. Add as org member with role 'agent'
 	const memberId = crypto.randomUUID();
-	try {
-		await locals.db.insert(member).values({
-			id: memberId,
-			organizationId: orgId,
-			userId: agentUserId,
-			role: 'agent',
-			createdAt: new Date()
-		});
-	} catch (e: any) {
-		console.error('[Agents] member insert failed:', e);
-		error(500, 'Failed to add agent as member');
-	}
 
-	// 3. Create agent_room_binding
 	let bindingId: number;
 	try {
-		const [binding] = await locals.db
-			.insert(agentRoomBindings)
-			.values({
-				orgId,
-				agentUserId,
-				label,
-				model
-			})
-			.returning({ id: agentRoomBindings.id });
-		bindingId = binding.id;
+		bindingId = await locals.db.transaction(async (tx: typeof locals.db) => {
+			// 1. Create synthetic agent user
+			await tx.insert(user).values({
+				id: agentUserId,
+				name: label,
+				email: agentEmail,
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date()
+			});
+
+			// 2. Create account record for Better Auth consistency
+			await tx.insert(account).values({
+				id: crypto.randomUUID(),
+				accountId: agentUserId,
+				providerId: 'agent',
+				userId: agentUserId,
+				createdAt: new Date(),
+				updatedAt: new Date()
+			});
+
+			// 3. Add as org member with role 'agent'
+			await tx.insert(member).values({
+				id: memberId,
+				organizationId: orgId,
+				userId: agentUserId,
+				role: 'agent',
+				createdAt: new Date()
+			});
+
+			// 4. Create agent_room_binding
+			const [binding] = await tx
+				.insert(agentRoomBindings)
+				.values({ orgId, agentUserId, label, model })
+				.returning({ id: agentRoomBindings.id });
+
+			return binding.id;
+		});
 	} catch (e: any) {
-		console.error('[Agents] binding insert failed:', e);
-		error(500, 'Failed to create agent binding');
+		console.error('[Agents] transaction failed (rolled back):', e);
+		error(500, 'Failed to create agent');
 	}
 
-	// 4. Create API key via Better Auth
+	// 5. Create API key via Better Auth (outside transaction — uses Better Auth's own DB connection)
 	let keyResult: any;
 	try {
 		keyResult = await locals.auth.api.createApiKey({
@@ -150,8 +140,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		});
 	} catch (e: any) {
-		console.error('[Agents] createApiKey failed:', e);
-		error(500, 'Failed to create API key');
+		// Transaction already committed — agent exists but has no key.
+		// This is acceptable: admin can revoke and recreate.
+		console.error('[Agents] createApiKey failed (agent created without key):', e);
+		error(500, 'Agent created but API key generation failed. Please revoke and try again.');
 	}
 
 	const fullKey = keyResult?.key;

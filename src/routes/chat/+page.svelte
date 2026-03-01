@@ -11,6 +11,7 @@
 	import PendingActionLine from '$lib/components/chat/PendingActionLine.svelte';
 	import AIDisclosureModal from '$lib/components/chat/AIDisclosureModal.svelte';
 	import ReportModal from '$lib/components/chat/ReportModal.svelte';
+	import UsernamePrompt from '$lib/components/chat/UsernamePrompt.svelte';
 
 	let { data } = $props();
 
@@ -169,6 +170,8 @@
 			onlineCount={store.onlineUsers.size}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
 		/>
+
+		<UsernamePrompt username={userName} />
 
 		<MessageList
 			messages={store.messages}

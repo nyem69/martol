@@ -16,6 +16,8 @@ import type { CloudflareEnv } from './app.d.ts';
 import { createAuth } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rate-limit';
 import { isDisposableEmail } from '$lib/server/disposable-emails';
+import { termsVersions, termsAcceptances } from '$lib/server/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -120,6 +122,71 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 		} catch (error) {
 			console.error('[Auth] Session validation failed:', error);
+		}
+	}
+
+	// ── Terms Re-acceptance Check ────────────────────────────────────────
+	// For authenticated page routes, check if user has accepted the latest terms.
+	// Skip for: API routes, /login, /legal/*, /accept-terms
+	const pathname = event.url.pathname;
+	const isPageRoute =
+		!pathname.startsWith('/api/') &&
+		!pathname.startsWith('/login') &&
+		!pathname.startsWith('/legal/') &&
+		!pathname.startsWith('/accept-terms');
+
+	if (event.locals.user && event.locals.db && isPageRoute) {
+		try {
+			const db = event.locals.db;
+			const userId = event.locals.user.id;
+
+			// Get latest version of each required type
+			const requiredTypes = ['tos', 'privacy', 'aup'] as const;
+			const latestVersions: { id: number; type: string }[] = [];
+
+			for (const type of requiredTypes) {
+				const [latest] = await db
+					.select({ id: termsVersions.id, type: termsVersions.type })
+					.from(termsVersions)
+					.where(eq(termsVersions.type, type))
+					.orderBy(desc(termsVersions.effectiveAt))
+					.limit(1);
+				if (latest) {
+					latestVersions.push(latest);
+				}
+			}
+
+			// Only check if at least one terms version exists
+			if (latestVersions.length > 0) {
+				// Get user's acceptances for these versions
+				const acceptedVersionIds: number[] = [];
+				for (const v of latestVersions) {
+					const [acceptance] = await db
+						.select({ id: termsAcceptances.id })
+						.from(termsAcceptances)
+						.where(
+							and(
+								eq(termsAcceptances.userId, userId),
+								eq(termsAcceptances.termsVersionId, v.id)
+							)
+						)
+						.limit(1);
+					if (acceptance) {
+						acceptedVersionIds.push(v.id);
+					}
+				}
+
+				// If any required type is missing acceptance, redirect
+				if (acceptedVersionIds.length < latestVersions.length) {
+					return new Response(null, {
+						status: 302,
+						headers: { Location: '/accept-terms' }
+					});
+				}
+			}
+		} catch (err) {
+			console.error('[Terms] Version check failed:', err);
+			// Fail open — don't block the user if the check fails
 		}
 	}
 
@@ -302,22 +369,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 			'max-age=63072000; includeSubDomains; preload'
 		);
 
-		const csp = [
-			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com", // Turnstile + SvelteKit hydration; TODO: nonce-based CSP
-			"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-			"img-src 'self' data: blob: https:",
-			"font-src 'self' data: https://cdn.jsdelivr.net",
-			"connect-src 'self' https://martol.app wss://martol.app https://martol.plitix.com wss://martol.plitix.com https://cloudflareinsights.com https://challenges.cloudflare.com",
-			"frame-src https://challenges.cloudflare.com", // Turnstile iframe
-			"worker-src 'self' blob:",
-			"object-src 'none'",
-			"base-uri 'self'",
-			"form-action 'self'",
-			"frame-ancestors 'none'"
-		].join('; ');
-
-		response.headers.set('Content-Security-Policy', csp);
+		// CSP is now handled by SvelteKit's built-in csp config in svelte.config.js
+		// which auto-generates nonces for inline scripts during SSR.
 
 		return response;
 	} finally {

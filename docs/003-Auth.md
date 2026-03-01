@@ -968,15 +968,18 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 ### P1 — Within 30 days of launch
 
 - [ ] Register with NCMEC as ESP (before enabling image uploads)
-- [ ] Implement data subject rights endpoints (export, delete)
+- [x] Implement data subject rights endpoints (export JSON, account deletion with anonymization)
 - [ ] Add image scanning pipeline (Cloudflare Images CSAM detection)
 - [ ] Implement international data transfer mechanisms (SCCs)
 - [ ] Add cookie consent mechanism for EU users
 - [ ] Implement 2FA UI (twoFactor plugin configured, passkey pending plugin availability)
 - [x] Add `account_audit` table (schema created, logging hooks P1)
-- [ ] Implement session listing and remote logout in settings
-- [ ] Migrate CSP to nonce-based (remove `unsafe-inline`)
-- [ ] Atomic agent creation with transaction rollback
+- [x] Implement session listing and remote logout in settings
+- [x] Migrate CSP to nonce-based (SvelteKit built-in `csp` config with `'nonce'` directive)
+- [x] Atomic agent creation with transaction rollback (Drizzle `db.transaction()`)
+- [x] Settings page with username change (90-day cooldown, reserved words, old username hold)
+- [x] Terms re-acceptance middleware (hooks.server.ts checks latest terms versions, redirects to /accept-terms)
+- [x] Username personalization prompt (inline banner in chat for auto-generated usernames)
 
 ### P2 — Within 90 days
 

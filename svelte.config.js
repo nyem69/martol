@@ -20,6 +20,35 @@ const config = {
 		alias: {
 			$components: 'src/lib/components',
 			$server: 'src/lib/server'
+		},
+		csp: {
+			directives: {
+				'default-src': ['self'],
+				'script-src': [
+					'self',
+					'nonce',
+					'https://static.cloudflareinsights.com',
+					'https://challenges.cloudflare.com'
+				],
+				'style-src': ['self', 'unsafe-inline', 'https://cdn.jsdelivr.net'],
+				'img-src': ['self', 'data:', 'blob:', 'https:'],
+				'font-src': ['self', 'data:', 'https://cdn.jsdelivr.net'],
+				'connect-src': [
+					'self',
+					'https://martol.app',
+					'wss://martol.app',
+					'https://martol.plitix.com',
+					'wss://martol.plitix.com',
+					'https://cloudflareinsights.com',
+					'https://challenges.cloudflare.com'
+				],
+				'frame-src': ['https://challenges.cloudflare.com'],
+				'worker-src': ['self', 'blob:'],
+				'object-src': ['none'],
+				'base-uri': ['self'],
+				'form-action': ['self'],
+				'frame-ancestors': ['none']
+			}
 		}
 	}
 };
