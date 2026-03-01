@@ -833,14 +833,60 @@ const magicUrl = `${baseURL}/api/auth/magic?token=${magicToken}`;
 const subject = `Sign in to ${appName}`;
 ```
 
-### OTP Rate Limiting
+### Bot & Spam Prevention
 
-| Limit | Value | Scope |
-|---|---|---|
-| OTP sends | 3 per email per 15 min, 10 per email per hour | Per email |
-| OTP sends | 10 per IP per hour | Per IP |
-| OTP verification attempts | 5 per OTP generation | Per OTP |
-| Failed OTP attempts | Lock account for 15 min after 3 consecutive failures | Per account |
+The login and signup endpoints are the primary target for automated abuse: email enumeration (OSINT), OTP send spam (cost amplification + sender reputation damage), and mass account creation.
+
+#### Cloudflare Turnstile (P0)
+
+Turnstile is Cloudflare's free, privacy-preserving bot detection. It runs as an invisible challenge before the OTP send — no user interaction unless a bot is detected.
+
+```
+[Age gate] --> [Email + Terms]
+                    |
+                    v
+              [Turnstile challenge (invisible)]
+                    |
+                    +--> Bot score high --> visible challenge widget
+                    |
+                    +--> Human verified --> send OTP
+```
+
+**Integration:**
+- Client: embed Turnstile widget on login page (invisible mode)
+- Client sends `cf-turnstile-response` token with OTP request
+- Server validates token via `https://challenges.cloudflare.com/turnstile/v0/siteverify`
+- Reject OTP send if validation fails
+- No user friction for legitimate users (invisible mode passes silently)
+
+**Cost:** $0 (free for all Cloudflare plans)
+
+#### Layered Defense
+
+| Layer | Mechanism | Stops | Priority |
+|---|---|---|---|
+| **Turnstile** | Invisible bot challenge before OTP send | Bots, scripts, headless browsers | P0 |
+| **IP rate limit** | 10 OTP sends per IP per hour | Single-IP flooding | P0 |
+| **Email rate limit** | 3 OTP sends per email per 15 min | Targeted harassment | P0 |
+| **Global rate limit** | 100 OTP sends per minute globally | Cost amplification attacks | P0 |
+| **Consistent responses** | Same response whether email exists or not | OSINT email enumeration | P0 |
+| **Disposable email blocking** | Denylist of known disposable domains | Throwaway account spam | P0 |
+| **Honeypot field** | Hidden form field — bots fill it, humans don't | Simple bots | P0 |
+| **OTP verification limit** | 5 attempts per OTP generation | Brute force | P0 |
+| **Account lockout** | 15 min lock after 3 consecutive OTP failures | Persistent brute force | P0 |
+
+#### Email Enumeration Prevention
+
+The OTP send endpoint must return **identical responses** regardless of whether the email is registered:
+- Registered email: send OTP, respond "Check your email"
+- Unregistered email: do nothing, respond "Check your email"
+- Rate-limited: respond "Check your email" (do not reveal the rate limit was hit)
+
+This prevents attackers from probing which emails have accounts. Better Auth's `emailOTP` with `disableSignUp: false` creates accounts on first OTP, which may already behave consistently — verify during implementation.
+
+#### Disposable Email Blocking
+
+Maintain a denylist of known disposable email domains (mailinator.com, tempmail.com, etc.). Block at the OTP send step, before any email is dispatched. Open-source lists available (e.g., `disposable-email-domains` on GitHub, ~3000 domains). Update periodically via cron or CI.
 
 ### WebSocket Identity Signing
 
@@ -908,7 +954,12 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 - [ ] Fix magic link (opaque token, remove OTP from subject)
 - [ ] Remove `emailAndPassword: { enabled: true }` — use direct DB insert for agents
 - [ ] Implement user reporting UI and `content_reports` table
-- [ ] Add OTP rate limiting (per-email and per-IP)
+- [ ] Add OTP rate limiting (per-email: 3/15min, per-IP: 10/hr, global: 100/min)
+- [ ] Integrate Cloudflare Turnstile on login page (invisible mode, server-side validation)
+- [ ] Add honeypot field to login form
+- [ ] Add consistent responses for OTP send (same response whether email exists or not)
+- [ ] Block disposable email domains (denylist)
+- [ ] Add OTP verification attempt limit (5 per generation) and account lockout (15min after 3 failures)
 - [ ] Reduce cookie cache to 5 minutes
 - [ ] Fix email leak in WebSocket X-User-Name header
 - [ ] Sign WebSocket identity headers with HMAC
@@ -934,7 +985,6 @@ Wrap all agent creation operations in a database transaction. On failure of any 
 - [ ] Document breach notification procedure
 - [ ] Add CCPA "Do Not Sell/Share" link
 - [ ] Implement owner succession mechanism
-- [ ] Add disposable email domain blocking
 - [ ] Implement username reclamation for inactive accounts
 - [ ] Add file upload quotas (per-user daily, per-org monthly)
 - [ ] Text analysis layer (keyword patterns, link scanning)
