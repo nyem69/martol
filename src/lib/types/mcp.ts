@@ -124,6 +124,7 @@ export interface ChatWhoMember {
 export interface ChatWhoResult {
 	room_id: string;
 	room_name: string;
+	self_user_id: string;
 	members: ChatWhoMember[];
 }
 

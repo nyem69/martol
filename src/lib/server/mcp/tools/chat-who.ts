@@ -35,6 +35,7 @@ export async function chatWho(
 		data: {
 			room_id: agent.orgId,
 			room_name: org?.name ?? 'Unknown',
+			self_user_id: agent.agentUserId,
 			members: result
 		}
 	};
