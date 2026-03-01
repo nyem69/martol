@@ -6,36 +6,56 @@ A multi-user AI collaboration workspace where humans and AI agents work together
 
 Agents don't self-execute from chat — they submit structured intents validated against a role × risk matrix. Destructive actions require explicit owner approval.
 
+## Features
+
+- **Real-time chat** — WebSocket-based rooms with typing indicators, presence, and message history
+- **Passwordless auth** — email OTP login with Cloudflare Turnstile CAPTCHA protection
+- **Role-based access** — owner, lead, member, viewer roles with graduated permissions
+- **AI agent integration** — agents connect via API key, interact through WebSocket + MCP HTTP
+- **Action gating** — agents submit structured intents; server enforces approval based on role × risk level
+- **File uploads** — image sharing via Cloudflare R2
+- **@mention routing** — direct messages to specific agents or humans
+- **Reply threading** — reply to specific messages in the conversation
+- **Mobile ready** — Capacitor builds for iOS and Android
+- **Legal compliance** — built-in Terms of Service, Privacy Policy, and Acceptable Use Policy pages
+- **User settings** — active sessions management, data export, account deletion
+
 ## Tech Stack
 
-- **SvelteKit** on Cloudflare Workers (+ Capacitor for iOS/Android)
-- **Better Auth** — passwordless email OTP, organization-based rooms, API key auth for agents
-- **PostgreSQL** (Aiven) via Cloudflare Hyperdrive — Drizzle ORM
-- **Durable Objects** — per-room WebSocket with hibernation API
-- **Paraglide** i18n, **Tailwind v4**, **Svelte 5** runes
+| Layer | Technology |
+|---|---|
+| Framework | SvelteKit (`adapter-cloudflare`) |
+| UI | Svelte 5 (runes only), Tailwind v4 |
+| Auth | Better Auth (emailOTP + organization + apiKey + captcha) |
+| Database | PostgreSQL (Aiven) via Cloudflare Hyperdrive, Drizzle ORM |
+| Real-time | Durable Objects (WebSocket Hibernation API) |
+| Storage | Cloudflare R2 (files), KV (session cache) |
+| i18n | Paraglide |
+| Mobile | Capacitor 8 (iOS + Android) |
 
 ## Getting Started
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Start dev server (localhost:5190)
-pnpm dev
+cp .dev.vars.example .dev.vars   # fill in your keys
+pnpm dev                         # localhost:5190
 ```
-
-Create a `.dev.vars` file with your environment variables (see `.dev.vars.example` or ask a team member).
 
 ## Commands
 
 ```bash
 pnpm dev              # Dev server on localhost:5190
 pnpm check            # TypeScript check
-pnpm build            # Production build (Cloudflare)
+pnpm test             # Run tests (vitest)
+pnpm build            # Production build
 
 pnpm db:generate      # Generate Drizzle migrations
+pnpm db:migrate       # Run migrations
 pnpm db:push          # Push schema to DB (dev)
 pnpm db:studio        # Drizzle Studio GUI
+
+pnpm cf:dev           # Local Cloudflare Workers dev
+pnpm cf:deploy        # Deploy to Cloudflare
 
 pnpm cap:sync         # Build SPA + sync native projects
 pnpm cap:ios          # Build + open Xcode
@@ -46,36 +66,71 @@ pnpm cap:android      # Build + open Android Studio
 
 ```
 SvelteKit (adapter-cloudflare)
+  /login             — passwordless email OTP + Turnstile
   /chat              — real-time chat UI
-  /login             — passwordless email OTP
+  /settings          — session management, data rights
+  /legal/*           — ToS, Privacy Policy, AUP
   /api/auth/*        — Better Auth handler
-  Drizzle → Hyperdrive → Aiven PostgreSQL
+  /api/agents        — agent registration (owner/lead only)
+  /api/upload        — R2 file uploads
+  /api/reports       — content reporting
+  /mcp/v1            — authenticated MCP endpoint for agents
 
 Durable Object (one per room)
   WebSocket hub — messages, typing, presence
-  WAL → batch flush to DB
+  WAL → batch flush to PostgreSQL
 
-R2 — file uploads ({org_id}/{message_id}/{filename})
-KV — session cache
+PostgreSQL (Aiven via Hyperdrive)
+  users, organizations, members, messages, read_cursors, actions
 ```
 
-## Roles
+## Roles & Risk Matrix
 
-| Role | Can send | Can direct agents | Destructive actions |
+| Role | Low risk | Medium risk | High risk |
 |---|---|---|---|
-| **owner** | Yes | Yes | Direct |
-| **lead** | Yes | Yes | Needs owner approval |
-| **member** | Yes | Limited | Needs approval |
-| **viewer** | No | No | No |
+| **owner** | Auto-approve | Auto-approve | Auto-approve |
+| **lead** | Auto-approve | Auto-approve | Needs owner approval |
+| **member** | Auto-approve | Needs approval | Rejected / needs approval |
+| **viewer** | Rejected | Rejected | Rejected |
+
+Action types: `question_answer`, `code_review`, `code_write`, `code_modify`, `code_delete`, `deploy`, `config_change`
 
 ## Agent Integration
 
-Agents connect via **API key** auth through two channels:
+Agents connect via API key through two channels:
 
 - **WebSocket** — real-time messages, typing indicators, presence
 - **MCP HTTP** (`POST /mcp/v1`) — structured tool calls: `chat_send`, `chat_read`, `chat_resync`, `chat_join`, `chat_who`, `action_submit`, `action_status`
 
-The Python agent wrapper lives in a separate repo: [martol-client](https://github.com/nyem69/martol-client)
+### Creating an agent
+
+1. An owner or lead creates an agent in the chat room's member panel
+2. The server generates an API key (shown once)
+3. Use the key with the [Python agent wrapper](https://github.com/nyem69/martol-client) or any HTTP client
+
+### Agent auth flow
+
+```
+Agent sends x-api-key header
+  → Better Auth verifies API key
+  → Server resolves agent's org membership (role='agent')
+  → Agent gets scoped access to that room only
+```
+
+## Routes
+
+| Route | Purpose |
+|---|---|
+| `/login` | Email OTP login with Turnstile |
+| `/chat` | Main chat interface |
+| `/settings` | User settings (sessions, data export, deletion) |
+| `/accept-terms` | Terms acceptance gate |
+| `/legal/terms` | Terms of Service |
+| `/legal/privacy` | Privacy Policy |
+| `/legal/aup` | Acceptable Use Policy |
+| `/api/agents` | Agent CRUD (owner/lead) |
+| `/api/rooms/[id]/ws` | WebSocket endpoint |
+| `/mcp/v1` | MCP tool endpoint for agents |
 
 ## License
 
