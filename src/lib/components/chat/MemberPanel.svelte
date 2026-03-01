@@ -485,165 +485,9 @@
 			>
 				<div style="overflow: hidden;">
 					<div class="px-4 pb-3">
-						<!-- Step 1: Clone -->
-						<div class="mb-2">
-							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-								1. Clone
-							</h4>
-							<div class="code-block">
-								<div class="flex items-center justify-between">
-									<code>git clone https://github.com/nyem69/martol-client.git</code>
-									<button
-										class="copy-btn"
-										onclick={() => copyToClipboard('git clone https://github.com/nyem69/martol-client.git && cd martol-client', 'clone')}
-										aria-label="Copy"
-									>
-										{#if copiedField === 'clone'}
-											<Check size={10} />
-										{:else}
-											<Copy size={10} />
-										{/if}
-									</button>
-								</div>
-							</div>
-						</div>
-
-						<!-- Step 2: Install -->
-						<div class="mb-2">
-							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-								2. {m.agent_setup_install()}
-							</h4>
-							<div class="code-block">
-								<div class="flex items-center justify-between">
-									<code>pip install -r requirements.txt</code>
-									<button
-										class="copy-btn"
-										onclick={() => copyToClipboard('pip install -r requirements.txt', 'install')}
-										aria-label="Copy"
-									>
-										{#if copiedField === 'install'}
-											<Check size={10} />
-										{:else}
-											<Copy size={10} />
-										{/if}
-									</button>
-								</div>
-							</div>
-						</div>
-
-						<!-- Step 3: Configure -->
-						<div class="mb-2">
-							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-								3. {m.agent_setup_configure()}
-							</h4>
-							<div class="code-block">
-								<code>cp .env.example .env</code>
-							</div>
-						</div>
-
-						<!-- Step 4: Run -->
-						<div class="mb-3">
-							<h4 class="mb-1 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-								4. {m.agent_setup_run()}
-							</h4>
-							<div class="code-block">
-								<div class="flex items-center justify-between">
-									<code>python -m martol_agent</code>
-									<button
-										class="copy-btn"
-										onclick={() => copyToClipboard('python -m martol_agent', 'run')}
-										aria-label="Copy"
-									>
-										{#if copiedField === 'run'}
-											<Check size={10} />
-										{:else}
-											<Copy size={10} />
-										{/if}
-									</button>
-								</div>
-							</div>
-						</div>
-
-						<!-- Parameters reference -->
-						<div class="mb-3">
-							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
-								{m.agent_setup_params()}
-							</h4>
-
-							<!-- WS URL -->
-							<div class="param-row">
-								<div class="flex items-center justify-between">
-									<code class="param-label">MARTOL_WS_URL</code>
-									<button
-										class="copy-btn"
-										onclick={() => copyToClipboard(wsUrl, 'ws')}
-										aria-label="Copy"
-									>
-										{#if copiedField === 'ws'}
-											<Check size={10} />
-										{:else}
-											<Copy size={10} />
-										{/if}
-									</button>
-								</div>
-								<div class="param-value">{wsUrl}</div>
-								<div class="param-desc">{m.agent_setup_ws_url()}</div>
-							</div>
-
-							<!-- MCP URL -->
-							<div class="param-row">
-								<div class="flex items-center justify-between">
-									<code class="param-label">MARTOL_MCP_URL</code>
-									<button
-										class="copy-btn"
-										onclick={() => copyToClipboard(mcpUrl, 'mcp')}
-										aria-label="Copy"
-									>
-										{#if copiedField === 'mcp'}
-											<Check size={10} />
-										{:else}
-											<Copy size={10} />
-										{/if}
-									</button>
-								</div>
-								<div class="param-value">{mcpUrl}</div>
-								<div class="param-desc">MCP HTTP endpoint</div>
-							</div>
-
-							<!-- API Key -->
-							<div class="param-row">
-								<code class="param-label">MARTOL_API_KEY</code>
-								<div class="param-desc">{m.agent_setup_api_key()}</div>
-							</div>
-
-							<!-- Provider -->
-							<div class="param-row">
-								<code class="param-label">AI_PROVIDER</code>
-								<div class="param-desc">{m.agent_setup_provider()}</div>
-							</div>
-
-							<!-- AI Key -->
-							<div class="param-row">
-								<code class="param-label">AI_API_KEY</code>
-								<div class="param-desc">{m.agent_setup_ai_key()}</div>
-							</div>
-
-							<!-- Model -->
-							<div class="param-row">
-								<code class="param-label">AI_MODEL</code>
-								<div class="param-desc">{m.agent_setup_model()}</div>
-							</div>
-
-							<!-- Label -->
-							<div class="param-row">
-								<code class="param-label">AGENT_LABEL</code>
-								<div class="param-desc">{m.agent_setup_label()}</div>
-							</div>
-						</div>
-
 						<!-- ── Generate Agent Key (owner/lead only) ── -->
 						{#if canManageAgents}
-							<div class="mb-3" style="border-top: 1px solid var(--border); padding-top: 0.75rem;">
+							<div class="mb-3">
 								<h4 class="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
 									<KeyRound size={11} />
 									{m.agent_generate_title()}
@@ -746,7 +590,33 @@
 							{/if}
 						</div>
 
-						<!-- Repo link -->
+						<!-- ── Connection Details ── -->
+						<div class="mb-3" style="border-top: 1px solid var(--border); padding-top: 0.75rem;">
+							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
+								{m.agent_setup_connection()}
+							</h4>
+
+							<!-- WS URL -->
+							<div class="param-row">
+								<div class="flex items-center justify-between">
+									<code class="param-label">MARTOL_WS_URL</code>
+									<button
+										class="copy-btn"
+										onclick={() => copyToClipboard(wsUrl, 'ws')}
+										aria-label="Copy"
+									>
+										{#if copiedField === 'ws'}
+											<Check size={10} />
+										{:else}
+											<Copy size={10} />
+										{/if}
+									</button>
+								</div>
+								<div class="param-value">{wsUrl}</div>
+							</div>
+						</div>
+
+						<!-- Client repo link -->
 						<a
 							href="https://github.com/nyem69/martol-client"
 							target="_blank"
@@ -886,22 +756,6 @@
 		color: var(--text);
 		word-break: break-all;
 		padding: 0.125rem 0;
-	}
-
-	.param-desc {
-		font-size: 10px;
-		color: var(--text-muted);
-	}
-
-	.code-block {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 0.375rem;
-		padding: 0.375rem 0.5rem;
-		font-size: 10px;
-		font-family: var(--font-mono);
-		color: var(--text);
-		word-break: break-all;
 	}
 
 	.copy-btn {
