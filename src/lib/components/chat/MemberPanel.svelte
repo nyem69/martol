@@ -195,7 +195,8 @@
 			const res = await organization.inviteMember({
 				email,
 				role: inviteRole as 'member' | 'admin',
-				organizationId: roomId
+				organizationId: roomId,
+				resend: isResend
 			});
 			if (res.error) {
 				inviteStatus = { type: 'error', message: res.error.message || m.chat_invite_error() };
@@ -203,8 +204,9 @@
 				inviteStatus = { type: 'success', message: m.chat_invite_success() };
 				sentEmails.add(email.toLowerCase());
 			}
-		} catch {
-			inviteStatus = { type: 'error', message: m.chat_invite_error() };
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : m.chat_invite_error();
+			inviteStatus = { type: 'error', message: msg };
 		} finally {
 			inviteLoading = false;
 		}

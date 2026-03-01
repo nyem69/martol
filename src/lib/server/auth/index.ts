@@ -120,10 +120,12 @@ export function createAuth(
 
 			// Rooms modeled as organizations
 			organization({
-				sendInvitationEmail: async ({ email, organization: org, inviter }) => {
+				async sendInvitationEmail(data) {
+					const { id, email, organization: org, inviter } = data;
 					if (!emailConfig.resendApiKey) {
 						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
 							console.warn(`[Auth] DEV ONLY — Invitation for ${email} to ${org.name} from ${inviter.user.email}`);
+							console.warn(`[Auth] DEV ONLY — Accept link: ${baseURL}/accept-invitation/${id}`);
 						} else {
 							console.error('[Auth] RESEND_API_KEY not configured — cannot send invitation');
 							throw new Error('Email service not configured');
@@ -132,7 +134,8 @@ export function createAuth(
 					}
 
 					const inviterName = inviter.user.name || inviter.user.email;
-					const { subject, html } = invitationEmailTemplate(inviterName, org.name, baseURL);
+					const acceptUrl = `${baseURL}/accept-invitation/${id}`;
+					const { subject, html } = invitationEmailTemplate(inviterName, org.name, acceptUrl);
 					const appName = emailConfig.emailName || 'Martol';
 
 					const result = await sendEmail(

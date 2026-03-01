@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { tick } from 'svelte';
 	import { emailOtp, signIn } from '$lib/auth-client';
 	import * as m from '$lib/paraglide/messages';
@@ -163,7 +164,8 @@
 					// Non-blocking — terms acceptance is best-effort during login
 					console.warn('[Login] Failed to record terms acceptance');
 				}
-				goto('/chat');
+				const redirectTo = $page.url.searchParams.get('redirect');
+				goto(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/chat');
 			}
 		} catch {
 			error = m.error_generic();

@@ -66,7 +66,7 @@ export async function sendEmail(options: EmailOptions, config: EmailConfig): Pro
 export function invitationEmailTemplate(
 	inviterName: string,
 	orgName: string,
-	appUrl: string
+	acceptUrl: string
 ): { subject: string; html: string } {
 	return {
 		subject: `You're invited to ${orgName} on Martol`,
@@ -88,7 +88,7 @@ export function invitationEmailTemplate(
     <p style="color: #a0a0a8;"><strong style="color: #e8e8e8;">${inviterName}</strong> invited you to join <strong style="color: #c49a3c;">${orgName}</strong> on Martol.</p>
 
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${appUrl}/login" style="background: #c49a3c; color: #0f0f14; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;">
+      <a href="${acceptUrl}" style="background: #c49a3c; color: #0f0f14; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;">
         Join Room
       </a>
     </div>
