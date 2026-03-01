@@ -7,7 +7,7 @@
 
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
-import { member } from '$lib/server/db/auth-schema';
+import { member, user } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
 
 // Allowed origins for WebSocket upgrade (prevents CSWSH)
@@ -20,18 +20,15 @@ const WS_ALLOWED_ORIGINS = new Set([
 ]);
 
 export const GET: RequestHandler = async ({ params, locals, platform, request }) => {
-	// 0. Origin check — prevent cross-site WebSocket hijacking (CSWSH)
-	const origin = request.headers.get('origin');
-	if (!origin || !WS_ALLOWED_ORIGINS.has(origin)) {
-		error(403, 'Origin not allowed');
-	}
+	// 0. Auth: API key (agents) or session (browsers)
+	// Agents skip origin check — server-side scripts, not subject to CSWSH
+	const apiKeyHeader = request.headers.get('x-api-key');
 
-	// 1. Auth check
-	const user = locals.user;
-	const session = locals.session;
-
-	if (!user || !session) {
-		error(401, 'Authentication required');
+	if (!apiKeyHeader) {
+		const origin = request.headers.get('origin');
+		if (!origin || !WS_ALLOWED_ORIGINS.has(origin)) {
+			error(403, 'Origin not allowed');
+		}
 	}
 
 	const db = locals.db;
@@ -46,11 +43,44 @@ export const GET: RequestHandler = async ({ params, locals, platform, request })
 		error(400, 'Invalid room ID');
 	}
 
+	let userId: string;
+	let userName: string;
+
+	if (apiKeyHeader) {
+		// Agent auth via API key
+		if (!locals.auth) error(503, 'Auth service unavailable');
+		let keyData: any;
+		try {
+			keyData = await locals.auth.api.verifyApiKey({ body: { key: apiKeyHeader } });
+		} catch {
+			error(401, 'Invalid API key');
+		}
+		if (!keyData?.valid || !keyData.key?.userId) {
+			error(401, 'Invalid API key');
+		}
+		userId = keyData.key.userId;
+
+		// Get agent display name
+		const [agentUser] = await db
+			.select({ name: user.name, username: user.username })
+			.from(user)
+			.where(eq(user.id, userId))
+			.limit(1);
+		userName = agentUser?.name || agentUser?.username || `Agent-${userId.slice(0, 6)}`;
+	} else {
+		// Browser auth via session
+		if (!locals.user || !locals.session) {
+			error(401, 'Authentication required');
+		}
+		userId = locals.user.id;
+		userName = locals.user.name || locals.user.username || `User-${locals.user.id.slice(0, 6)}`;
+	}
+
 	// 2. Verify org membership and get role
 	const [memberRecord] = await db
 		.select({ role: member.role })
 		.from(member)
-		.where(and(eq(member.organizationId, roomId), eq(member.userId, user.id)))
+		.where(and(eq(member.organizationId, roomId), eq(member.userId, userId)))
 		.limit(1);
 
 	if (!memberRecord) {
@@ -68,10 +98,7 @@ export const GET: RequestHandler = async ({ params, locals, platform, request })
 	// 4. Forward request to DO with signed identity headers
 	const doUrl = new URL(request.url);
 	const headers = new Headers(request.headers);
-
-	const userId = user.id;
 	const role = memberRecord.role;
-	const userName = user.name || user.username || `User-${user.id.slice(0, 6)}`;
 
 	// HMAC-sign identity payload to prevent header spoofing
 	const signingKey = platform?.env?.BETTER_AUTH_SECRET;
