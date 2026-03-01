@@ -567,17 +567,30 @@
 												<span class="text-[11px] font-semibold" style="color: var(--text); font-family: var(--font-mono);">
 													{agent.name}
 												</span>
-												{#if canManageAgents}
+												<div class="flex items-center gap-1">
 													<button
-														class="rounded p-0.5 transition-colors hover:opacity-80"
-														style="color: var(--error);"
-														onclick={() => revokeAgent(agent.agentUserId)}
-														aria-label={m.agent_revoke()}
-														data-testid="agent-revoke-btn"
+														class="copy-btn"
+														onclick={() => copyToClipboard(agent.name, `agent-${agent.agentUserId}`)}
+														aria-label="Copy name"
 													>
-														<Trash2 size={11} />
+														{#if copiedField === `agent-${agent.agentUserId}`}
+															<Check size={10} />
+														{:else}
+															<Copy size={10} />
+														{/if}
 													</button>
-												{/if}
+													{#if canManageAgents}
+														<button
+															class="rounded p-0.5 transition-colors hover:opacity-80"
+															style="color: var(--error);"
+															onclick={() => revokeAgent(agent.agentUserId)}
+															aria-label={m.agent_revoke()}
+															data-testid="agent-revoke-btn"
+														>
+															<Trash2 size={11} />
+														</button>
+													{/if}
+												</div>
 											</div>
 											{#if agent.keyStart}
 												<div class="text-[9px]" style="color: var(--text-muted); font-family: var(--font-mono);">
