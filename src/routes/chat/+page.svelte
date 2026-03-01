@@ -17,7 +17,7 @@
 
 	// These values are stable for the page lifetime (server load runs once, no invalidation).
 	// svelte-ignore state_referenced_locally — intentional: capturing initial snapshot for store.
-	const { roomId, userId, userName, userRole, roomName, initialMessages, hasAgents } = data;
+	const { roomId, userId, userName, userRole, roomName, userRooms, initialMessages, hasAgents } = data;
 
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
@@ -166,7 +166,9 @@
 	<div class="mx-auto flex h-full max-w-5xl flex-col overflow-hidden">
 		<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
 		<ChatHeader
-			roomName={roomName}
+			{roomName}
+			{roomId}
+			rooms={userRooms}
 			onlineCount={store.onlineUsers.size}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
 		/>

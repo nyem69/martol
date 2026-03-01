@@ -118,6 +118,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.where(eq(organization.id, roomId))
 		.limit(1);
 
+	// Load all rooms the user belongs to (for room switcher)
+	const userRooms = await db
+		.select({ id: organization.id, name: organization.name })
+		.from(member)
+		.innerJoin(organization, eq(organization.id, member.organizationId))
+		.where(eq(member.userId, locals.user.id));
+
 	// Load recent messages from PostgreSQL as fallback history
 	const recentMessages = await db
 		.select({
@@ -190,6 +197,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		userName: locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`,
 		userRole,
 		roomName: org?.name || 'Chat',
+		userRooms,
 		initialMessages,
 		hasAgents
 	};

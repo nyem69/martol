@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader, LogOut } from '@lucide/svelte';
+	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader, LogOut, Send } from '@lucide/svelte';
+	import { organization } from '$lib/auth-client';
 	import { getAvailableCommands } from '$lib/chat/commands';
 	import { themeStore, THEMES } from '$lib/stores/theme.svelte';
 	import { signOut } from '$lib/auth-client';
@@ -24,6 +25,7 @@
 	// Collapsible section state — members open by default, rest collapsed
 	let sectionsOpen = $state<Record<string, boolean>>({
 		members: true,
+		invite: false,
 		guide: false,
 		theme: false,
 		agentSetup: false,
@@ -175,6 +177,37 @@
 			.sort((a, b) => a.name.localeCompare(b.name))
 	);
 
+	// ── Invite member state ──
+	const canInvite = $derived(userRole === 'owner' || userRole === 'lead');
+	let inviteEmail = $state('');
+	let inviteRole = $state('member');
+	let inviteLoading = $state(false);
+	let inviteStatus = $state<{ type: 'success' | 'error'; message: string } | null>(null);
+
+	async function sendInvite() {
+		const email = inviteEmail.trim();
+		if (!email || inviteLoading) return;
+		inviteLoading = true;
+		inviteStatus = null;
+		try {
+			const res = await organization.inviteMember({
+				email,
+				role: inviteRole as 'member' | 'admin',
+				organizationId: roomId
+			});
+			if (res.error) {
+				inviteStatus = { type: 'error', message: res.error.message || m.chat_invite_error() };
+			} else {
+				inviteStatus = { type: 'success', message: m.chat_invite_success() };
+				inviteEmail = '';
+			}
+		} catch {
+			inviteStatus = { type: 'error', message: m.chat_invite_error() };
+		} finally {
+			inviteLoading = false;
+		}
+	}
+
 	let loggingOut = $state(false);
 
 	async function handleLogout() {
@@ -313,6 +346,82 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- ═══ INVITE SECTION (owner/lead only) ═══ -->
+		{#if canInvite}
+			<div style="border-bottom: 1px solid var(--border);">
+				<button
+					class="section-toggle flex w-full items-center justify-between px-4 py-2.5"
+					onclick={() => toggleSection('invite')}
+					aria-expanded={sectionsOpen.invite}
+				>
+					<span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
+						{m.chat_invite_title()}
+					</span>
+					<span
+						class="transition-transform duration-150"
+						style="color: var(--text-muted); transform: rotate({sectionsOpen.invite ? '0' : '-90'}deg);"
+					>
+						<ChevronDown size={14} />
+					</span>
+				</button>
+
+				<div
+					class="section-body"
+					style="display: grid; grid-template-rows: {sectionsOpen.invite ? '1fr' : '0fr'}; transition: grid-template-rows 200ms ease;"
+				>
+					<div style="overflow: hidden;">
+						<div class="px-4 pb-3">
+							<form
+								class="flex flex-col gap-2"
+								onsubmit={(e) => { e.preventDefault(); sendInvite(); }}
+							>
+								<input
+									type="email"
+									bind:value={inviteEmail}
+									placeholder={m.chat_invite_email_placeholder()}
+									class="agent-input"
+									data-testid="invite-email-input"
+								/>
+								<div class="flex items-center gap-2">
+									<select
+										bind:value={inviteRole}
+										class="agent-input flex-1"
+										data-testid="invite-role-select"
+									>
+										<option value="member">{m.role_member()}</option>
+										<option value="admin">{m.role_lead()}</option>
+									</select>
+									<button
+										type="submit"
+										class="agent-btn"
+										disabled={inviteLoading || !inviteEmail.trim()}
+										data-testid="invite-send-btn"
+									>
+										{#if inviteLoading}
+											<Loader size={11} class="animate-spin" />
+											{m.chat_invite_sending()}
+										{:else}
+											<Send size={11} />
+											{m.chat_invite_send()}
+										{/if}
+									</button>
+								</div>
+							</form>
+
+							{#if inviteStatus}
+								<div
+									class="mt-2 rounded px-2 py-1 text-[10px]"
+									style="background: color-mix(in oklch, var({inviteStatus.type === 'success' ? '--success' : '--error'}) 15%, transparent); color: var({inviteStatus.type === 'success' ? '--success' : '--error'});"
+								>
+									{inviteStatus.message}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		<!-- ═══ THEME SECTION ═══ -->
 		<div style="border-bottom: 1px solid var(--border);">

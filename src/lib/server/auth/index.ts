@@ -9,7 +9,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { emailOTP, organization, apiKey, twoFactor } from 'better-auth/plugins';
-import { sendEmail, otpEmailTemplate } from '$lib/server/email';
+import { sendEmail, otpEmailTemplate, invitationEmailTemplate } from '$lib/server/email';
 import * as authSchema from '$lib/server/db/auth-schema';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -119,7 +119,37 @@ export function createAuth(
 			}),
 
 			// Rooms modeled as organizations
-			organization(),
+			organization({
+				sendInvitationEmail: async ({ email, organization: org, inviter }) => {
+					if (!emailConfig.resendApiKey) {
+						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
+							console.warn(`[Auth] DEV ONLY — Invitation for ${email} to ${org.name} from ${inviter.user.email}`);
+						} else {
+							console.error('[Auth] RESEND_API_KEY not configured — cannot send invitation');
+							throw new Error('Email service not configured');
+						}
+						return;
+					}
+
+					const inviterName = inviter.user.name || inviter.user.email;
+					const { subject, html } = invitationEmailTemplate(inviterName, org.name, baseURL);
+					const appName = emailConfig.emailName || 'Martol';
+
+					const result = await sendEmail(
+						{ to: email, subject, html },
+						{
+							RESEND_API_KEY: emailConfig.resendApiKey,
+							EMAIL_FROM: emailConfig.emailFrom || 'noreply@martol.app',
+							EMAIL_NAME: appName
+						}
+					);
+
+					if (!result.success) {
+						console.error('[Auth] Failed to send invitation email:', result.error);
+						throw new Error('Failed to send invitation email');
+					}
+				}
+			}),
 
 			// Agent authentication via API keys
 			apiKey(),

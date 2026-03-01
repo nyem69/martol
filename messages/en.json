@@ -180,5 +180,16 @@
   "terms_reaccept_title": "Updated Terms",
   "terms_reaccept_subtitle": "We've updated our terms. Please review and accept to continue.",
   "terms_reaccept_accept": "Accept and continue",
-  "terms_reaccept_updated": "Updated"
+  "terms_reaccept_updated": "Updated",
+  "chat_room_create": "Create Room",
+  "chat_room_name_placeholder": "Room name",
+  "chat_room_creating": "Creating...",
+  "chat_room_switch": "Switch room",
+  "chat_invite_title": "Invite",
+  "chat_invite_email_placeholder": "Email address",
+  "chat_invite_role": "Role",
+  "chat_invite_send": "Send invite",
+  "chat_invite_sending": "Sending...",
+  "chat_invite_success": "Invitation sent",
+  "chat_invite_error": "Failed to send invitation"
 }
