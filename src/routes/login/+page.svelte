@@ -19,6 +19,7 @@
 
 	// Email + terms
 	const inviteEmail = $page.url.searchParams.get('email') || '';
+	const magicToken = $page.url.searchParams.get('magic') || '';
 	let email = $state(inviteEmail);
 	const emailLocked = !!inviteEmail; // lock email when coming from invitation
 	let agreedToTos = $state(false);
@@ -27,6 +28,33 @@
 
 	// OTP
 	let code = $state('');
+
+	// Magic link flow — user clicked magic link in email, redirected here with token
+	let magicVerifying = $state(false);
+	let magicError = $state('');
+
+	async function handleMagicVerify() {
+		if (!magicToken || magicVerifying) return;
+		magicVerifying = true;
+		magicError = '';
+		try {
+			const res = await fetch('/api/auth/magic', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ token: magicToken })
+			});
+			if (res.ok) {
+				const redirectTo = $page.url.searchParams.get('redirect');
+				goto(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/chat');
+			} else {
+				magicError = m.login_code_invalid();
+			}
+		} catch {
+			magicError = m.error_generic();
+		} finally {
+			magicVerifying = false;
+		}
+	}
 
 	// Turnstile
 	const turnstileSiteKey = $derived(data.turnstileSiteKey);
@@ -222,7 +250,31 @@
 			</p>
 		</div>
 
-		{#if step === 'age'}
+		{#if magicToken}
+			<!-- Magic link flow — user clicked link in email, needs one click to verify -->
+			<div class="text-center">
+				<p class="mb-4 text-sm" style="color: var(--text-muted);">
+					{inviteEmail || m.auth_check_email()}
+				</p>
+				<button
+					onclick={handleMagicVerify}
+					disabled={magicVerifying}
+					data-testid="magic-verify-btn"
+					class="flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+					style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px;"
+				>
+					{#if magicVerifying}
+						<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+						{m.login_verifying()}
+					{:else}
+						{m.auth_sign_in()}
+					{/if}
+				</button>
+				{#if magicError}
+					<p class="mt-4 text-sm" style="color: var(--danger);">{magicError}</p>
+				{/if}
+			</div>
+		{:else if step === 'age'}
 			<!-- Age gate — BEFORE email collection -->
 			<div>
 				<p class="mb-4 text-sm" style="color: var(--text-muted);">
