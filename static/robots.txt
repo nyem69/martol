@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /api/
+Disallow: /chat
+Disallow: /settings
+Disallow: /login
+Disallow: /accept-terms
+Disallow: /accept-invitation/
+
+Sitemap: https://martol.plitix.com/sitemap.xml
