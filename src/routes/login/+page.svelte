@@ -7,7 +7,8 @@
 
 	let { data } = $props();
 
-	let step = $state<'age' | 'email' | 'code'>('age');
+	const ageVerified = typeof localStorage !== 'undefined' && localStorage.getItem('age-verified') === '1';
+	let step = $state<'age' | 'email' | 'code'>(ageVerified ? 'email' : 'age');
 	let loading = $state(false);
 	let error = $state('');
 
@@ -102,6 +103,7 @@
 			return;
 		}
 
+		localStorage.setItem('age-verified', '1');
 		step = 'email';
 	}
 
