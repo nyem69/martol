@@ -1,19 +1,14 @@
 import { redirect, error } from '@sveltejs/kit';
-import { invitation, organization, user } from '$lib/server/db/auth-schema';
-import { eq } from 'drizzle-orm';
+import { invitation, organization, user, member } from '$lib/server/db/auth-schema';
+import { eq, and } from 'drizzle-orm';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const invitationId = params.id;
-
-	if (!locals.user || !locals.session) {
-		redirect(302, `/login?redirect=/accept-invitation/${invitationId}`);
-	}
-
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
 
-	// Fetch invitation with org name and inviter name
+	// Fetch invitation details first (before auth check)
 	const [invite] = await db
 		.select({
 			id: invitation.id,
@@ -35,6 +30,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		error(404, 'Invitation not found');
 	}
 
+	// Already accepted → go to chat (no auth needed for this check)
 	if (invite.status === 'accepted') {
 		redirect(302, '/chat');
 	}
@@ -45,6 +41,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (invite.expiresAt < new Date()) {
 		error(410, 'This invitation has expired');
+	}
+
+	// Now check auth — invitation is valid and pending
+	if (!locals.user || !locals.session) {
+		redirect(302, `/login?redirect=/accept-invitation/${invitationId}`);
+	}
+
+	// If user is already a member of this org, redirect to chat
+	const [existing] = await db
+		.select({ id: member.id })
+		.from(member)
+		.where(and(eq(member.organizationId, invite.orgId), eq(member.userId, locals.user.id)))
+		.limit(1);
+
+	if (existing) {
+		redirect(302, '/chat');
 	}
 
 	return {
@@ -69,7 +81,6 @@ export const actions: Actions = {
 			});
 		} catch (e) {
 			console.error('[Invite] Failed to accept invitation:', e);
-			// Fallback: auto-accept in /chat page.server.ts handles pending invitations
 		}
 
 		redirect(302, '/chat');
@@ -83,7 +94,6 @@ export const actions: Actions = {
 		const db = locals.db;
 		if (!db) error(503, 'Database unavailable');
 
-		// Mark invitation as rejected
 		await db
 			.update(invitation)
 			.set({ status: 'rejected' })
