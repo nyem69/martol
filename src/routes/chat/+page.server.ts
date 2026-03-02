@@ -38,7 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.from(invitation)
 				.where(
 					and(
-						eq(invitation.email, locals.user.email!),
+						sql`LOWER(${invitation.email}) = LOWER(${locals.user.email!})`,
 						eq(invitation.status, 'pending'),
 						gt(invitation.expiresAt, new Date())
 					)

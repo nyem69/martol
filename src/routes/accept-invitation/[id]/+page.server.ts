@@ -1,5 +1,5 @@
 import { redirect, error } from '@sveltejs/kit';
-import { invitation, organization, user, member } from '$lib/server/db/auth-schema';
+import { invitation, organization, user, member, session as sessionTable } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -36,6 +36,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// If logged in, check if already a member → go straight to chat
 	if (locals.user && locals.session) {
 		if (invite.status === 'accepted') {
+			// Ensure active org points to the invited room
+			await db
+				.update(sessionTable)
+				.set({ activeOrganizationId: invite.orgId })
+				.where(eq(sessionTable.id, locals.session.id));
 			redirect(302, '/chat');
 		}
 
@@ -51,6 +56,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				.update(invitation)
 				.set({ status: 'accepted' })
 				.where(eq(invitation.id, invitationId));
+			await db
+				.update(sessionTable)
+				.set({ activeOrganizationId: invite.orgId })
+				.where(eq(sessionTable.id, locals.session.id));
 			redirect(302, '/chat');
 		}
 	}
@@ -74,11 +83,28 @@ export const actions: Actions = {
 			redirect(302, `/login?redirect=/accept-invitation/${params.id}`);
 		}
 
+		const db = locals.db;
+		if (!db) error(503, 'Database unavailable');
+
 		try {
 			await locals.auth.api.acceptInvitation({
 				body: { invitationId: params.id },
 				headers: request.headers
 			});
+
+			// Set the invited org as active so /chat lands in the right room
+			const [invite] = await db
+				.select({ organizationId: invitation.organizationId })
+				.from(invitation)
+				.where(eq(invitation.id, params.id))
+				.limit(1);
+
+			if (invite) {
+				await db
+					.update(sessionTable)
+					.set({ activeOrganizationId: invite.organizationId })
+					.where(eq(sessionTable.id, locals.session.id));
+			}
 		} catch (e) {
 			console.error('[Invite] Failed to accept invitation:', e);
 		}
