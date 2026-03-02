@@ -8,18 +8,30 @@
 	import { goto } from '$app/navigation';
 	import type { SvelteMap } from 'svelte/reactivity';
 
+	interface Invitation {
+		id: string;
+		email: string;
+		role: string;
+		status: string;
+		createdAt: string;
+		hasAccount: boolean;
+		username: string | null;
+	}
+
 	let {
 		open = false,
 		onClose,
 		onlineUsers,
 		userRole = 'member',
-		roomId = ''
+		roomId = '',
+		invitations = []
 	}: {
 		open: boolean;
 		onClose: () => void;
 		onlineUsers: SvelteMap<string, string>;
 		userRole?: string;
 		roomId?: string;
+		invitations?: Invitation[];
 	} = $props();
 
 	// Collapsible section state — members open by default, rest collapsed
@@ -422,6 +434,44 @@
 									style="background: color-mix(in oklch, var({inviteStatus.type === 'success' ? '--success' : '--error'}) 15%, transparent); color: var({inviteStatus.type === 'success' ? '--success' : '--error'});"
 								>
 									{inviteStatus.message}
+								</div>
+							{/if}
+
+							<!-- Invited users list -->
+							{#if invitations.length > 0}
+								<div class="mt-3" style="border-top: 1px solid var(--border); padding-top: 0.75rem;">
+									<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted); font-family: var(--font-mono);">
+										{m.chat_invite_list()} — {invitations.length}
+									</h4>
+									<div class="flex flex-col gap-1">
+										{#each invitations as inv (inv.id)}
+											<div class="flex items-center gap-2 py-1">
+												<!-- Status dot -->
+												<span
+													class="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+													style="background: var({inv.status === 'accepted' ? '--success' : inv.status === 'pending' ? '--warning' : '--error'});"
+													aria-hidden="true"
+												></span>
+												<div class="flex min-w-0 flex-1 flex-col">
+													{#if inv.hasAccount && inv.username}
+														<span class="flex items-center gap-1 truncate text-[11px] font-medium" style="color: var(--text);">
+															{inv.username}
+															<Check size={10} style="color: var(--success);" />
+														</span>
+														<span class="truncate text-[10px]" style="color: var(--text-muted);">{inv.email}</span>
+													{:else}
+														<span class="truncate text-[11px]" style="color: var(--text);">{inv.email}</span>
+													{/if}
+												</div>
+												<span
+													class="shrink-0 text-[9px] uppercase"
+													style="color: var(--text-muted); font-family: var(--font-mono);"
+												>
+													{inv.status}
+												</span>
+											</div>
+										{/each}
+									</div>
 								</div>
 							{/if}
 						</div>

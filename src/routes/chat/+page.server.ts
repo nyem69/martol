@@ -183,6 +183,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.catch((err: unknown) => console.error('[Chat] Read cursor update failed:', err));
 	}
 
+	// Load invitations for this room (for invite list in MemberPanel)
+	const roomInvitations = await db
+		.select({
+			id: invitation.id,
+			email: invitation.email,
+			role: invitation.role,
+			status: invitation.status,
+			createdAt: invitation.createdAt,
+			// Left join to check if invited email has an account
+			userId: user.id,
+			username: user.username,
+			userName: user.name
+		})
+		.from(invitation)
+		.leftJoin(user, sql`LOWER(${user.email}) = LOWER(${invitation.email})`)
+		.where(eq(invitation.organizationId, roomId))
+		.orderBy(desc(invitation.createdAt));
+
 	// Check if this room has any registered agents
 	const [agentMember] = await db
 		.select({ id: member.id })
@@ -198,6 +216,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		userRole,
 		roomName: org?.name || 'Chat',
 		userRooms,
+		roomInvitations: roomInvitations.map((inv: typeof roomInvitations[number]) => ({
+			id: inv.id,
+			email: inv.email,
+			role: inv.role || 'member',
+			status: inv.status,
+			createdAt: inv.createdAt.toISOString(),
+			hasAccount: !!inv.userId,
+			username: inv.username || inv.userName || null
+		})),
 		initialMessages,
 		hasAgents
 	};

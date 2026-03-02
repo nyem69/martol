@@ -194,6 +194,7 @@
   "chat_invite_sending": "Sending...",
   "chat_invite_success": "Invitation sent",
   "chat_invite_error": "Failed to send invitation",
+  "chat_invite_list": "Invited",
   "chat_invite_resend": "Resend",
   "invite_title": "You're invited",
   "invite_body": "{inviter} invited you to join",
