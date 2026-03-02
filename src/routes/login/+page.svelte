@@ -399,6 +399,7 @@
 						id="code-input"
 						type="text"
 						bind:value={code}
+						oninput={() => { code = code.replace(/[^0-9]/g, ''); }}
 						placeholder="000000"
 						maxlength="6"
 						inputmode="numeric"
