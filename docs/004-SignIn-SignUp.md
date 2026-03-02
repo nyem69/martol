@@ -9,13 +9,14 @@
 1. [Sign-In / Sign-Up (Email OTP)](#1-sign-in--sign-up-email-otp)
 2. [Magic Link Flow](#2-magic-link-flow)
 3. [Invitation Flow](#3-invitation-flow)
-4. [Session Management](#4-session-management)
-5. [API Key Authentication (Agents)](#5-api-key-authentication-agents)
-6. [Rate Limiting & Abuse Prevention](#6-rate-limiting--abuse-prevention)
-7. [Terms Re-acceptance](#7-terms-re-acceptance)
-8. [Known Issues & Root Causes](#8-known-issues--root-causes)
-9. [Environment Variables](#9-environment-variables)
-10. [File Reference](#10-file-reference)
+4. [Room Resolution](#4-room-resolution)
+5. [Session Management](#5-session-management)
+6. [API Key Authentication (Agents)](#6-api-key-authentication-agents)
+7. [Rate Limiting & Abuse Prevention](#7-rate-limiting--abuse-prevention)
+8. [Terms Re-acceptance](#8-terms-re-acceptance)
+9. [Security Audit & Known Issues](#9-security-audit--known-issues)
+10. [Environment Variables](#10-environment-variables)
+11. [File Reference](#11-file-reference)
 
 ---
 
@@ -23,52 +24,69 @@
 
 Sign-up is not a separate flow. First-time users create accounts automatically on first successful OTP verification (`disableSignUp: false`).
 
-### Sequence
+### Full OTP Flow
 
-```
-Browser                          Server (hooks.server.ts)              Better Auth
-  |                                  |                                     |
-  |  1. Age gate (client-side)       |                                     |
-  |  2. Enter email + accept terms   |                                     |
-  |  3. Turnstile challenge          |                                     |
-  |                                  |                                     |
-  |  POST /api/auth/email-otp/      |                                     |
-  |    send-verification-otp         |                                     |
-  |  headers: x-captcha-response     |                                     |
-  |--------------------------------->|                                     |
-  |                                  |  4. Validate Turnstile token        |
-  |                                  |  5. Check disposable email          |
-  |                                  |  6. Check rate limits (IP/email/    |
-  |                                  |     global) via KV                  |
-  |                                  |  7. Forward to Better Auth          |
-  |                                  |---------------------------------->  |
-  |                                  |                                     |  8. Generate 6-digit OTP
-  |                                  |                                     |  9. INSERT into verification table
-  |                                  |                                     | 10. Call sendVerificationOTP hook
-  |                                  |                                     |     -> store magic token in KV
-  |                                  |                                     |     -> send email via Resend
-  |                                  |  <---------------------------------|
-  |  <-------------------------------|                                     |
-  |                                  |                                     |
-  |  POST /api/auth/sign-in/        |                                     |
-  |    email-otp { email, otp }      |                                     |
-  |--------------------------------->|                                     |
-  |                                  | 11. Check lockout flag in KV        |
-  |                                  | 12. Check verify rate limit (5/15m) |
-  |                                  | 13. Forward to Better Auth          |
-  |                                  |---------------------------------->  |
-  |                                  |                                     | 14. Lookup verification record
-  |                                  |                                     | 15. Validate OTP + attempts
-  |                                  |                                     | 16. If new user: CREATE user
-  |                                  |                                     |     (auto-generate username)
-  |                                  |                                     | 17. Create session
-  |                                  |                                     | 18. Set cookies
-  |                                  |  <---------------------------------|
-  |  <-------------------------------|                                     |
-  |                                  |                                     |
-  | 19. POST /api/terms (record      |                                     |
-  |     terms acceptance, non-block) |                                     |
-  | 20. goto('/chat')                |                                     |
+```mermaid
+flowchart TD
+    Start([User visits /login]) --> AgeGate[Age gate: DOB entry]
+    AgeGate -->|Under 16| Blocked[Blocked — no data retained]
+    AgeGate -->|16+| EmailStep[Enter email + accept ToS & Privacy]
+
+    EmailStep --> Honeypot{Honeypot filled?}
+    Honeypot -->|Yes — bot| SilentOK[Silent 200 OK\nno email sent]
+    Honeypot -->|No| Turnstile[Turnstile CAPTCHA challenge]
+
+    Turnstile -->|Failed| CaptchaError[400: CAPTCHA failed]
+    Turnstile -->|Passed| SendOTP
+
+    subgraph Server [hooks.server.ts — OTP Send]
+        SendOTP[POST /api/auth/email-otp/send-verification-otp] --> Disposable{Disposable\nemail?}
+        Disposable -->|Yes| SilentDrop[Silent 200 OK]
+        Disposable -->|No| IPRate{IP rate limit\n10/hr?}
+        IPRate -->|Exceeded| SilentDrop
+        IPRate -->|OK| EmailRate{Email rate limit\n3/15min?}
+        EmailRate -->|Exceeded| SilentDrop
+        EmailRate -->|OK| GlobalRate{Global rate limit\n100/min?}
+        GlobalRate -->|Exceeded| SilentDrop
+        GlobalRate -->|OK| BetterAuth[Forward to Better Auth]
+    end
+
+    BetterAuth --> GenerateOTP[Generate 6-digit OTP]
+    GenerateOTP --> StoreVerification[INSERT verification table\nidentifier: sign-in-otp-email\nvalue: otp:attemptCount\nexpires: +15min]
+    StoreVerification --> SendHook[sendVerificationOTP hook]
+    SendHook --> StoreMagic[Store magic:uuid in KV\nTTL 5min]
+    StoreMagic --> SendEmail[Send email via Resend\ncontains: magic link + OTP code\nNO OTP in subject line]
+
+    SendEmail --> UserGetsEmail([User receives email])
+    UserGetsEmail -->|Enter 6-digit code| VerifyOTP
+    UserGetsEmail -->|Click magic link| MagicFlow([See §2 Magic Link])
+
+    subgraph VerifyServer [hooks.server.ts — OTP Verify]
+        VerifyOTP[POST /api/auth/sign-in/email-otp] --> Lockout{lockout:email\nin KV?}
+        Lockout -->|Yes| TooMany[429: Too many attempts]
+        Lockout -->|No| VerifyRate{Verify rate limit\n5/15min?}
+        VerifyRate -->|Exceeded| SetLockout[Set lockout:email\nTTL 15min] --> TooMany
+        VerifyRate -->|OK| ForwardVerify[Forward to Better Auth]
+    end
+
+    ForwardVerify --> LookupOTP[Lookup verification record]
+    LookupOTP --> ValidateOTP{OTP correct\n& not expired?}
+    ValidateOTP -->|No| IncrementAttempt[Increment attempt count]
+    ValidateOTP -->|Yes| NewUser{First-time\nuser?}
+
+    NewUser -->|Yes| CreateUser[CREATE user\nauto-generate username\nuser-random8\ntwoFactorEnabled: false]
+    NewUser -->|No| ExistingUser[Load existing user]
+
+    CreateUser --> CreateSession[Create session + set cookies]
+    ExistingUser --> CreateSession
+
+    CreateSession --> RecordTerms[POST /api/terms\nnon-blocking]
+    RecordTerms --> CheckRedirect{redirect param\nin URL?}
+    CheckRedirect -->|Yes| GoRedirect[goto redirect path]
+    CheckRedirect -->|No| GoChat[goto /chat]
+
+    GoRedirect --> RoomResolution([See §4 Room Resolution])
+    GoChat --> RoomResolution
 ```
 
 ### Step Details
@@ -106,26 +124,33 @@ TTL:   5 minutes
 
 ### Sequence
 
-```
-Email client                     GET /api/auth/magic?token=xxx
-  |  (prefetch or click)         |
-  |----------------------------->|
-  |                              |  1. Read magic:{token} from KV
-  |                              |  2. Extract email (do NOT consume token)
-  |                              |  3. Redirect 302 → /login?magic={token}&email={email}
-  |  <---------------------------|
-  |                              |
-Browser (login page)             POST /api/auth/magic { token }
-  |  User clicks "Sign in"      |
-  |----------------------------->|
-  |                              |  4. Read magic:{token} from KV
-  |                              |  5. Validate: email has @, OTP is 6 digits
-  |                              |  6. DELETE token from KV (single-use)
-  |                              |  7. Internal fetch to Better Auth sign-in
-  |                              |     POST /api/auth/sign-in/email-otp
-  |                              |  8. Forward Set-Cookie headers
-  |  <---------------------------|
-  |  goto('/chat')               |
+```mermaid
+sequenceDiagram
+    participant EC as Email Client
+    participant B as Browser
+    participant S as /api/auth/magic
+    participant KV as Cloudflare KV
+    participant BA as Better Auth
+
+    Note over EC: Email contains magic link:<br/>GET /api/auth/magic?token=xxx
+
+    EC->>S: GET /api/auth/magic?token=xxx<br/>(prefetch or user click)
+    S->>KV: Read magic:{token}
+    KV-->>S: { email, otp }
+    Note over S: Do NOT consume token<br/>(prefetch safe)
+    S-->>EC: 302 → /login?magic={token}&email={email}
+
+    EC->>B: Browser navigates to login page
+    Note over B: Login page shows<br/>"Sign in" button<br/>(pre-filled email)
+
+    B->>S: POST /api/auth/magic { token }
+    S->>KV: Read magic:{token}
+    KV-->>S: { email, otp }
+    S->>KV: DELETE magic:{token}<br/>(single-use consumed)
+    S->>BA: Internal POST /api/auth/sign-in/email-otp<br/>{ email, otp }
+    BA-->>S: 200 OK + Set-Cookie
+    S-->>B: 200 OK + Set-Cookie forwarded
+    B->>B: goto('/chat')
 ```
 
 **Why two steps**: Email clients (Gmail, Outlook) prefetch links via GET. If GET consumed the token, the link would be dead by the time the user clicks it.
@@ -140,60 +165,175 @@ Source: `src/routes/api/auth/magic/+server.ts`
 
 ### Sending an Invitation
 
-```
-Owner/Lead (MemberPanel)         POST (Better Auth organization plugin)
-  |  inviteMember({              |
-  |    email, role, orgId })     |
-  |----------------------------->|
-  |                              |  1. Create invitation record
-  |                              |     status: 'pending'
-  |                              |     expiresAt: +7 days
-  |                              |  2. Call sendInvitationEmail hook
-  |                              |     → Resend email with accept link
-  |  <---------------------------|
-```
+```mermaid
+sequenceDiagram
+    participant O as Owner/Lead
+    participant C as Client (MemberPanel)
+    participant BA as Better Auth
+    participant DB as Database
+    participant R as Resend
 
-The `sendInvitationEmail` callback in `lib/server/auth/index.ts` uses `invitationEmailTemplate()` from `lib/server/email.ts`. Accept link: `{baseURL}/accept-invitation/{invitationId}`.
-
-### Accepting an Invitation
-
-```
-Invitee clicks link              /accept-invitation/[id]
-  |                              |
-  |----------------------------->|  +page.server.ts load:
-  |                              |  1. Fetch invitation + org + inviter
-  |                              |  2. Check: expired? canceled? rejected?
-  |                              |  3. If logged in + already member → redirect /chat
-  |                              |  4. If logged in + not member → show "Join" button
-  |                              |  5. If not logged in → show "Sign in to join" link
-  |                              |     → /login?redirect=/accept-invitation/{id}&email={email}
-  |                              |
-  |  (after login, user returns) |
-  |  POST ?/accept               |
-  |----------------------------->|
-  |                              |  6. auth.api.acceptInvitation({ invitationId })
-  |                              |  7. Creates member record
-  |                              |  8. Sets invitation status → 'accepted'
-  |                              |  9. Redirect → /chat
-  |  <---------------------------|
+    O->>C: Enter email + role, click "Send invite"
+    C->>BA: organization.inviteMember({ email, role, orgId })
+    BA->>DB: INSERT invitation<br/>status: 'pending'<br/>expiresAt: +7 days
+    BA->>BA: Call sendInvitationEmail hook
+    BA->>R: Send invitation email<br/>link: /accept-invitation/{id}
+    R-->>BA: Email sent
+    BA-->>C: Success
+    C-->>O: "Invitation sent"
 ```
 
-**Decline**: `POST ?/decline` sets status to `rejected`.
+### Accepting an Invitation — All Scenarios
+
+```mermaid
+flowchart TD
+    Start([Invitee clicks email link]) --> LoadPage[GET /accept-invitation/id]
+    LoadPage --> FetchInvite[Fetch invitation + org + inviter]
+    FetchInvite --> NotFound{Invitation\nexists?}
+    NotFound -->|No| Error404[404: Invitation not found]
+    NotFound -->|Yes| CheckStatus{Status?}
+
+    CheckStatus -->|canceled / rejected| ShowInvalid[Show: invitation no longer valid]
+    CheckStatus -->|expired| ShowExpired[Show: invitation has expired]
+
+    CheckStatus -->|pending| CheckAuth{User logged in?}
+    CheckStatus -->|accepted| CheckAuthAccepted{User logged in?}
+
+    CheckAuthAccepted -->|No| LoginLinkAccepted[Show: Sign in to continue]
+    CheckAuthAccepted -->|Yes| SetActiveAccepted[Set activeOrganizationId\non session] --> RedirectChat1([302 → /chat])
+
+    CheckAuth -->|No| LoginLink[Show: Sign in to join\n→ /login?redirect=...&email=...]
+    CheckAuth -->|Yes| CheckMember{Already a\nmember?}
+
+    CheckMember -->|Yes| MarkAccepted[Mark invitation accepted\nSet activeOrganizationId] --> RedirectChat2([302 → /chat])
+    CheckMember -->|No| ShowAcceptUI[Show invitation details\nJoin / Decline buttons]
+
+    ShowAcceptUI -->|Decline| DeclineAction[POST ?/decline\nSet status: rejected] --> RedirectChat3([302 → /chat])
+    ShowAcceptUI -->|Join| AcceptAction
+
+    subgraph AcceptAction [POST ?/accept]
+        Accept1[auth.api.acceptInvitation] --> Accept2[Creates member record\nSets invitation: accepted]
+        Accept2 --> Accept3[Query invitation.organizationId]
+        Accept3 --> Accept4[UPDATE session\nactiveOrganizationId = orgId]
+    end
+
+    AcceptAction --> RedirectChat4([302 → /chat\nlands in invited room])
+
+    LoginLink --> LoginFlow[Login via OTP]
+    LoginFlow --> RedirectBack[goto /accept-invitation/id\nvia redirect param]
+    RedirectBack --> LoadPage
+```
+
+### Invitation for New User (end-to-end)
+
+```mermaid
+sequenceDiagram
+    participant I as Invitee
+    participant B as Browser
+    participant S as Server
+
+    Note over I: Receives invitation email
+
+    I->>B: Click invitation link
+    B->>S: GET /accept-invitation/{id}
+    S-->>B: Not logged in → show "Sign in to join"
+
+    I->>B: Click sign-in link
+    B->>S: GET /login?redirect=/accept-invitation/{id}&email=invitee@example.com
+    Note over B: Email pre-filled & locked<br/>Age gate → Terms → OTP
+
+    I->>B: Complete OTP verification
+    Note over S: Better Auth creates new user<br/>(auto-generates username)
+    S-->>B: Session created
+
+    B->>S: goto('/accept-invitation/{id}')<br/>via redirect param
+    S-->>B: Now logged in → show "Join" button
+
+    I->>B: Click "Join room"
+    B->>S: POST ?/accept
+    Note over S: acceptInvitation() → creates member<br/>Set activeOrganizationId on session
+    S-->>B: 302 → /chat
+
+    B->>S: GET /chat
+    Note over S: activeOrganizationId set → lands in invited room<br/>No auto-room created
+```
 
 Source: `src/routes/accept-invitation/[id]/+page.server.ts`, `+page.svelte`
 
 ---
 
-## 4. Session Management
+## 4. Room Resolution
+
+When `/chat` loads, the server resolves which room to show. This is a cascade with multiple fallback paths.
+
+```mermaid
+flowchart TD
+    Start([GET /chat — page.server.ts]) --> CheckAuth{Authenticated?}
+    CheckAuth -->|No| LoginRedirect([302 → /login])
+    CheckAuth -->|Yes| CheckActiveOrg{session.activeOrganizationId\nset?}
+
+    CheckActiveOrg -->|Yes| UseActiveOrg[roomId = activeOrganizationId]
+    CheckActiveOrg -->|No| FirstMembership{User has any\nmemberships?}
+
+    FirstMembership -->|Yes| UseFirst[roomId = first membership.orgId]
+    FirstMembership -->|No| CheckPending{Pending invitation\nfor user's email?\ncase-insensitive}
+
+    CheckPending -->|Yes| AutoAccept[Insert member record\nMark invitation accepted\nroomId = invitation.orgId]
+    CheckPending -->|No| AutoCreate[Create personal room\nname: 'username's Room'\nrole: owner\nroomId = new org]
+
+    UseActiveOrg --> SyncSession
+    UseFirst --> SyncSession
+    AutoAccept --> SyncSession
+    AutoCreate --> SyncSession
+
+    SyncSession{activeOrganizationId\n== roomId?}
+    SyncSession -->|Yes| LoadRoom
+    SyncSession -->|No| UpdateSession[UPDATE session\nactiveOrganizationId = roomId] --> LoadRoom
+
+    LoadRoom[Load room data:\n- org name\n- user rooms list\n- invitations\n- recent messages\n- read cursors\n- agent presence]
+    LoadRoom --> Render([Render chat UI])
+```
+
+### Room Resolution Priority
+
+| Priority | Condition | Result |
+|----------|-----------|--------|
+| 1 | `activeOrganizationId` set on session | Use that room |
+| 2 | User has any memberships | Use first membership |
+| 3 | Pending invitation matches email (case-insensitive) | Auto-accept and join that room |
+| 4 | None of the above | Auto-create personal room |
+
+Source: `src/routes/chat/+page.server.ts`
+
+---
+
+## 5. Session Management
 
 ### Per-Request Session Loading
 
-Every request in `hooks.server.ts`:
+```mermaid
+flowchart LR
+    Request([Incoming request]) --> ConnectDB
 
-1. Create DB connection (Hyperdrive or direct)
-2. Create Better Auth instance (`createAuth()`)
-3. Call `auth.api.getSession({ headers: request.headers })`
-4. Populate `event.locals.user` and `event.locals.session`
+    subgraph hooks.server.ts
+        ConnectDB{Hyperdrive\navailable?}
+        ConnectDB -->|Yes| HyperdriveDB[Connect via Hyperdrive]
+        ConnectDB -->|No| CheckLocal{PG_HOST +\nBETTER_AUTH_SECRET?}
+        CheckLocal -->|Yes| DirectDB[Connect via pg.Pool]
+        CheckLocal -->|No| NoAuth[No auth — locals.user = null]
+
+        HyperdriveDB --> CreateAuth[createAuth with db, secret, baseURL]
+        DirectDB --> CreateAuth
+
+        CreateAuth --> GetSession[auth.api.getSession]
+        GetSession -->|Valid| PopulateLocals[locals.user = user\nlocals.session = session]
+        GetSession -->|Invalid/None| NullLocals[locals.user = null\nlocals.session = null]
+    end
+
+    PopulateLocals --> Continue([Continue to route handler])
+    NullLocals --> Continue
+    NoAuth --> Continue
+```
 
 ### Session Configuration
 
@@ -207,6 +347,21 @@ session: {
     maxAge: 60 * 5                  // 5-minute client-side cache
   }
 }
+```
+
+### Session Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active: OTP verified → session created
+    Active --> Cached: Cookie cache (5 min)
+    Cached --> Active: Cache expired → DB lookup
+    Active --> Refreshed: 24h elapsed → new token
+    Refreshed --> Active
+    Active --> Expired: 7 days elapsed
+    Active --> Revoked: User signs out / remote revoke
+    Expired --> [*]
+    Revoked --> [*]
 ```
 
 ### Cookies
@@ -228,32 +383,54 @@ Client calls `signOut()` from `$lib/auth-client`. Better Auth clears cookies and
 
 ---
 
-## 5. API Key Authentication (Agents)
+## 6. API Key Authentication (Agents)
 
 ### Agent Creation
 
-`POST /api/agents` (session-authenticated, owner/lead only):
+```mermaid
+sequenceDiagram
+    participant O as Owner/Lead
+    participant S as POST /api/agents
+    participant DB as Database
+    participant BA as Better Auth
 
-1. Generate synthetic email: `agent-{12-char-random}@agent.invalid`
-2. In DB transaction:
-   - INSERT user (synthetic, `emailVerified: true`)
-   - INSERT account (`providerId: 'agent'`)
-   - INSERT member (`role: 'agent'`, bound to active org)
-3. Create API key via Better Auth plugin (prefix: `mtl`)
-4. Return full key (shown once, never retrievable again)
+    O->>S: POST { name: "claude:backend" }
+    Note over S: Verify session + role ∈ {owner, lead}
+
+    S->>DB: BEGIN transaction
+    S->>DB: INSERT user<br/>email: agent-{random}@agent.invalid<br/>emailVerified: true
+    S->>DB: INSERT account<br/>providerId: 'agent'
+    S->>DB: INSERT member<br/>role: 'agent', orgId: activeOrg
+    S->>BA: Create API key (prefix: mtl)
+    BA-->>S: Full key (mtl_...)
+    S->>DB: COMMIT
+    S-->>O: { key: "mtl_..." }<br/>shown once, never retrievable
+```
 
 ### Agent Authentication (WebSocket)
 
-`src/routes/api/rooms/[roomId]/ws/+server.ts`:
+```mermaid
+flowchart TD
+    Agent([Agent connects]) --> CheckKey{x-api-key\nheader present?}
+    CheckKey -->|No| CheckSession{Session cookie?}
+    CheckSession -->|No| Reject401[401 Unauthorized]
+    CheckSession -->|Yes| HumanAuth[Session-based auth\nnormal user flow]
 
-1. Check `x-api-key` header
-2. Call `auth.api.verifyApiKey({ body: { key } })`
-3. Query DB: verify user exists, has `role: 'agent'` membership
-4. Create signed identity payload (HMAC-SHA256 with `BETTER_AUTH_SECRET`):
-   ```json
-   { "userId": "...", "role": "agent", "userName": "...", "orgId": "...", "timestamp": ... }
-   ```
-5. Forward to Durable Object with `X-Identity` + `X-Identity-Sig` headers
+    CheckKey -->|Yes| VerifyKey[auth.api.verifyApiKey]
+    VerifyKey -->|Invalid| Reject401
+    VerifyKey -->|Valid| QueryMember[Query DB: user + member\nverify role = 'agent']
+    QueryMember -->|Not agent| Reject403[403 Forbidden]
+    QueryMember -->|Valid agent| SignIdentity
+
+    subgraph SignIdentity [HMAC Identity Signing]
+        Payload["payload = { userId, role: 'agent',\nuserName, orgId, timestamp }"]
+        Payload --> HMAC[HMAC-SHA256 with\nBETTER_AUTH_SECRET]
+        HMAC --> Headers[Set X-Identity + X-Identity-Sig]
+    end
+
+    SignIdentity --> ForwardDO[Forward to Durable Object\nwith signed headers]
+    HumanAuth --> ForwardDO
+```
 
 ### Agent Authentication (MCP)
 
@@ -267,7 +444,44 @@ Client calls `signOut()` from `$lib/auth-client`. Better Auth clears cookies and
 
 ---
 
-## 6. Rate Limiting & Abuse Prevention
+## 7. Rate Limiting & Abuse Prevention
+
+### Defense Layers
+
+```mermaid
+flowchart TD
+    Request([OTP Send Request]) --> L1
+
+    subgraph L1 [Layer 1: Turnstile]
+        Turnstile{CAPTCHA\nvalid?}
+    end
+    L1 -->|Failed| Block400[400: CAPTCHA failed]
+    L1 -->|Passed| L2
+
+    subgraph L2 [Layer 2: Disposable Email]
+        DisposableCheck{Known disposable\ndomain?}
+    end
+    L2 -->|Yes| Silent200a[Silent 200 OK]
+    L2 -->|No| L3
+
+    subgraph L3 [Layer 3: IP Rate Limit]
+        IPCheck{"otp-ip:{ip}\n> 10 / hour?"}
+    end
+    L3 -->|Exceeded| Silent200b[Silent 200 OK]
+    L3 -->|OK| L4
+
+    subgraph L4 [Layer 4: Email Rate Limit]
+        EmailCheck{"otp-email:{email}\n> 3 / 15min?"}
+    end
+    L4 -->|Exceeded| Silent200c[Silent 200 OK]
+    L4 -->|OK| L5
+
+    subgraph L5 [Layer 5: Global Rate Limit]
+        GlobalCheck{"otp-global\n> 100 / min?"}
+    end
+    L5 -->|Exceeded| Silent200d[Silent 200 OK]
+    L5 -->|OK| Forward[Forward to Better Auth\n→ Generate & send OTP]
+```
 
 ### OTP Send Rate Limits
 
@@ -283,12 +497,22 @@ All blocked requests return `200 OK` to prevent enumeration.
 
 ### OTP Verify Rate Limits
 
+```mermaid
+flowchart TD
+    Verify([OTP Verify Request]) --> CheckLockout{lockout:email\nin KV?}
+    CheckLockout -->|Yes| Locked[429: Too many attempts\nfail-fast, no counter increment]
+    CheckLockout -->|No| CheckVerifyRate{"otp-verify:{email}\n> 5 / 15min?"}
+    CheckVerifyRate -->|Exceeded| SetLockout[Set lockout:email\nTTL: 15 min] --> Locked
+    CheckVerifyRate -->|OK| Forward[Forward to Better Auth]
+    Forward --> BACheck{OTP\ncorrect?}
+    BACheck -->|Yes| Success[Create session]
+    BACheck -->|No| Increment[Increment attempt count\nin verification record]
+```
+
 | Limit | Key | Max | Window | Response |
 |-------|-----|-----|--------|----------|
 | Per-email | `otp-verify:{email}` | 5 | 15 min | 429 + error message |
 | Lockout | `lockout:{email}` | — | 15 min TTL | 429 "Too many attempts" |
-
-Lockout flag set in KV after exceeding verify limit. Subsequent requests fail-fast without incrementing counter.
 
 ### Disposable Email Blocking
 
@@ -308,9 +532,28 @@ Fail-open on KV errors (logs but doesn't block).
 
 ---
 
-## 7. Terms Re-acceptance
+## 8. Terms Re-acceptance
 
-`hooks.server.ts:128-192` — runs on every authenticated page request (excludes `/api/*`, `/login`, `/legal/*`, `/accept-terms`, `/accept-invitation`).
+```mermaid
+flowchart TD
+    Request([Authenticated page request]) --> SkipCheck{Path is /api/*\nor /login\nor /legal/*\nor /accept-terms\nor /accept-invitation?}
+
+    SkipCheck -->|Yes| Continue([Continue to route])
+    SkipCheck -->|No| FetchTerms[Fetch latest version of\ntos, privacy, aup]
+
+    FetchTerms --> AnyExist{Any terms\nversions exist?}
+    AnyExist -->|No| Continue
+    AnyExist -->|Yes| CheckAcceptance[Check user's acceptances\nfor each latest version]
+
+    CheckAcceptance --> AllAccepted{All required\ntypes accepted?}
+    AllAccepted -->|Yes| Continue
+    AllAccepted -->|No| Redirect([302 → /accept-terms])
+
+    FetchTerms -->|Error| FailOpen[Log error\nfail-open → continue]
+    FailOpen --> Continue
+```
+
+`hooks.server.ts:128-192` — runs on every authenticated page request.
 
 1. Fetch latest version of each required type: `tos`, `privacy`, `aup`
 2. Check if user has accepted each latest version in `termsAcceptances`
@@ -319,9 +562,11 @@ Fail-open on KV errors (logs but doesn't block).
 
 ---
 
-## 8. Known Issues & Root Causes
+## 9. Security Audit & Known Issues
 
-### twoFactorEnabled Column (Fixed 2026-03-02)
+### Known Issues & Root Causes
+
+#### twoFactorEnabled Column (Fixed 2026-03-02)
 
 **Symptom**: New user sign-up via OTP fails with 500 error.
 
@@ -335,15 +580,84 @@ BetterAuthError: The field "twoFactorEnabled" does not exist in the "user" Drizz
 
 **Prevention**: After adding any Better Auth plugin, run `npx @better-auth/cli generate` to check for required schema changes.
 
-### Hyperdrive SELECT Caching
+#### Turnstile Site Key Missing from Vars (Fixed 2026-03-03)
+
+**Symptom**: OTP send returns 400 "CAPTCHA verification required" on production.
+
+**Root cause**: `TURNSTILE_SITE_KEY` was stored only as a Cloudflare secret (encrypted, server-only). The login page SSR couldn't access it, so the Turnstile widget never rendered. No `x-captcha-response` header was sent.
+
+**Fix**: Added `TURNSTILE_SITE_KEY` to `wrangler.toml` `[vars]` (public vars accessible during SSR). Kept `TURNSTILE_SECRET_KEY` as a Cloudflare secret.
+
+#### Invited User Lands in Wrong Room (Fixed 2026-03-03)
+
+**Symptom**: User accepts invitation but lands in auto-created personal room instead of invited room.
+
+**Root cause**: The `accept` action called `acceptInvitation()` (which creates the member record) but did not set `activeOrganizationId` on the session. When redirected to `/chat`, room resolution fell through to the first membership or auto-created room.
+
+**Fix**: After `acceptInvitation()`, query the invitation's `organizationId` and update `session.activeOrganizationId` before redirecting. Applied to all three redirect paths in `accept-invitation/[id]/+page.server.ts`.
+
+#### Hyperdrive SELECT Caching
 
 **Observation**: INSERT via Hyperdrive succeeds (RETURNING returns data, record confirmed via direct psql), but SELECT in the same request returns 0 rows.
 
 **Impact**: None for auth flows — OTP SEND and VERIFY are always separate HTTP requests, so the verification record is visible by the time VERIFY runs.
 
+### Design vs Implementation Gaps
+
+| 003-Auth.md Design | Current Implementation | Status |
+|---|---|---|
+| 2FA mandatory for room owners | twoFactor plugin configured, no UI enforcement at room creation | **Gap** — P1 |
+| Passkey plugin | Not yet added (pending plugin availability) | **Gap** — P1 |
+| 72-hour email undo | Email change flow not implemented | **Gap** — P1 |
+| Lost-email recovery | Not implemented | **Gap** — P2 |
+| Account audit logging | Schema exists, logging hooks not wired | **Gap** — P1 |
+| Username history table | Schema exists, not populated on change | **Gap** — P2 |
+| Invitation purge (7 days) | Cron not implemented | **Gap** — P2 |
+| Session cleanup cron | Cron trigger configured but cleanup logic TBD | **Gap** — P2 |
+| Age gate stores `ageVerifiedAt` | Age gate is client-only localStorage, no `ageVerifiedAt` stored on user record | **Gap** — P1 |
+
+### Identified Security Considerations
+
+#### Critical
+
+| Item | Description | File |
+|------|-------------|------|
+| Invitation decline has no auth check | Any authenticated user can decline any invitation by ID — no check that `locals.user.email` matches the invitation email. Attacker can reject other people's invitations. | `accept-invitation/[id]/+page.server.ts:115-129` |
+| Magic link GET leaks email in URL | GET handler puts email into redirect URL query param (`?email=...`). Visible in browser history, referrer headers, server logs. Contradicts email privacy design. | `api/auth/magic/+server.ts:34` |
+
+#### High
+
+| Item | Description | File |
+|------|-------------|------|
+| Resend OTP bypasses Turnstile | `handleResendCode` calls `sendVerificationOtp` without Turnstile token. Either silently fails (400) or becomes a bypass vector. | `login/+page.svelte:181-204` |
+| `activeOrganizationId` trusted without membership check | `/api/reports` takes `orgId` from session without verifying user membership. User who manipulates session org can file reports against messages in rooms they don't belong to. | `api/reports/+server.ts:49` |
+| Inviter email leaked in invitation email | When inviter has no `name`, code falls back to `inviter.user.email` as display name in invitation template. Should fall back to username or generic label. | `server/auth/index.ts:136` |
+| Dev fallback magic link exposes raw OTP | When KV unavailable, raw OTP goes in URL. No production guard — if KV binding misconfigured, auth tokens exposed in URLs. | `server/auth/index.ts:97-98` |
+
+#### Medium
+
+| Item | Description | File |
+|------|-------------|------|
+| Rate limiter KV race condition | Read-then-write without atomicity. Under concurrent requests, limit can be doubled (5→10 OTP attempts). | `rate-limit.ts:40-76` |
+| Chat auto-accept bypasses Better Auth | `/chat` load directly inserts member row for pending invitations instead of calling `acceptInvitation` API. Skips Better Auth hooks/validation. | `chat/+page.server.ts:48-64` |
+| Magic link POST bypasses verify rate limit | Internal `fetch()` sends `{ token }` not `{ email }`, so email-keyed rate limit sees empty email. | `api/auth/magic/+server.ts`, `hooks.server.ts` |
+| Agent auth binds to first matching room | `authenticateAgent` uses `.limit(1)` without ORDER BY. Agent in multiple rooms resolves nondeterministically. | `server/mcp/auth.ts:76-85` |
+| `/whois` exposes user IDs | Available to any connected user (no role check). Returns internal user ID, enabling targeted attacks. | `server/chat-room.ts:864-909` |
+| No invitation rate limit | No server-side rate limit on `organization.inviteMember()`. Owner could spam invitations. | `server/auth/index.ts` |
+
+#### Low
+
+| Item | Description | File |
+|------|-------------|------|
+| Age gate client-side only | `localStorage.setItem('age-verified', '1')` — trivially bypassable. `ageVerifiedAt` never set server-side. | `login/+page.svelte:10-11` |
+| Upload trusts client content-type | File type checked against allowlist from client header, no magic byte validation. Behind feature flag. | `api/upload/+server.ts:59` |
+| Room auto-creation race | Concurrent `/chat` loads with no memberships can create duplicate rooms. | `chat/+page.server.ts` |
+| Invitation emails visible to all owner/leads | 003-Auth says "visible only to the inviter". Implementation shows to all owner/leads. | `MemberPanel.svelte` |
+| Missing reserved usernames | Missing `sales`, `moderator`, `mod`, `root`, `security` from reserved words. | `api/account/username/+server.ts:16-27` |
+
 ---
 
-## 9. Environment Variables
+## 10. Environment Variables
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -352,15 +666,15 @@ BetterAuthError: The field "twoFactorEnabled" does not exist in the "user" Drizz
 | `EMAIL_FROM` | No | Sender address (default: `noreply@martol.app`) |
 | `EMAIL_NAME` | No | Sender name (default: `Martol`) |
 | `APP_BASE_URL` | No | Base URL for callbacks (default: `http://localhost:5190`) |
-| `TURNSTILE_SITE_KEY` | Production | Cloudflare Turnstile public key |
-| `TURNSTILE_SECRET_KEY` | Production | Cloudflare Turnstile secret |
+| `TURNSTILE_SITE_KEY` | Production | Cloudflare Turnstile public key (in wrangler.toml `[vars]`) |
+| `TURNSTILE_SECRET_KEY` | Production | Cloudflare Turnstile secret (Cloudflare secret) |
 | `CACHE` | Production | Cloudflare KV binding (rate limits, magic tokens, sessions) |
 | `HYPERDRIVE` | Production | Cloudflare Hyperdrive binding (PostgreSQL) |
 | `PG_HOST` | Local dev | Direct PostgreSQL host |
 
 ---
 
-## 10. File Reference
+## 11. File Reference
 
 | File | Responsibility |
 |------|----------------|
@@ -377,6 +691,7 @@ BetterAuthError: The field "twoFactorEnabled" does not exist in the "user" Drizz
 | `src/routes/api/auth/[...auth]/+server.ts` | Better Auth catch-all handler |
 | `src/routes/api/auth/magic/+server.ts` | Magic link GET (redirect) + POST (verify) |
 | `src/routes/accept-invitation/[id]/` | Invitation acceptance page + server logic |
+| `src/routes/chat/+page.server.ts` | Room resolution, auto-creation, data loading |
 | `src/routes/api/agents/+server.ts` | Agent CRUD + API key generation |
 | `src/routes/api/account/sessions/+server.ts` | Session listing + revocation |
 | `src/routes/api/rooms/[roomId]/ws/+server.ts` | WebSocket upgrade with session/API key auth |
