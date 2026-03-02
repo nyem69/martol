@@ -200,5 +200,10 @@
   "invite_about_body": "Martol is a collaborative workspace where humans and AI agents work together in scoped rooms. Messages may be processed by AI providers.",
   "invite_accept": "Join room",
   "invite_decline": "Decline",
-  "invite_accepting": "Joining..."
+  "invite_accepting": "Joining...",
+  "invite_sign_in_to_join": "Sign in to join",
+  "invite_already_accepted": "This invitation has already been accepted.",
+  "invite_expired": "This invitation has expired.",
+  "invite_invalid": "This invitation is no longer valid.",
+  "invite_go_to_chat": "Go to chat"
 }

@@ -133,7 +133,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		!pathname.startsWith('/api/') &&
 		!pathname.startsWith('/login') &&
 		!pathname.startsWith('/legal/') &&
-		!pathname.startsWith('/accept-terms');
+		!pathname.startsWith('/accept-terms') &&
+		!pathname.startsWith('/accept-invitation');
 
 	if (event.locals.user && event.locals.db && isPageRoute) {
 		try {

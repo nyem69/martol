@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
 
-	// Fetch invitation details first (before auth check)
+	// Fetch invitation details (visible to anyone with the link)
 	const [invite] = await db
 		.select({
 			id: invitation.id,
@@ -30,33 +30,29 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		error(404, 'Invitation not found');
 	}
 
-	// Already accepted → go to chat (no auth needed for this check)
-	if (invite.status === 'accepted') {
-		redirect(302, '/chat');
-	}
+	const expired = invite.expiresAt < new Date();
+	const invalid = invite.status === 'canceled' || invite.status === 'rejected';
 
-	if (invite.status === 'canceled' || invite.status === 'rejected') {
-		error(410, 'This invitation is no longer valid');
-	}
+	// If logged in, check if already a member → go straight to chat
+	if (locals.user && locals.session) {
+		if (invite.status === 'accepted') {
+			redirect(302, '/chat');
+		}
 
-	if (invite.expiresAt < new Date()) {
-		error(410, 'This invitation has expired');
-	}
+		const [existing] = await db
+			.select({ id: member.id })
+			.from(member)
+			.where(and(eq(member.organizationId, invite.orgId), eq(member.userId, locals.user.id)))
+			.limit(1);
 
-	// Now check auth — invitation is valid and pending
-	if (!locals.user || !locals.session) {
-		redirect(302, `/login?redirect=/accept-invitation/${invitationId}`);
-	}
-
-	// If user is already a member of this org, redirect to chat
-	const [existing] = await db
-		.select({ id: member.id })
-		.from(member)
-		.where(and(eq(member.organizationId, invite.orgId), eq(member.userId, locals.user.id)))
-		.limit(1);
-
-	if (existing) {
-		redirect(302, '/chat');
+		if (existing) {
+			// Already a member — also mark invitation as accepted to prevent future prompts
+			await db
+				.update(invitation)
+				.set({ status: 'accepted' })
+				.where(eq(invitation.id, invitationId));
+			redirect(302, '/chat');
+		}
 	}
 
 	return {
@@ -64,14 +60,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		orgName: invite.orgName,
 		inviterName: invite.inviterName,
 		role: invite.role || 'member',
-		email: invite.email
+		email: invite.email,
+		status: invite.status,
+		expired,
+		invalid,
+		loggedIn: !!(locals.user && locals.session)
 	};
 };
 
 export const actions: Actions = {
 	accept: async ({ params, locals, request }) => {
 		if (!locals.user || !locals.session || !locals.auth) {
-			redirect(302, '/login');
+			redirect(302, `/login?redirect=/accept-invitation/${params.id}`);
 		}
 
 		try {
@@ -88,7 +88,7 @@ export const actions: Actions = {
 
 	decline: async ({ params, locals }) => {
 		if (!locals.user || !locals.session) {
-			redirect(302, '/login');
+			redirect(302, `/login?redirect=/accept-invitation/${params.id}`);
 		}
 
 		const db = locals.db;
