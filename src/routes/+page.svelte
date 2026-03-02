@@ -316,9 +316,10 @@
 	}
 
 	.hero-img {
-		width: clamp(120px, 28vw, 200px);
+		width: clamp(180px, 36vw, 320px);
 		height: auto;
-		margin-bottom: 16px;
+		margin: 0 auto 20px;
+		display: block;
 		pointer-events: none;
 		user-select: none;
 	}
