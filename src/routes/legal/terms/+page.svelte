@@ -4,6 +4,8 @@
 
 <svelte:head>
 	<title>{m.legal_terms()} — {m.app_name()}</title>
+	<meta name="description" content="Terms of Service for Martol, the multi-user AI collaboration workspace." />
+	<link rel="canonical" href="https://martol.plitix.com/legal/terms" />
 </svelte:head>
 
 <article class="legal-content">

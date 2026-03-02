@@ -4,6 +4,8 @@
 
 <svelte:head>
 	<title>{m.legal_aup()} — {m.app_name()}</title>
+	<meta name="description" content="Acceptable Use Policy for Martol. Rules for responsible use of the AI collaboration workspace." />
+	<link rel="canonical" href="https://martol.plitix.com/legal/aup" />
 </svelte:head>
 
 <article class="legal-content">

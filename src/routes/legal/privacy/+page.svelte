@@ -4,6 +4,8 @@
 
 <svelte:head>
 	<title>{m.legal_privacy()} — {m.app_name()}</title>
+	<meta name="description" content="Privacy Policy for Martol. Learn what data we collect, how we use it, and your rights." />
+	<link rel="canonical" href="https://martol.plitix.com/legal/privacy" />
 </svelte:head>
 
 <article class="legal-content">

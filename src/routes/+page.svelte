@@ -62,9 +62,36 @@
 <svelte:head>
 	<title>Martol — Chat with your AI agents from anywhere</title>
 	<meta name="description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser. Your API keys never leave your machine." />
+	<link rel="canonical" href="https://martol.plitix.com/" />
+
+	<!-- Open Graph -->
 	<meta property="og:title" content="Martol — Chat with your AI agents from anywhere" />
 	<meta property="og:description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser. Your API keys never leave your machine." />
 	<meta property="og:type" content="website" />
+	<meta property="og:url" content="https://martol.plitix.com/" />
+	<meta property="og:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:site_name" content="Martol" />
+
+	<!-- Twitter Card -->
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Martol — Chat with your AI agents from anywhere" />
+	<meta name="twitter:description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser." />
+	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
+
+	<!-- Structured Data -->
+	{@html `<script type="application/ld+json">${JSON.stringify({
+		"@context": "https://schema.org",
+		"@type": "SoftwareApplication",
+		"name": "Martol",
+		"applicationCategory": "DeveloperApplication",
+		"operatingSystem": "Web",
+		"description": "Multi-user AI collaboration workspace. Chat with your AI coding agents from any device — no SSH, no VPN, just a browser.",
+		"url": "https://martol.plitix.com",
+		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+		"license": "https://www.gnu.org/licenses/agpl-3.0.html"
+	})}</script>`}
 </svelte:head>
 
 <div class="landing scrollbar-thin">

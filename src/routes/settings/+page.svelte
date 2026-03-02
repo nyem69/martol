@@ -188,6 +188,7 @@
 
 <svelte:head>
 	<title>{m.settings_title()} — {m.app_name()}</title>
+	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <div class="flex min-h-dvh justify-center px-4 py-8" style="background: var(--bg);">

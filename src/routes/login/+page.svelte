@@ -196,6 +196,7 @@
 
 <svelte:head>
 	<title>{m.auth_sign_in()} — {m.app_name()}</title>
+	<meta name="robots" content="noindex, nofollow" />
 	{#if turnstileSiteKey}
 		<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 	{/if}
