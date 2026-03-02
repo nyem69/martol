@@ -167,7 +167,7 @@
 			});
 			if (res.ok) {
 				await signOut();
-				goto('/login');
+				goto('/');
 			} else {
 				const result: { error?: string } = await res.json();
 				errorMsg = result.error || m.error_generic();

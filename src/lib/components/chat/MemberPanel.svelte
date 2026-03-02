@@ -218,7 +218,7 @@
 		loggingOut = true;
 		try {
 			await signOut();
-			goto('/login');
+			goto('/');
 		} catch {
 			loggingOut = false;
 		}
