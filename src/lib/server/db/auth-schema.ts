@@ -22,6 +22,8 @@ export const user = pgTable(
 		username: text('username'),
 		displayName: text('displayName'),
 		ageVerifiedAt: timestamp('ageVerifiedAt'),
+		// twoFactor plugin — required for user creation to succeed
+		twoFactorEnabled: boolean('twoFactorEnabled').default(false),
 		createdAt: timestamp('createdAt').notNull(),
 		updatedAt: timestamp('updatedAt').notNull()
 	},

@@ -60,8 +60,7 @@ export function createAuth(
 	const auth = betterAuth({
 		database: drizzleAdapter(db, {
 			provider: 'pg',
-			schema: authSchema,
-			debugLogs: true
+			schema: authSchema
 		}),
 
 		secret,
@@ -74,7 +73,6 @@ export function createAuth(
 				otpLength: 6,
 				disableSignUp: false,
 				sendVerificationOTP: async ({ email, otp }) => {
-					console.log('[AUTH-DEBUG] sendVerificationOTP called:', { email, otpLength: otp.length, otpPrefix: otp.slice(0, 2) });
 					if (!emailConfig.resendApiKey) {
 						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
 							console.warn(`[Auth] DEV ONLY — OTP for ${email}: ${otp}`);
@@ -200,17 +198,6 @@ export function createAuth(
 							return { data: { ...user, username: `user-${random}` } };
 						}
 						return { data: user };
-					}
-				}
-			},
-			verification: {
-				create: {
-					before: async (data) => {
-						console.log('[AUTH-DEBUG] verification.create.before:', JSON.stringify(data));
-						return { data };
-					},
-					after: async (data) => {
-						console.log('[AUTH-DEBUG] verification.create.after:', JSON.stringify(data));
 					}
 				}
 			}

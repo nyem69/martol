@@ -175,10 +175,39 @@
 		}
 	}
 
+	let resending = $state(false);
+	let resendSuccess = $state(false);
+
+	async function handleResendCode() {
+		if (resending) return;
+		resending = true;
+		error = '';
+		resendSuccess = false;
+		try {
+			const result = await emailOtp.sendVerificationOtp({
+				email: email.trim(),
+				type: 'sign-in'
+			});
+			if (result.error) {
+				error = result.error.message || m.login_otp_send_failed();
+			} else {
+				code = '';
+				resendSuccess = true;
+				await tick();
+				document.getElementById('code-input')?.focus();
+			}
+		} catch {
+			error = m.error_generic();
+		} finally {
+			resending = false;
+		}
+	}
+
 	async function handleVerifyCode() {
 		if (code.length !== 6) return;
 		loading = true;
 		error = '';
+		resendSuccess = false;
 
 		try {
 			const result = await signIn.emailOtp({ email: email.trim(), otp: code });
@@ -481,6 +510,28 @@
 						{/if}
 					</button>
 				</form>
+
+				<div class="mt-4 text-center">
+					<button
+						onclick={handleResendCode}
+						disabled={resending}
+						data-testid="resend-code-btn"
+						class="text-xs underline transition-opacity hover:opacity-80 disabled:opacity-50"
+						style="color: var(--text-muted);"
+					>
+						{#if resending}
+							{m.chat_sending()}
+						{:else}
+							{m.login_code_resend()}
+						{/if}
+					</button>
+				</div>
+
+				{#if resendSuccess}
+					<p class="mt-2 text-center text-xs" style="color: var(--success, #4ade80);">
+						{m.login_code_resent()}
+					</p>
+				{/if}
 			</div>
 		{/if}
 
