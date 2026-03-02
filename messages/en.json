@@ -192,5 +192,13 @@
   "chat_invite_sending": "Sending...",
   "chat_invite_success": "Invitation sent",
   "chat_invite_error": "Failed to send invitation",
-  "chat_invite_resend": "Resend"
+  "chat_invite_resend": "Resend",
+  "invite_title": "You're invited",
+  "invite_body": "{inviter} invited you to join",
+  "invite_role_label": "Your role",
+  "invite_about_title": "About Martol",
+  "invite_about_body": "Martol is a collaborative workspace where humans and AI agents work together in scoped rooms. Messages may be processed by AI providers.",
+  "invite_accept": "Join room",
+  "invite_decline": "Decline",
+  "invite_accepting": "Joining..."
 }
