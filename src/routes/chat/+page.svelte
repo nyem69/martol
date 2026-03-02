@@ -15,10 +15,6 @@
 
 	let { data } = $props();
 
-	// These values are stable for the page lifetime (server load runs once, no invalidation).
-	// svelte-ignore state_referenced_locally — intentional: capturing initial snapshot for store.
-	const { roomId, userId, userName, userRole, roomName, userRooms, initialMessages, hasAgents } = data;
-
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
 
@@ -160,6 +156,7 @@
 
 <svelte:head>
 	<title>Chat — Martol</title>
+	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <main class="h-dvh overflow-hidden" aria-label="Chat room: {roomName}">
