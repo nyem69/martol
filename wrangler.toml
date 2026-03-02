@@ -63,5 +63,13 @@ APP_BASE_URL = "https://martol.plitix.com"
 EMAIL_FROM="noreply@roadasset.co"
 EMAIL_NAME="Martol"
 
+# Public key — embedded in client HTML for Turnstile widget
+TURNSTILE_SITE_KEY = "0x4AAAAAACkQpeHr3nM8lyRa"
+
+# secrets
+# TURNSTILE_SECRET_KEY
+# RESEND_API_KEY
+# BETTER_AUTH_SECRET
+
 [triggers]
 crons = ["0 * * * *"]
