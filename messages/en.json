@@ -205,5 +205,7 @@
   "invite_already_accepted": "This invitation has already been accepted.",
   "invite_expired": "This invitation has expired.",
   "invite_invalid": "This invitation is no longer valid.",
-  "invite_go_to_chat": "Go to chat"
+  "invite_go_to_chat": "Go to chat",
+  "invite_not_found": "This invitation link is invalid or has been removed.",
+  "invite_not_found_title": "Invitation not found"
 }
