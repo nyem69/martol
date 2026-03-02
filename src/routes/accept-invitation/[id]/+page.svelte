@@ -119,7 +119,7 @@
 					</form>
 				{:else}
 					<a
-						href="/login?redirect=/accept-invitation/{data.invitationId}"
+						href="/login?redirect=/accept-invitation/{data.invitationId}&email={encodeURIComponent(data.email)}"
 						class="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90"
 						style="background: var(--accent); color: var(--bg); font-family: var(--font-mono); text-decoration: none;"
 						data-testid="sign-in-to-join-btn"

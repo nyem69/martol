@@ -18,7 +18,9 @@
 	let dobYear = $state('');
 
 	// Email + terms
-	let email = $state('');
+	const inviteEmail = $page.url.searchParams.get('email') || '';
+	let email = $state(inviteEmail);
+	const emailLocked = !!inviteEmail; // lock email when coming from invitation
 	let agreedToTos = $state(false);
 	let agreedToPrivacy = $state(false);
 	let honeypot = $state(''); // hidden field — bots fill it, humans don't
@@ -310,10 +312,11 @@
 						bind:value={email}
 						placeholder="you@example.com"
 						required
+						readonly={emailLocked}
 						disabled={loading}
 						data-testid="email-input"
 						class="w-full rounded-md px-3 py-2.5 text-sm outline-none"
-						style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+						style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);{emailLocked ? ' opacity: 0.7; cursor: not-allowed;' : ''}"
 					/>
 
 					<!-- Honeypot — hidden field, bots fill it, humans don't -->
