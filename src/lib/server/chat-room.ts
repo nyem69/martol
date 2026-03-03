@@ -1155,7 +1155,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				new TextEncoder().encode(json)
 			);
 			const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
-			json = JSON.stringify({ ...msg, _hmac: hmac });
+			// Append _hmac via string concat to preserve exact signed bytes
+			json = json.slice(0, -1) + ',"_hmac":"' + hmac + '"}';
 		}
 		const sockets = this.ctx.getWebSockets();
 		for (const ws of sockets) {
