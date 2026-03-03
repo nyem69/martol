@@ -471,11 +471,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	}
 
 	// ── REST Ingest (for MCP chat_send) ──────────────────────────────
-	// Trust boundary: only reachable via stub.fetch() from the Worker (chat-send.ts).
+	// Trust boundary: verified via X-Internal-Secret header (shared BETTER_AUTH_SECRET).
 	// The calling code authenticates the agent via API key before invoking this endpoint.
-	// If the DO ever becomes directly routable, add a shared internal secret header.
 
 	private async handleRestIngest(request: Request): Promise<Response> {
+		// Verify internal caller
+		const internalSecret = request.headers.get('X-Internal-Secret');
+		if (!internalSecret || internalSecret !== this.env.BETTER_AUTH_SECRET) {
+			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
+		}
+
 		let payload: {
 			localId: string;
 			senderId: string;

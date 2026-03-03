@@ -45,7 +45,10 @@ export async function chatSend(
 
 		const doResponse = await stub.fetch(new Request('https://do/ingest', {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Internal-Secret': platform.env.BETTER_AUTH_SECRET
+			},
 			body: JSON.stringify(ingestPayload)
 		}));
 
