@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Resolve room from active org or first membership
 	const activeOrgId = locals.session.activeOrganizationId;
-	let roomId: string;
+	let roomId = '';
 	let userRole = 'member';
 
 	if (activeOrgId) {
@@ -66,7 +66,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			} else {
 				// Organic user: auto-create a default room (organization)
 				// Advisory lock prevents duplicate creation from concurrent requests
-				await db.transaction(async (tx) => {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			await db.transaction(async (tx: any) => {
 					await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${locals.user.id}))`);
 
 					// Re-check membership after acquiring lock
