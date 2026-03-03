@@ -34,13 +34,19 @@
 	}
 
 	async function switchRoom(orgId: string) {
+		console.log('[switchRoom] clicked:', orgId, 'current:', roomId);
 		if (orgId === roomId) {
+			console.log('[switchRoom] same room, closing dropdown');
 			closeDropdown();
 			return;
 		}
-		await organization.setActive({ organizationId: orgId });
+		console.log('[switchRoom] calling organization.setActive...');
+		const res = await organization.setActive({ organizationId: orgId });
+		console.log('[switchRoom] setActive result:', res);
 		closeDropdown();
+		console.log('[switchRoom] calling invalidateAll...');
 		await invalidateAll();
+		console.log('[switchRoom] invalidateAll done, roomId is now:', roomId);
 	}
 
 	async function createRoom() {

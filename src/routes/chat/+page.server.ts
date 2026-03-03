@@ -17,6 +17,8 @@ export const load: PageServerLoad = async (event) => {
 	let roomId = '';
 	let userRole = 'member';
 
+	console.log('[chat/load] activeOrgId from session:', activeOrgId, 'userId:', locals.user.id);
+
 	if (activeOrgId) {
 		roomId = activeOrgId;
 	} else {
@@ -236,6 +238,8 @@ export const load: PageServerLoad = async (event) => {
 			hasAccount: !!inv.userId,
 			username: inv.username || inv.userName || null
 		}));
+
+	console.log('[chat/load] returning roomId:', roomId, 'roomName:', org?.name, 'rooms:', userRooms.length);
 
 	return {
 		roomId,
