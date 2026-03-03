@@ -26,7 +26,7 @@ const config = {
 				'default-src': ['self'],
 				'script-src': [
 					'self',
-					'nonce',
+					'unsafe-inline',
 					'https://static.cloudflareinsights.com',
 					'https://challenges.cloudflare.com'
 				],

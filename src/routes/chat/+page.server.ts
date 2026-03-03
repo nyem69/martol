@@ -17,8 +17,6 @@ export const load: PageServerLoad = async (event) => {
 	let roomId = '';
 	let userRole = 'member';
 
-	console.log('[chat/load] activeOrgId from session:', activeOrgId, 'userId:', locals.user.id);
-
 	if (activeOrgId) {
 		roomId = activeOrgId;
 	} else {
@@ -225,10 +223,16 @@ export const load: PageServerLoad = async (event) => {
 		.limit(1);
 	const hasAgents = !!agentMember;
 
+	// Deduplicate per email — keep only the latest invitation (already sorted desc)
+	const seenEmails = new Set<string>();
 	const filteredInvitations = roomInvitations
-		.filter((inv: typeof roomInvitations[number]) =>
-			userRole === 'owner' || inv.inviterId === locals.user.id
-		)
+		.filter((inv: typeof roomInvitations[number]) => {
+			if (userRole !== 'owner' && inv.inviterId !== locals.user.id) return false;
+			const key = inv.email.toLowerCase();
+			if (seenEmails.has(key)) return false;
+			seenEmails.add(key);
+			return true;
+		})
 		.map((inv: typeof roomInvitations[number]) => ({
 			id: inv.id,
 			email: inv.email,
@@ -238,8 +242,6 @@ export const load: PageServerLoad = async (event) => {
 			hasAccount: !!inv.userId,
 			username: inv.username || inv.userName || null
 		}));
-
-	console.log('[chat/load] returning roomId:', roomId, 'roomName:', org?.name, 'rooms:', userRooms.length);
 
 	return {
 		roomId,

@@ -166,6 +166,7 @@
 			{roomName}
 			{roomId}
 			rooms={userRooms}
+			{userName}
 			onlineCount={store.onlineUsers.size}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
 		/>

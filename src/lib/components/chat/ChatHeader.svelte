@@ -1,24 +1,27 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Menu, ChevronDown, Plus, Loader } from '@lucide/svelte';
-	import { organization } from '$lib/auth-client';
-	import { invalidateAll } from '$app/navigation';
+	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut } from '@lucide/svelte';
+	import { organization, signOut } from '$lib/auth-client';
+	import { invalidateAll, goto } from '$app/navigation';
 
 	let {
 		roomName,
 		roomId,
 		rooms,
+		userName,
 		onlineCount,
 		onToggleMembers
 	}: {
 		roomName: string;
 		roomId: string;
 		rooms: Array<{ id: string; name: string }>;
+		userName: string;
 		onlineCount: number;
 		onToggleMembers: () => void;
 	} = $props();
 
 	let dropdownOpen = $state(false);
+	let userMenuOpen = $state(false);
 	let creating = $state(false);
 	let newRoomName = $state('');
 	let createLoading = $state(false);
@@ -33,20 +36,28 @@
 		creating = false;
 	}
 
+	function toggleUserMenu() {
+		userMenuOpen = !userMenuOpen;
+	}
+
+	function closeUserMenu() {
+		userMenuOpen = false;
+	}
+
+	async function handleSignOut() {
+		closeUserMenu();
+		await signOut();
+		goto('/login');
+	}
+
 	async function switchRoom(orgId: string) {
-		console.log('[switchRoom] clicked:', orgId, 'current:', roomId);
 		if (orgId === roomId) {
-			console.log('[switchRoom] same room, closing dropdown');
 			closeDropdown();
 			return;
 		}
-		console.log('[switchRoom] calling organization.setActive...');
-		const res = await organization.setActive({ organizationId: orgId });
-		console.log('[switchRoom] setActive result:', res);
+		await organization.setActive({ organizationId: orgId });
 		closeDropdown();
-		console.log('[switchRoom] calling invalidateAll...');
 		await invalidateAll();
-		console.log('[switchRoom] invalidateAll done, roomId is now:', roomId);
 	}
 
 	async function createRoom() {
@@ -69,12 +80,19 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') closeDropdown();
+		if (e.key === 'Escape') {
+			closeDropdown();
+			closeUserMenu();
+		}
 	}
 </script>
 
-<svelte:window onkeydown={dropdownOpen ? handleKeydown : undefined} />
+<svelte:window onkeydown={dropdownOpen || userMenuOpen ? handleKeydown : undefined} />
 
+<header
+	class="z-10 flex shrink-0 items-center justify-between px-4 py-3"
+	style="background: var(--bg-elevated); border-bottom: 1px solid var(--border); padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));"
+>
 {#if dropdownOpen}
 	<button
 		class="fixed inset-0 z-20"
@@ -83,11 +101,6 @@
 		tabindex="-1"
 	></button>
 {/if}
-
-<header
-	class="z-10 flex shrink-0 items-center justify-between px-4 py-3"
-	style="background: var(--bg-elevated); border-bottom: 1px solid var(--border); padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));"
->
 	<div class="relative flex items-center gap-2">
 		<span
 			class="text-sm font-bold tracking-widest"
@@ -192,6 +205,53 @@
 				</span>
 			</div>
 		{/if}
+		<div class="relative">
+			<button
+				class="user-btn flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+				onclick={toggleUserMenu}
+				aria-expanded={userMenuOpen}
+				aria-haspopup="menu"
+				data-testid="user-menu-btn"
+			>
+				<User size={14} />
+				<span style="color: var(--text); font-family: var(--font-mono);">{userName}</span>
+			</button>
+			{#if userMenuOpen}
+				<button
+					class="fixed inset-0 z-20"
+					onclick={closeUserMenu}
+					aria-label="Close menu"
+					tabindex="-1"
+				></button>
+				<div
+					class="user-dropdown absolute right-0 top-full z-30 mt-1 min-w-40 rounded-lg border shadow-xl"
+					style="background: var(--bg-elevated); border-color: var(--border);"
+					role="menu"
+				>
+					<a
+						href="/settings"
+						class="menu-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
+						style="color: var(--text);"
+						role="menuitem"
+						onclick={closeUserMenu}
+					>
+						<Settings size={14} />
+						<span>{m.nav_settings()}</span>
+					</a>
+					<div style="border-top: 1px solid var(--border);">
+						<button
+							class="menu-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
+							style="color: var(--error);"
+							onclick={handleSignOut}
+							role="menuitem"
+						>
+							<LogOut size={14} />
+							<span>{m.auth_sign_out()}</span>
+						</button>
+					</div>
+				</div>
+			{/if}
+		</div>
 		<button
 			class="rounded p-1.5 transition-opacity hover:opacity-70 active:scale-95"
 			style="color: var(--text-muted);"
@@ -260,6 +320,23 @@
 		overflow-y: auto;
 		scrollbar-width: thin;
 		scrollbar-color: var(--border) transparent;
+	}
+
+	.user-btn {
+		color: var(--text-muted);
+	}
+
+	.user-btn:hover {
+		background: color-mix(in oklch, var(--bg-surface) 50%, transparent);
+	}
+
+	.user-dropdown {
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+
+	.menu-item:hover {
+		background: color-mix(in oklch, var(--bg-surface) 60%, transparent);
 	}
 
 	/* Touch devices: larger tap targets */

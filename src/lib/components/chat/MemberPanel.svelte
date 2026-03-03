@@ -463,12 +463,17 @@
 														<span class="truncate text-[11px]" style="color: var(--text);">{inv.email}</span>
 													{/if}
 												</div>
-												<span
-													class="shrink-0 text-[9px] uppercase"
-													style="color: var(--text-muted); font-family: var(--font-mono);"
-												>
-													{inv.status}
-												</span>
+												<div class="flex shrink-0 flex-col items-end gap-0.5">
+													<span
+														class="text-[9px] uppercase"
+														style="color: var(--text-muted); font-family: var(--font-mono);"
+													>
+														{inv.status}
+													</span>
+													<span class="text-[9px]" style="color: var(--text-muted);">
+														{new Date(inv.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+													</span>
+												</div>
 											</div>
 										{/each}
 									</div>
