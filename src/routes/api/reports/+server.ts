@@ -9,7 +9,7 @@ import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { member } from '$lib/server/db/auth-schema';
 import { contentReports } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 const VALID_REASONS = ['csam', 'nsfw', 'spam', 'scam', 'harassment', 'other'] as const;
 type Reason = (typeof VALID_REASONS)[number];
@@ -55,6 +55,14 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			.limit(1);
 		if (!firstMembership) error(400, 'No active organization');
 		orgId = firstMembership.orgId;
+	} else {
+		// Verify user is still a member of the claimed org
+		const [membership] = await locals.db
+			.select({ id: member.id })
+			.from(member)
+			.where(and(eq(member.organizationId, orgId), eq(member.userId, locals.user.id)))
+			.limit(1);
+		if (!membership) error(403, 'Not a member of this room');
 	}
 
 	// Insert report
