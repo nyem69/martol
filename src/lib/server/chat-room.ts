@@ -862,6 +862,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				break;
 
 			case 'whois': {
+				// Restrict to owner/lead — members don't need to resolve user details
+				if (role !== 'owner' && role !== 'lead') {
+					this.sendError(ws, 'unauthorized', 'Only owner or lead can use /whois');
+					return;
+				}
 				const target = args.trim();
 				if (!target) {
 					this.sendError(ws, 'invalid_message', 'Usage: /whois <name>');
@@ -875,7 +880,6 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					const sName = this.extractTag(sTags, 'name:');
 					if (sName.toLowerCase() === target.toLowerCase()) {
 						const sRole = this.extractTag(sTags, 'role:');
-						const sId = this.extractTag(sTags, 'user:');
 						this.safeSend(ws, {
 							type: 'message',
 							message: {
@@ -884,7 +888,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 								senderId: 'system',
 								senderRole: 'system',
 								senderName: 'System',
-								body: `${sName} — role: ${sRole}, id: ${sId}`,
+								body: `${sName} — role: ${sRole}`,
 								timestamp: new Date().toISOString()
 							}
 						});
