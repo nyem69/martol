@@ -163,8 +163,8 @@
 
 	{#if hasNewMessages}
 		<button
-			class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg"
-			style="background: var(--accent); color: var(--bg);"
+			class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-xs font-medium shadow-lg active:scale-95"
+			style="background: var(--accent); color: var(--bg); font-family: var(--font-mono);"
 			onclick={scrollToBottom}
 			aria-label={m.chat_new_messages()}
 		>

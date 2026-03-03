@@ -90,7 +90,7 @@
 			{:else if message.dbId}
 				{#if onReply}
 					<button
-						class="text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+						class="msg-action text-[11px]"
 						style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
 						onclick={() => onReply(message)}
 						aria-label={m.chat_reply_to({ name: message.senderName })}
@@ -100,7 +100,7 @@
 				{/if}
 				{#if onReport && !message.isOwn}
 					<button
-						class="opacity-0 transition-opacity group-hover:opacity-100"
+						class="msg-action"
 						style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
 						onclick={() => onReport(message.dbId!, message.body)}
 						aria-label={m.report_title()}
@@ -116,3 +116,22 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	/* Desktop: show on hover */
+	.msg-action {
+		opacity: 0;
+		transition: opacity 150ms ease;
+	}
+
+	:global(.group):hover .msg-action {
+		opacity: 1;
+	}
+
+	/* Touch devices: always show actions */
+	@media (hover: none) {
+		.msg-action {
+			opacity: 0.6;
+		}
+	}
+</style>

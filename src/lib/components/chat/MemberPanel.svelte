@@ -248,7 +248,7 @@
 {/if}
 
 <aside
-	class="fixed top-0 right-0 z-40 flex h-full w-72 flex-col border-l transition-transform duration-200"
+	class="panel-aside fixed top-0 right-0 z-40 flex h-full flex-col border-l transition-transform duration-200"
 	style="background: var(--bg-elevated); border-color: var(--border);
 		transform: {open ? 'translateX(0)' : 'translateX(100%)'};"
 	aria-label={m.panel_title()}
@@ -889,6 +889,17 @@
 </aside>
 
 <style>
+	/* Panel width: full on small phones, fixed on larger screens */
+	.panel-aside {
+		width: 100%;
+	}
+
+	@media (min-width: 420px) {
+		.panel-aside {
+			width: 18rem; /* 288px, same as w-72 */
+		}
+	}
+
 	.section-toggle {
 		cursor: pointer;
 		background: none;

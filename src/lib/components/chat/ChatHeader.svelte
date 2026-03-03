@@ -104,7 +104,7 @@
 
 		{#if dropdownOpen}
 			<div
-				class="absolute top-full left-0 z-30 mt-1 min-w-56 rounded-lg border shadow-xl"
+				class="room-dropdown absolute top-full left-0 z-30 mt-1 min-w-56 rounded-lg border shadow-xl"
 				style="background: var(--bg-elevated); border-color: var(--border);"
 				role="listbox"
 				aria-label={m.chat_room_switch()}
@@ -242,5 +242,25 @@
 	.create-room-submit:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	/* Room dropdown: constrain height on small screens */
+	.room-dropdown {
+		max-height: 60vh;
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border) transparent;
+	}
+
+	/* Touch devices: larger tap targets */
+	@media (hover: none) {
+		.room-item {
+			padding-top: 0.625rem;
+			padding-bottom: 0.625rem;
+		}
+
+		.room-switcher-btn {
+			padding: 0.375rem 0.5rem;
+		}
 	}
 </style>

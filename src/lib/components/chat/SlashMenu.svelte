@@ -29,8 +29,8 @@
 
 {#if commands.length > 0}
 	<div
-		class="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg shadow-lg"
-		style="background: var(--bg-elevated); border: 1px solid var(--border);"
+		class="absolute bottom-full left-0 right-0 mb-1 overflow-y-auto rounded-lg shadow-lg"
+		style="background: var(--bg-elevated); border: 1px solid var(--border); max-height: 40vh; scrollbar-width: thin; scrollbar-color: var(--border) transparent;"
 		role="listbox"
 		aria-label={m.chat_slash_commands()}
 		data-testid="slash-menu"
