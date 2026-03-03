@@ -26,6 +26,21 @@ const ALLOWED_TYPES = new Set([
 // Strict key format: orgId/timestamp-filename (no path traversal)
 const R2_KEY_RE = /^[\w-]+\/[\w][\w._-]*$/;
 
+const MAGIC_BYTES: Record<string, number[][]> = {
+	'image/jpeg': [[0xFF, 0xD8, 0xFF]],
+	'image/png': [[0x89, 0x50, 0x4E, 0x47]],
+	'image/gif': [[0x47, 0x49, 0x46, 0x38]],
+	'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+	'application/pdf': [[0x25, 0x50, 0x44, 0x46]]
+};
+
+function validateMagicBytes(buffer: ArrayBuffer, claimedType: string): boolean {
+	const sigs = MAGIC_BYTES[claimedType];
+	if (!sigs) return true; // text/plain — no reliable magic bytes
+	const bytes = new Uint8Array(buffer);
+	return sigs.some((sig) => sig.every((byte, i) => bytes[i] === byte));
+}
+
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	// Feature flag: uploads disabled unless ENABLE_UPLOADS=true
 	if (platform?.env?.ENABLE_UPLOADS !== 'true') {
@@ -58,14 +73,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (file.size > MAX_FILE_SIZE) error(413, 'File too large (max 10 MB)');
 	if (!ALLOWED_TYPES.has(file.type)) error(415, 'File type not allowed');
 
+	const buffer = await file.arrayBuffer();
+	if (!validateMagicBytes(buffer, file.type)) {
+		error(415, 'File content does not match declared type');
+	}
+
 	// Sanitize filename
 	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128);
 	const timestamp = Date.now();
 	const r2Key = `${activeOrgId}/${timestamp}-${safeName}`;
 
-	const arrayBuffer = await file.arrayBuffer();
-
-	await r2.put(r2Key, arrayBuffer, {
+	await r2.put(r2Key, buffer, {
 		httpMetadata: {
 			contentType: file.type,
 			contentDisposition: `attachment; filename="${safeName}"`
