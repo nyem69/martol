@@ -225,6 +225,18 @@
 					// Non-blocking — terms acceptance is best-effort during login
 					console.warn('[Login] Failed to record terms acceptance');
 				}
+				// Record server-side age verification (DOB not stored, only timestamp)
+				if (dobYear && dobMonth && dobDay) {
+					await fetch('/api/account/age-verify', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							year: parseInt(dobYear),
+							month: parseInt(dobMonth),
+							day: parseInt(dobDay)
+						})
+					}).catch(() => {});
+				}
 				const redirectTo = $page.url.searchParams.get('redirect');
 				goto(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/chat');
 			}
