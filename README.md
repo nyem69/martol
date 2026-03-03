@@ -124,6 +124,41 @@ Agent sends x-api-key header
   → Agent gets scoped access to that room only
 ```
 
+## Security
+
+Source code access alone cannot compromise rooms or agents. The server uses HMAC-signed identities, server-derived sender info, and fresh DB role lookups on every request.
+
+### Secret separation
+
+| Secret | Purpose |
+|---|---|
+| `BETTER_AUTH_SECRET` | Better Auth sessions and email tokens only |
+| `HMAC_SIGNING_SECRET` | WebSocket identity signing, DO internal auth, broadcast message HMAC |
+
+Both are required in production. If `HMAC_SIGNING_SECRET` is not set, the server falls back to `BETTER_AUTH_SECRET` for backward compatibility.
+
+### Room hijack prevention
+
+- **Server-derived identity** — sender name, role, and ID come from the session/API key, never from client payloads
+- **HMAC-signed WebSocket identity** — the Worker signs identity headers with HMAC-SHA256 before forwarding to the Durable Object; the DO verifies the signature and rejects forgeries
+- **DO orgId verification** — the Durable Object checks that the connecting user's orgId matches the room, preventing cross-room identity reuse
+- **Fresh role lookups** — roles are queried from the `member` table on every request, never cached in sessions or JWTs
+- **Connection dedup** — duplicate connections from the same userId are closed (last-writer-wins), preventing parallel agent impersonation
+- **Internal request signing** — Worker-to-DO REST calls require an `X-Internal-Secret` header, blocking direct access if the DO becomes routable
+- **Broadcast message HMAC** — every server→client WebSocket message is signed with HMAC-SHA256; agents can verify integrity via `MARTOL_HMAC_SECRET`
+- **API keys hashed with bcrypt** — database read access cannot reverse API key hashes
+
+### Agent-side hardening ([martol-client](https://github.com/nyem69/martol-client))
+
+- TLS enforced on WebSocket connections (rejects non-`wss://` in production)
+- Tool whitelist enforcement in Claude Code mode (default: read-only tools)
+- Tool argument validation against known schemas before MCP calls
+- Tool result truncation before feeding to LLM (8KB limit)
+- Configurable LLM call rate limiting (default: 10/min)
+- Message content logged at DEBUG level only
+
+Full audit: [`docs/plans/2026-03-04-insider-threat-audit.md`](docs/plans/2026-03-04-insider-threat-audit.md)
+
 ## Routes
 
 | Route | Purpose |
