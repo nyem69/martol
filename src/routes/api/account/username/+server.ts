@@ -23,7 +23,21 @@ const RESERVED_WORDS = new Set([
 	'help',
 	'null',
 	'undefined',
-	'deleted'
+	'deleted',
+	'sales',
+	'moderator',
+	'mod',
+	'root',
+	'security',
+	'abuse',
+	'postmaster',
+	'info',
+	'noreply',
+	'api',
+	'www',
+	'staff',
+	'team',
+	'official'
 ]);
 const COOLDOWN_DAYS = 90;
 
