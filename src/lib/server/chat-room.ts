@@ -85,6 +85,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// Debounced read cursor updates — flushed alongside WAL or on 5s timeout
 	private pendingReadCursors = new Map<string, { orgId: string; userId: string; lastReadId: number }>();
 
+	// [R6] Pre-imported HMAC key for signing broadcast messages
+	private broadcastSigningKey: CryptoKey | null = null;
+
 	constructor(ctx: DurableObjectState, env: App.Platform['env']) {
 		super(ctx, env);
 
@@ -104,6 +107,18 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			this.unflushedIds = unflushed ?? [];
 			this.flushFailures = failures ?? 0;
 			this.degraded = this.flushFailures >= MAX_FLUSH_FAILURES;
+
+			// Import broadcast signing key for R6 message integrity
+			const hmacSecret = this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET;
+			if (hmacSecret) {
+				this.broadcastSigningKey = await crypto.subtle.importKey(
+					'raw',
+					new TextEncoder().encode(hmacSecret),
+					{ name: 'HMAC', hash: 'SHA-256' },
+					false,
+					['sign']
+				);
+			}
 
 			// If there are unflushed messages, schedule a flush
 			if (this.unflushedIds.length > 0) {
@@ -216,7 +231,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			`org:${encodeURIComponent(orgId)}`
 		]);
 
-		this.broadcast(
+		await this.broadcast(
 			{ type: 'presence', senderId: userId, senderName: userName, status: 'online' },
 			server
 		);
@@ -255,7 +270,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.handleChatMessage(ws, msg);
 				break;
 			case 'typing':
-				this.handleTyping(ws, msg.active);
+				await this.handleTyping(ws, msg.active);
 				break;
 			case 'read':
 				await this.handleReadCursor(ws, msg.lastReadId);
@@ -274,11 +289,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		reason: string,
 		wasClean: boolean
 	): Promise<void> {
-		this.broadcastPresenceOffline(ws);
+		await this.broadcastPresenceOffline(ws);
 	}
 
 	async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-		this.broadcastPresenceOffline(ws);
+		await this.broadcastPresenceOffline(ws);
 	}
 
 	// ── Alarm: Batch Flush to DB ──────────────────────────────────────
@@ -311,7 +326,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					`[ChatRoom] Degraded mode after ${this.flushFailures} flush failures`,
 					err
 				);
-				this.broadcast({
+				await this.broadcast({
 					type: 'error',
 					code: 'degraded',
 					message: 'Room temporarily unavailable — messages paused'
@@ -455,7 +470,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			timestamp
 		};
 
-		this.broadcast({ type: 'message', message: payload });
+		await this.broadcast({ type: 'message', message: payload });
 
 		// Schedule flush
 		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
@@ -588,7 +603,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			timestamp
 		};
 
-		this.broadcast({ type: 'message', message: broadcastPayload });
+		await this.broadcast({ type: 'message', message: broadcastPayload });
 
 		// Schedule flush
 		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
@@ -680,7 +695,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			await this.ctx.storage.put('meta:unflushedIds', this.unflushedIds);
 
 			if (mappings.length > 0) {
-				this.broadcast({ type: 'id_map', mappings });
+				await this.broadcast({ type: 'id_map', mappings });
 			}
 
 			await this.pruneOldEntries();
@@ -730,14 +745,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// ── Typing ────────────────────────────────────────────────────────
 
-	private handleTyping(ws: WebSocket, active: boolean): void {
+	private async handleTyping(ws: WebSocket, active: boolean): Promise<void> {
 		const tags = this.ctx.getTags(ws);
 		const userId = this.extractTag(tags, 'user:');
 		const name = this.extractTag(tags, 'name:');
 
 		if (!userId) return;
 
-		this.broadcast(
+		await this.broadcast(
 			{ type: 'typing', senderId: userId, senderName: name, active },
 			ws
 		);
@@ -868,7 +883,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					return;
 				}
 				// Loop guard resume — broadcast a system message
-				this.broadcast({
+				await this.broadcast({
 					type: 'message',
 					message: {
 						localId: `sys-${Date.now()}`,
@@ -985,7 +1000,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 				// [I6] System messages use serverSeqId: 0 — ephemeral, not persisted
 				// through WAL. Important status changes are queryable via /api/actions.
-				this.broadcast({
+				await this.broadcast({
 					type: 'message',
 					message: {
 						localId: `sys-${Date.now()}`,
@@ -1087,7 +1102,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				'meta:walByteSize': 0
 			});
 
-			this.broadcast({ type: 'clear', clearedBy });
+			await this.broadcast({ type: 'clear', clearedBy });
 		} catch (err) {
 			console.error('[ChatRoom] Clear room failed:', err);
 		}
@@ -1095,14 +1110,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// ── Presence ──────────────────────────────────────────────────────
 
-	private broadcastPresenceOffline(ws: WebSocket): void {
+	private async broadcastPresenceOffline(ws: WebSocket): Promise<void> {
 		try {
 			const tags = this.ctx.getTags(ws);
 			const userId = this.extractTag(tags, 'user:');
 			const name = this.extractTag(tags, 'name:');
 
 			if (userId) {
-				this.broadcast(
+				await this.broadcast(
 					{ type: 'presence', senderId: userId, senderName: name, status: 'offline' },
 					ws
 				);
@@ -1131,8 +1146,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// ── Helpers ───────────────────────────────────────────────────────
 
-	private broadcast(msg: ServerMessage, exclude?: WebSocket): void {
-		const json = JSON.stringify(msg);
+	private async broadcast(msg: ServerMessage, exclude?: WebSocket): Promise<void> {
+		let json = JSON.stringify(msg);
+		if (this.broadcastSigningKey) {
+			const sig = await crypto.subtle.sign(
+				'HMAC',
+				this.broadcastSigningKey,
+				new TextEncoder().encode(json)
+			);
+			const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
+			json = JSON.stringify({ ...msg, _hmac: hmac });
+		}
 		const sockets = this.ctx.getWebSockets();
 		for (const ws of sockets) {
 			if (ws === exclude) continue;
