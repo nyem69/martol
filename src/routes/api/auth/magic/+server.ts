@@ -34,9 +34,19 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	redirect(302, `/login?magic=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`);
 };
 
-export const POST: RequestHandler = async ({ request, platform, fetch }) => {
+export const POST: RequestHandler = async ({ request, platform, fetch, getClientAddress }) => {
 	const kv = platform?.env?.CACHE;
 	if (!kv) return json({ error: 'Service unavailable' }, { status: 503 });
+
+	// Rate limit magic token consumption by IP — prevents token brute-force
+	const ip = getClientAddress();
+	const ipKey = `rl:magic-ip:${ip}`;
+	const existing = await kv.get(ipKey);
+	const count = existing ? parseInt(existing, 10) : 0;
+	if (count >= 10) {
+		return json({ error: 'Too many attempts' }, { status: 429 });
+	}
+	await kv.put(ipKey, String(count + 1), { expirationTtl: 900 });
 
 	const body = await request.json().catch(() => ({})) as Record<string, unknown>;
 	const token = typeof body.token === 'string' ? body.token : '';
