@@ -93,9 +93,13 @@ export function createAuth(
 							{ expirationTtl: 60 * 5 } // 5-minute TTL
 						);
 						magicUrl = `${baseURL}/api/auth/magic?token=${magicToken}`;
-					} else {
-						// Dev fallback — no KV available
+					} else if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
+						// Dev-only fallback — raw OTP in URL, acceptable for local testing
 						magicUrl = `${baseURL}/api/auth/verify-otp?email=${encodeURIComponent(email)}&code=${otp}`;
+					} else {
+						// Production without KV — fail hard rather than expose OTP in URL
+						console.error('[Auth] CACHE KV binding missing in production — cannot issue magic link');
+						throw new Error('Magic link service unavailable');
 					}
 
 					const appName = emailConfig.emailName || 'Martol';
