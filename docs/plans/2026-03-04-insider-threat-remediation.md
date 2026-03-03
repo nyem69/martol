@@ -510,7 +510,7 @@ git commit -m "feat(security): add configurable LLM call rate limit (R12)"
 
 ---
 
-## Summary: 10 tasks across 5 batches
+## Summary: All 13 remediation items completed
 
 | Batch | Tasks | Repo | Issues Fixed |
 |-------|-------|------|-------------|
@@ -519,9 +519,23 @@ git commit -m "feat(security): add configurable LLM call rate limit (R12)"
 | 3: Claude Code Restrictions | 1 (R3) | martol-client | Tool whitelist enforcement |
 | 4: LLM I/O Sanitization | 2 (R7, R8) | martol-client | Tool arg validation, result sanitization |
 | 5: Logging & Rate Limit | 2 (R11, R12) | martol-client | Debug logging, LLM rate limit |
+| 6: Secret Splitting | 1 (R1) | martol | HMAC_SIGNING_SECRET separated from BETTER_AUTH_SECRET |
+| 7: Message Integrity | 1 (R6) | both | Broadcast HMAC signing + client verification |
 
-**R1 (secret splitting) deferred** — requires Better Auth configuration changes and Cloudflare secret rotation. Should be a separate ops task.
+## Execution Log
 
-**R6 (message integrity HMAC) deferred** — requires coordinated changes in both repos and WebSocket protocol changes. Should be designed separately.
-
-**Batches 1-5 can all run in parallel** since they touch different repos / different files.
+| ID | Issue | Commit (martol) | Commit (martol-client) |
+|----|-------|----------------|----------------------|
+| R1 | Secret splitting | `6456338` | — |
+| R2 | .env security docs | — | Batch 2 |
+| R3 | Claude Code tool whitelist | — | `7ad136e` |
+| R4 | TLS enforcement | — | Batch 2 |
+| R5 | DO orgId re-check | `17e3bb5` | — |
+| R6 | Broadcast HMAC | `26f287e`, `83313a5` | `065c1f1` |
+| R7 | Tool arg validation | — | `f12d647` |
+| R8 | Tool result sanitization | — | `63e86ef` |
+| R9 | API key file | — | Batch 2 |
+| R10 | Connection dedup | `e844d04` | — |
+| R11 | DEBUG logging | — | `744afd6` |
+| R12 | LLM rate limit | — | `8bd2df7` |
+| R13 | REST ingest auth | `f93a60a` | — |
