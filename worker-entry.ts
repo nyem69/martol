@@ -80,6 +80,27 @@ export default {
 			}
 		} catch (err) {
 			console.error('[Cron] Action expiry failed:', err);
+		}
+
+		// Purge expired pending invitations
+		try {
+			const { invitation } = await import('./src/lib/server/db/auth-schema');
+			const expiredInvites = await db
+				.update(invitation)
+				.set({ status: 'canceled' })
+				.where(
+					and(
+						eq(invitation.status, 'pending'),
+						lt(invitation.expiresAt, new Date())
+					)
+				)
+				.returning({ id: invitation.id });
+
+			if (expiredInvites.length > 0) {
+				console.log(`[Cron] Expired ${expiredInvites.length} pending invitations`);
+			}
+		} catch (err) {
+			console.error('[Cron] Invitation purge failed:', err);
 		} finally {
 			try { await client.end(); } catch { /* already closed */ }
 		}
