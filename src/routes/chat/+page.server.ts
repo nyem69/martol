@@ -14,7 +14,7 @@ export const load: PageServerLoad = async (event) => {
 
 	// Resolve room from active org or first membership
 	const activeOrgId = locals.session.activeOrganizationId;
-	let roomId: string;
+	let roomId = '';
 	let userRole = 'member';
 
 	if (activeOrgId) {
@@ -61,28 +61,45 @@ export const load: PageServerLoad = async (event) => {
 				userRole = pendingInvite.role || 'member';
 			} else {
 				// Organic user: auto-create a default room (organization)
-				const orgId = generateId();
-				const memberId = generateId();
-				const now = new Date();
-				const userName = locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`;
-				const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
+				// Advisory lock prevents duplicate creation from concurrent requests
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			await db.transaction(async (tx: any) => {
+					await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${locals.user.id}))`);
 
-				await db.insert(organization).values({
-					id: orgId,
-					name: `${userName}'s Room`,
-					slug,
-					createdAt: now
-				});
-				await db.insert(member).values({
-					id: memberId,
-					organizationId: orgId,
-					userId: locals.user.id,
-					role: 'owner',
-					createdAt: now
-				});
+					// Re-check membership after acquiring lock
+					const [recheck] = await tx
+						.select({ orgId: member.organizationId })
+						.from(member)
+						.where(eq(member.userId, locals.user.id))
+						.limit(1);
 
-				roomId = orgId;
-				userRole = 'owner';
+					if (recheck) {
+						roomId = recheck.orgId;
+					} else {
+						const orgId = generateId();
+						const memberId = generateId();
+						const now = new Date();
+						const userName = locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`;
+						const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
+
+						await tx.insert(organization).values({
+							id: orgId,
+							name: `${userName}'s Room`,
+							slug,
+							createdAt: now
+						});
+						await tx.insert(member).values({
+							id: memberId,
+							organizationId: orgId,
+							userId: locals.user.id,
+							role: 'owner',
+							createdAt: now
+						});
+
+						roomId = orgId;
+						userRole = 'owner';
+					}
+				});
 			}
 		}
 	}
