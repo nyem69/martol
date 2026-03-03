@@ -18,20 +18,12 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	const kv = platform?.env?.CACHE;
 	if (!kv) redirect(302, '/login');
 
+	// Verify token exists in KV (don't consume — prefetch safe)
 	const stored = await kv.get(`magic:${token}`);
 	if (!stored) redirect(302, '/login?error=expired');
 
-	// Extract email for pre-fill but DON'T consume the token or verify OTP.
-	// Email client prefetches hit this GET — we must not consume the OTP here.
-	let email: string;
-	try {
-		const data = JSON.parse(stored);
-		email = data.email;
-	} catch {
-		redirect(302, '/login?error=invalid');
-	}
-
-	redirect(302, `/login?magic=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`);
+	// Redirect WITHOUT email — email stays server-side only
+	redirect(302, `/login?magic=${encodeURIComponent(token)}`);
 };
 
 export const POST: RequestHandler = async ({ request, platform, fetch }) => {
