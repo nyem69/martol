@@ -5,7 +5,8 @@ import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async (event) => {
+	const { locals } = event;
 	if (!locals.user || !locals.session) redirect(302, '/login');
 
 	const db = locals.db;
@@ -46,20 +47,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.limit(1);
 
 			if (pendingInvite) {
-				// Accept the invitation: add user as member and mark invitation as accepted
-				const memberId = generateId();
-				const now = new Date();
-				await db.insert(member).values({
-					id: memberId,
-					organizationId: pendingInvite.organizationId,
-					userId: locals.user.id,
-					role: pendingInvite.role || 'member',
-					createdAt: now
-				});
-				await db
-					.update(invitation)
-					.set({ status: 'accepted' })
-					.where(eq(invitation.id, pendingInvite.id));
+				// Use Better Auth API to accept — ensures hooks and validation run
+				try {
+					await locals.auth!.api.acceptInvitation({
+						body: { invitationId: pendingInvite.id },
+						headers: event.request.headers
+					});
+				} catch (e) {
+					console.error('[Chat] Auto-accept invitation failed:', e);
+				}
 
 				roomId = pendingInvite.organizationId;
 				userRole = pendingInvite.role || 'member';
@@ -191,6 +187,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			role: invitation.role,
 			status: invitation.status,
 			createdAt: invitation.createdAt,
+			inviterId: invitation.inviterId,
 			// Left join to check if invited email has an account
 			userId: user.id,
 			username: user.username,
@@ -209,14 +206,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.limit(1);
 	const hasAgents = !!agentMember;
 
-	return {
-		roomId,
-		userId: locals.user.id,
-		userName: locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`,
-		userRole,
-		roomName: org?.name || 'Chat',
-		userRooms,
-		roomInvitations: roomInvitations.map((inv: typeof roomInvitations[number]) => ({
+	const filteredInvitations = roomInvitations
+		.filter((inv: typeof roomInvitations[number]) =>
+			userRole === 'owner' || inv.inviterId === locals.user.id
+		)
+		.map((inv: typeof roomInvitations[number]) => ({
 			id: inv.id,
 			email: inv.email,
 			role: inv.role || 'member',
@@ -224,7 +218,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 			createdAt: inv.createdAt.toISOString(),
 			hasAccount: !!inv.userId,
 			username: inv.username || inv.userName || null
-		})),
+		}));
+
+	return {
+		roomId,
+		userId: locals.user.id,
+		userName: locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`,
+		userRole,
+		roomName: org?.name || 'Chat',
+		userRooms,
+		roomInvitations: filteredInvitations,
 		initialMessages,
 		hasAgents
 	};

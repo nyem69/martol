@@ -120,6 +120,25 @@ export const actions: Actions = {
 		const db = locals.db;
 		if (!db) error(503, 'Database unavailable');
 
+		// Fetch invitation to verify ownership before mutating
+		const [invite] = await db
+			.select({ email: invitation.email, status: invitation.status })
+			.from(invitation)
+			.where(eq(invitation.id, params.id))
+			.limit(1);
+
+		if (!invite) error(404, 'Invitation not found');
+
+		// Only the invited email can decline
+		if (invite.email.toLowerCase() !== locals.user.email!.toLowerCase()) {
+			error(403, 'Unauthorized');
+		}
+
+		// Only decline if still pending
+		if (invite.status !== 'pending') {
+			redirect(302, '/chat');
+		}
+
 		await db
 			.update(invitation)
 			.set({ status: 'rejected' })
