@@ -388,6 +388,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	try {
 		const response = await resolve(event);
 
+		// ── Audit logging for OTP verify ──
+		if (isOtpVerify && event.locals.user && event.locals.db) {
+			const auditAction = response.ok ? 'login_success' : 'login_failed';
+			try {
+				const { accountAudit } = await import('$lib/server/db/schema');
+				await event.locals.db.insert(accountAudit).values({
+					userId: event.locals.user.id,
+					action: auditAction,
+					oldValue: null,
+					newValue: null,
+					ipAddress: event.getClientAddress(),
+					userAgent: event.request.headers.get('user-agent') || null
+				});
+			} catch {
+				// Non-critical — don't block the response
+			}
+		}
+
 		// CORS headers on response
 		if (origin && ALLOWED_ORIGINS.has(origin)) {
 			response.headers.set('Access-Control-Allow-Origin', origin);
