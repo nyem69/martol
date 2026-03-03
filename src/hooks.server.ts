@@ -191,6 +191,43 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	// ── 2FA enforcement for room owners ──────────────────────────────────
+	// Room owners without 2FA enabled are redirected to settings
+	if (
+		event.locals.user &&
+		event.locals.session?.activeOrganizationId &&
+		event.locals.db &&
+		!event.url.pathname.startsWith('/api/') &&
+		!event.url.pathname.startsWith('/accept-') &&
+		event.url.pathname !== '/login' &&
+		event.url.pathname !== '/settings' &&
+		!event.locals.user.twoFactorEnabled
+	) {
+		try {
+			const { member } = await import('$lib/server/db/auth-schema');
+			const [ownerCheck] = await event.locals.db
+				.select({ role: member.role })
+				.from(member)
+				.where(
+					and(
+						eq(member.organizationId, event.locals.session.activeOrganizationId),
+						eq(member.userId, event.locals.user.id),
+						eq(member.role, 'owner')
+					)
+				)
+				.limit(1);
+
+			if (ownerCheck) {
+				return new Response(null, {
+					status: 302,
+					headers: { Location: '/settings?setup2fa=1' }
+				});
+			}
+		} catch {
+			// Fail open — don't block the user
+		}
+	}
+
 	// ── OTP Rate Limiting ──────────────────────────────────────────────────
 	// Intercept OTP endpoints BEFORE they reach Better Auth.
 	// All blocked requests return consistent responses to prevent enumeration.
@@ -372,6 +409,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Process the request — ensure Hyperdrive client is closed after
 	try {
 		const response = await resolve(event);
+
+		// ── Audit logging for OTP verify ──
+		if (isOtpVerify && event.locals.user && event.locals.db) {
+			const auditAction = response.ok ? 'login_success' : 'login_failed';
+			try {
+				const { accountAudit } = await import('$lib/server/db/schema');
+				await event.locals.db.insert(accountAudit).values({
+					userId: event.locals.user.id,
+					action: auditAction,
+					oldValue: null,
+					newValue: null,
+					ipAddress: event.getClientAddress(),
+					userAgent: event.request.headers.get('user-agent') || null
+				});
+			} catch {
+				// Non-critical — don't block the response
+			}
+		}
 
 		// CORS headers on response
 		if (origin && ALLOWED_ORIGINS.has(origin)) {
