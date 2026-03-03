@@ -47,7 +47,7 @@ export async function chatSend(
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				'X-Internal-Secret': platform.env.BETTER_AUTH_SECRET
+				'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET || platform.env.BETTER_AUTH_SECRET
 			},
 			body: JSON.stringify(ingestPayload)
 		}));

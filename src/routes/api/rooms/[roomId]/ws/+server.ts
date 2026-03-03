@@ -101,7 +101,7 @@ export const GET: RequestHandler = async ({ params, locals, platform, request })
 	const role = memberRecord.role;
 
 	// HMAC-sign identity payload to prevent header spoofing
-	const signingKey = platform?.env?.BETTER_AUTH_SECRET;
+	const signingKey = platform?.env?.HMAC_SIGNING_SECRET || platform?.env?.BETTER_AUTH_SECRET;
 	if (!signingKey) {
 		error(503, 'Signing key unavailable');
 	}

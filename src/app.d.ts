@@ -10,6 +10,7 @@ interface CloudflareEnv {
 	EMAIL_FROM: string;
 	EMAIL_NAME: string;
 	BETTER_AUTH_SECRET: string;
+	HMAC_SIGNING_SECRET: string;
 	APP_BASE_URL: string;
 	ENVIRONMENT: string;
 	SENTRY_DSN: string;
