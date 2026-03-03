@@ -1,5 +1,12 @@
 # martol
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-5-ff3e00.svg?logo=svelte&logoColor=white)](https://svelte.dev)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020.svg?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Better Auth](https://img.shields.io/badge/Auth-Better_Auth-000.svg)](https://better-auth.com)
+[![Drizzle ORM](https://img.shields.io/badge/ORM-Drizzle-c5f74f.svg)](https://orm.drizzle.team)
+
 > *martol* — "hammer" in Javanese
 
 A multi-user AI collaboration workspace where humans and AI agents work together in scoped rooms with server-enforced authority.
