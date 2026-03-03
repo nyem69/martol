@@ -127,24 +127,61 @@
 		<div class="container">
 			{@render sectionHead('the problem')}
 			<p class="lead">
-				You asked an AI agent to refactor your code, fix a failing test, or review a PR.
+				You asked an AI agent to refactor your code. Then you stepped away.
 			</p>
-			<p class="lead">Then you stepped away.</p>
-			<div class="terminal-block">
-				<div class="terminal-chrome">
-					<span class="dot"></span><span class="dot"></span><span class="dot"></span>
+			<p class="lead">Now you need to check in.</p>
+			<div class="chat-transcript">
+				<div class="chat-chrome">
+					<span class="chat-room-name">backend-refactor</span>
+					<span class="chat-online">2 online</span>
 				</div>
-				<div class="terminal-body">
-					<span class="prompt">$</span> status --agent<br />
-					<span class="dim">&rarr;</span> Is it done?<br />
-					<span class="dim">&rarr;</span> Did something break?<br />
-					<span class="dim">&rarr;</span> Is it waiting for your OK?<br />
-					<br />
-					<span class="dim">option a:</span> <span class="strike">pull out laptop, ssh, check terminal</span><br />
-					<span class="dim">option b:</span> <span class="strike">termius, configure keys, hope it works</span><br />
-					<span class="dim">option c:</span> <span class="accent">open browser, open room, done</span> <span class="check">&check;</span>
+				<div class="chat-messages">
+					<div class="chat-msg">
+						<div class="chat-msg-header">
+							<span class="chat-agent-name">claude-backend</span>
+							<span class="chat-time">2 min ago</span>
+						</div>
+						<div class="chat-msg-body">Refactored auth module. 4 files changed, all tests green.</div>
+					</div>
+					<div class="chat-msg chat-msg-action">
+						<div class="chat-msg-header">
+							<span class="chat-agent-name">claude-backend</span>
+							<span class="chat-time">2 min ago</span>
+						</div>
+						<div class="chat-msg-body">
+							<span class="chat-action-badge"><ShieldCheck size={12} /> ACTION</span> Deploy to staging?<br />
+							<span class="chat-action-meta">Risk: medium &middot; deploy ./dist to staging-3.fly.dev</span>
+						</div>
+					</div>
+					<div class="chat-msg chat-msg-user">
+						<div class="chat-msg-header">
+							<span class="chat-user-name">you</span>
+							<span class="chat-time">just now</span>
+						</div>
+						<div class="chat-msg-body">/approve</div>
+					</div>
+					<div class="chat-msg">
+						<div class="chat-msg-header">
+							<span class="chat-agent-name">claude-backend</span>
+							<span class="chat-time">just now</span>
+						</div>
+						<div class="chat-msg-body">
+							<span class="chat-success">&check; Deployed.</span> https://staging-3.fly.dev<br />
+							Running smoke tests...
+						</div>
+					</div>
+					<div class="chat-msg">
+						<div class="chat-msg-header">
+							<span class="chat-agent-name">claude-backend</span>
+							<span class="chat-time">just now</span>
+						</div>
+						<div class="chat-msg-body"><span class="chat-success">All 12 smoke tests passed.</span> Staging is live.</div>
+					</div>
 				</div>
 			</div>
+			<p class="transcript-punchline">
+				This happened while you were at lunch. You approved from your phone.
+			</p>
 		</div>
 	</section>
 
@@ -453,7 +490,8 @@
 		margin: 0 0 8px;
 	}
 
-	.terminal-block {
+	/* ── Chat transcript ── */
+	.chat-transcript {
 		margin-top: 32px;
 		border: 1px solid var(--border);
 		border-radius: 8px;
@@ -461,34 +499,118 @@
 		background: var(--bg);
 	}
 
-	.terminal-chrome {
+	.chat-chrome {
 		display: flex;
-		gap: 6px;
-		padding: 10px 14px;
-		background: var(--bg-surface);
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 16px;
+		background: var(--bg-elevated);
 		border-bottom: 1px solid var(--border-subtle);
 	}
 
-	.terminal-chrome .dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: var(--border);
-	}
-
-	.terminal-body {
-		padding: 20px;
+	.chat-room-name {
 		font-family: var(--font-mono);
 		font-size: 13px;
-		line-height: 2;
+		font-weight: 600;
 		color: var(--text);
 	}
 
-	.prompt { color: var(--accent); font-weight: 600; }
-	.dim { color: var(--text-muted); }
-	.accent { color: var(--accent); }
-	.strike { color: var(--text-muted); text-decoration: line-through; }
-	.check { color: var(--success); font-weight: 600; }
+	.chat-online {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		color: var(--success);
+	}
+
+	.chat-messages {
+		padding: 8px 0;
+	}
+
+	.chat-msg {
+		padding: 8px 16px;
+	}
+
+	.chat-msg-header {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		margin-bottom: 2px;
+	}
+
+	.chat-agent-name {
+		font-family: var(--font-mono);
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--accent);
+	}
+
+	.chat-user-name {
+		font-family: var(--font-mono);
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text);
+	}
+
+	.chat-time {
+		font-family: var(--font-mono);
+		font-size: 10px;
+		color: var(--text-muted);
+	}
+
+	.chat-msg-body {
+		font-family: var(--font-sans);
+		font-size: 14px;
+		color: var(--text);
+		line-height: 1.5;
+	}
+
+	.chat-msg-action {
+		border-left: 2px solid var(--warning);
+		background: oklch(0.75 0.15 65 / 0.04);
+		border-radius: 0 4px 4px 0;
+		margin: 4px 16px 4px 0;
+		padding-left: 14px;
+	}
+
+	.chat-action-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--warning);
+		letter-spacing: 0.5px;
+	}
+
+	.chat-action-badge :global(svg) {
+		color: var(--warning);
+	}
+
+	.chat-action-meta {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		color: var(--text-muted);
+	}
+
+	.chat-msg-user .chat-msg-body {
+		font-family: var(--font-mono);
+		font-weight: 600;
+		color: var(--accent);
+	}
+
+	.chat-success {
+		color: var(--success);
+		font-weight: 600;
+	}
+
+	.transcript-punchline {
+		text-align: center;
+		font-family: var(--font-sans);
+		font-size: 15px;
+		font-style: italic;
+		color: var(--text-muted);
+		margin-top: 20px;
+	}
 
 	/* ── Diagram ── */
 	.diagram {
