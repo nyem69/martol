@@ -124,7 +124,7 @@ export function createAuth(
 					const { id, email, organization: org, inviter } = data;
 					if (!emailConfig.resendApiKey) {
 						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
-							console.warn(`[Auth] DEV ONLY — Invitation for ${email} to ${org.name} from ${inviter.user.email}`);
+							console.warn(`[Auth] DEV ONLY — Invitation for ${email} to ${org.name} (inviter: ${inviter.user.name || 'unnamed'})`);
 							console.warn(`[Auth] DEV ONLY — Accept link: ${baseURL}/accept-invitation/${id}`);
 						} else {
 							console.error('[Auth] RESEND_API_KEY not configured — cannot send invitation');
@@ -133,7 +133,7 @@ export function createAuth(
 						return;
 					}
 
-					const inviterName = inviter.user.name || inviter.user.email;
+					const inviterName = inviter.user.name || 'A Martol user';
 					const acceptUrl = `${baseURL}/accept-invitation/${id}`;
 					const { subject, html } = invitationEmailTemplate(inviterName, org.name, acceptUrl);
 					const appName = emailConfig.emailName || 'Martol';
