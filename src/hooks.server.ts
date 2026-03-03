@@ -200,6 +200,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isOtpVerify =
 		event.url.pathname === '/api/auth/sign-in/email-otp' &&
 		event.request.method === 'POST';
+	const isInvite =
+		event.url.pathname === '/api/auth/organization/invite-member' &&
+		event.request.method === 'POST';
 
 	// ── Turnstile CAPTCHA verification (OTP send only) ──
 	// Turnstile tokens are single-use. Enforce only on send, not verify.
@@ -343,6 +346,25 @@ export const handle: Handle = async ({ event, resolve }) => {
 						{ status: 429, headers: { 'Content-Type': 'application/json' } }
 					);
 				}
+			}
+		}
+	}
+
+	// ── Invitation rate limit: 20 per user per hour ──
+	if (isInvite && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (kv) {
+			const userId = event.locals.user.id;
+			const inviteLimit = await checkRateLimit(kv, {
+				key: `invite-user:${userId}`,
+				maxRequests: 20,
+				windowSeconds: 3600
+			});
+			if (!inviteLimit.allowed) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Too many invitations. Try again later.' } }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
 			}
 		}
 	}

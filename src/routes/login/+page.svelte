@@ -180,23 +180,33 @@
 
 	async function handleResendCode() {
 		if (resending) return;
+		// Require fresh Turnstile token if configured
+		if (turnstileSiteKey && !turnstileToken) return;
 		resending = true;
 		error = '';
 		resendSuccess = false;
 		try {
+			const fetchHeaders: Record<string, string> = {};
+			if (turnstileToken) {
+				fetchHeaders['x-captcha-response'] = turnstileToken;
+			}
 			const result = await emailOtp.sendVerificationOtp({
 				email: email.trim(),
-				type: 'sign-in'
+				type: 'sign-in',
+				fetchOptions: { headers: fetchHeaders }
 			});
 			if (result.error) {
+				resetTurnstile();
 				error = result.error.message || m.login_otp_send_failed();
 			} else {
+				resetTurnstile();
 				code = '';
 				resendSuccess = true;
 				await tick();
 				document.getElementById('code-input')?.focus();
 			}
 		} catch {
+			resetTurnstile();
 			error = m.error_generic();
 		} finally {
 			resending = false;
@@ -510,6 +520,10 @@
 						{/if}
 					</button>
 				</form>
+
+				{#if turnstileSiteKey}
+					<div use:renderTurnstile class="mt-4 flex justify-center"></div>
+				{/if}
 
 				<div class="mt-4 text-center">
 					<button
