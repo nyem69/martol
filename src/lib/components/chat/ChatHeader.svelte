@@ -2,7 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { Menu, ChevronDown, Plus, Loader } from '@lucide/svelte';
 	import { organization } from '$lib/auth-client';
-	import { goto } from '$app/navigation';
+	import { invalidateAll } from '$app/navigation';
 
 	let {
 		roomName,
@@ -40,7 +40,7 @@
 		}
 		await organization.setActive({ organizationId: orgId });
 		closeDropdown();
-		goto('/chat', { invalidateAll: true });
+		await invalidateAll();
 	}
 
 	async function createRoom() {
@@ -49,10 +49,14 @@
 		createLoading = true;
 		try {
 			const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-			await organization.create({ name, slug });
+			const res = await organization.create({ name, slug });
+			// Set the new org as active so the chat page loads it
+			if (res.data?.id) {
+				await organization.setActive({ organizationId: res.data.id });
+			}
 			newRoomName = '';
 			closeDropdown();
-			goto('/chat', { invalidateAll: true });
+			await invalidateAll();
 		} finally {
 			createLoading = false;
 		}
