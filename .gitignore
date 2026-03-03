@@ -16,3 +16,5 @@ drizzle/meta/
 
 
 docs/prompt
+.obsidian/
+.playwright-mcp/
