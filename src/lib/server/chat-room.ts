@@ -195,6 +195,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// [C3] Persist orgId for alarm-triggered flush (when no sockets connected)
 		await this.ctx.storage.put('meta:orgId', orgId);
 
+		// Close old connection if same userId already connected (last-writer-wins)
+		for (const ws of this.ctx.getWebSockets()) {
+			const tags = this.ctx.getTags(ws);
+			const existingUserId = this.extractTag(tags, 'user:');
+			if (existingUserId === userId) {
+				ws.close(4002, 'Replaced by new connection');
+				break;
+			}
+		}
+
 		const pair = new WebSocketPair();
 		const [client, server] = [pair[0], pair[1]];
 
