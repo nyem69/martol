@@ -606,54 +606,55 @@ BetterAuthError: The field "twoFactorEnabled" does not exist in the "user" Drizz
 
 | 003-Auth.md Design | Current Implementation | Status |
 |---|---|---|
-| 2FA mandatory for room owners | twoFactor plugin configured, no UI enforcement at room creation | **Gap** — P1 |
+| 2FA mandatory for room owners | Owners without 2FA redirected to settings (`5fe412d`) | **Fixed** 2026-03-03 |
 | Passkey plugin | Not yet added (pending plugin availability) | **Gap** — P1 |
 | 72-hour email undo | Email change flow not implemented | **Gap** — P1 |
 | Lost-email recovery | Not implemented | **Gap** — P2 |
-| Account audit logging | Schema exists, logging hooks not wired | **Gap** — P1 |
+| Account audit logging | Login events logged via hooks (`295ea35`) | **Fixed** 2026-03-03 |
 | Username history table | Schema exists, not populated on change | **Gap** — P2 |
-| Invitation purge (7 days) | Cron not implemented | **Gap** — P2 |
+| Invitation purge (7 days) | Cron purges expired invitations (`b5340b2`) | **Fixed** 2026-03-03 |
 | Session cleanup cron | Cron trigger configured but cleanup logic TBD | **Gap** — P2 |
-| Age gate stores `ageVerifiedAt` | Age gate is client-only localStorage, no `ageVerifiedAt` stored on user record | **Gap** — P1 |
+| Age gate stores `ageVerifiedAt` | Server-side age verification endpoint (`3599a84`) | **Fixed** 2026-03-03 |
 
 ### Identified Security Considerations
 
-#### Critical
+> **All items below were fixed on 2026-03-03.** See `docs/plans/2026-03-03-security-remediation.md` for details.
 
-| Item | Description | File |
-|------|-------------|------|
-| Invitation decline has no auth check | Any authenticated user can decline any invitation by ID — no check that `locals.user.email` matches the invitation email. Attacker can reject other people's invitations. | `accept-invitation/[id]/+page.server.ts:115-129` |
-| Magic link GET leaks email in URL | GET handler puts email into redirect URL query param (`?email=...`). Visible in browser history, referrer headers, server logs. Contradicts email privacy design. | `api/auth/magic/+server.ts:34` |
+#### Critical — Fixed
 
-#### High
+| Item | Fix | Commit |
+|------|-----|--------|
+| Invitation decline has no auth check | Added email ownership verification before decline | `5b1909c` |
+| Magic link GET leaks email in URL | Removed email from redirect URL | `1e299db` |
 
-| Item | Description | File |
-|------|-------------|------|
-| Resend OTP bypasses Turnstile | `handleResendCode` calls `sendVerificationOtp` without Turnstile token. Either silently fails (400) or becomes a bypass vector. | `login/+page.svelte:181-204` |
-| `activeOrganizationId` trusted without membership check | `/api/reports` takes `orgId` from session without verifying user membership. User who manipulates session org can file reports against messages in rooms they don't belong to. | `api/reports/+server.ts:49` |
-| Inviter email leaked in invitation email | When inviter has no `name`, code falls back to `inviter.user.email` as display name in invitation template. Should fall back to username or generic label. | `server/auth/index.ts:136` |
-| Dev fallback magic link exposes raw OTP | When KV unavailable, raw OTP goes in URL. No production guard — if KV binding misconfigured, auth tokens exposed in URLs. | `server/auth/index.ts:97-98` |
+#### High — Fixed
 
-#### Medium
+| Item | Fix | Commit |
+|------|-----|--------|
+| Resend OTP bypasses Turnstile | Require Turnstile token for OTP resend, re-render widget | `8e5b998` |
+| Report endpoint no membership check | Verify membership before accepting report | `082040c` |
+| Inviter email leaked in template | Fall back to "A Martol user" instead of email | `1ef7c98` |
+| Dev fallback exposes raw OTP | Block raw OTP in URL for production without KV | `688ffc5` |
 
-| Item | Description | File |
-|------|-------------|------|
-| Rate limiter KV race condition | Read-then-write without atomicity. Under concurrent requests, limit can be doubled (5→10 OTP attempts). | `rate-limit.ts:40-76` |
-| Chat auto-accept bypasses Better Auth | `/chat` load directly inserts member row for pending invitations instead of calling `acceptInvitation` API. Skips Better Auth hooks/validation. | `chat/+page.server.ts:48-64` |
-| Magic link POST bypasses verify rate limit | Internal `fetch()` sends `{ token }` not `{ email }`, so email-keyed rate limit sees empty email. | `api/auth/magic/+server.ts`, `hooks.server.ts` |
-| Agent auth binds to first matching room | `authenticateAgent` uses `.limit(1)` without ORDER BY. Agent in multiple rooms resolves nondeterministically. | `server/mcp/auth.ts:76-85` |
-| `/whois` exposes user IDs | Available to any connected user (no role check). Returns internal user ID, enabling targeted attacks. | `server/chat-room.ts:864-909` |
-| No invitation rate limit | No server-side rate limit on `organization.inviteMember()`. Owner could spam invitations. | `server/auth/index.ts` |
+#### Medium — Fixed
 
-#### Low
+| Item | Fix | Commit |
+|------|-----|--------|
+| Chat auto-accept bypasses Better Auth | Use `acceptInvitation` API instead of raw INSERT | `ddab0ef` |
+| Magic link POST no rate limit | Add IP-based rate limit (10/15min) to POST | `d3b82b5` |
+| Agent auth non-deterministic room | Add `orderBy(createdAt)` for deterministic binding | `b977098` |
+| `/whois` exposes user IDs | Restrict to owner/lead, remove user ID from response | `2e9567c` |
+| No invitation rate limit | Add per-user rate limit (20/hr) for invitations | `08a82f1` |
 
-| Item | Description | File |
-|------|-------------|------|
-| Age gate client-side only | `localStorage.setItem('age-verified', '1')` — trivially bypassable. `ageVerifiedAt` never set server-side. | `login/+page.svelte:10-11` |
-| Upload trusts client content-type | File type checked against allowlist from client header, no magic byte validation. Behind feature flag. | `api/upload/+server.ts:59` |
-| Room auto-creation race | Concurrent `/chat` loads with no memberships can create duplicate rooms. | `chat/+page.server.ts` |
-| Invitation emails visible to all owner/leads | 003-Auth says "visible only to the inviter". Implementation shows to all owner/leads. | `MemberPanel.svelte` |
-| Missing reserved usernames | Missing `sales`, `moderator`, `mod`, `root`, `security` from reserved words. | `api/account/username/+server.ts:16-27` |
+#### Low — Fixed
+
+| Item | Fix | Commit |
+|------|-----|--------|
+| Invitation list visible to all | Filter: owners see all, others see own invitations | `6e29197` |
+| Missing reserved usernames | Expanded reserved words list (+14 entries) | `fec9486` |
+| Age gate client-side only | Server-side age verification endpoint | `3599a84` |
+| Upload trusts client content-type | Magic byte validation for JPEG/PNG/GIF/WebP/PDF | `60eecf1` |
+| Room auto-creation race | Advisory lock prevents duplicate rooms | `2bf119d` |
 
 ---
 

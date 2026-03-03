@@ -1246,3 +1246,33 @@ git commit -m "docs: update security audit status after remediation"
 | 6: Docs | 1 | docs | ~5 min |
 
 **Batches 1-4 can run in parallel.** Batch 5 can also run in parallel but touches `hooks.server.ts` which is also in Batch 3 — schedule Batch 5 tasks D6/D7 after Batch 3 completes.
+
+---
+
+## Execution Log
+
+**Completed:** 2026-03-03 — All 5 batches executed via parallel worktree agents.
+
+| Issue | Severity | Commit | Status |
+|-------|----------|--------|--------|
+| C1: Invitation decline without auth | Critical | `5b1909c` | Fixed |
+| C2: Magic link email leak in URL | Critical | `1e299db` | Fixed |
+| H1: OTP resend bypasses Turnstile | High | `8e5b998` | Fixed |
+| H2: Report endpoint no membership check | High | `082040c` | Fixed |
+| H3: Inviter email leaked in template | High | `1ef7c98` | Fixed |
+| H4: Raw OTP in URL without KV | High | `688ffc5` | Fixed |
+| M2: Auto-accept bypasses Better Auth | Medium | `ddab0ef` | Fixed |
+| M3: Magic link POST no rate limit | Medium | `d3b82b5` | Fixed |
+| M4: Non-deterministic agent room | Medium | `b977098` | Fixed |
+| M5: /whois leaks user IDs | Medium | `2e9567c` | Fixed |
+| M6: Invitation sending no rate limit | Medium | `08a82f1` | Fixed |
+| L4: Invitation list visible to all | Low | `6e29197` | Fixed |
+| L5: Reserved username list too small | Low | `fec9486` | Fixed |
+| D1/D8: Server-side age verification | Design | `3599a84` | Fixed |
+| D2: File upload magic byte validation | Design | `60eecf1` | Fixed |
+| D3: Advisory lock for room creation | Design | `2bf119d` | Fixed |
+| D6: 2FA enforcement for owners | Design | `5fe412d` | Fixed |
+| D7: Account audit logging | Design | `295ea35` | Fixed |
+| D9: Expired invitation purge cron | Design | `b5340b2` | Fixed |
+
+**Verification:** `pnpm check` — 0 errors after all merges.
