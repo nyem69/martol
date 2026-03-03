@@ -177,6 +177,12 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response('Identity signature expired', { status: 403 });
 		}
 
+		// Verify orgId matches this DO's room
+		const storedOrgId = await this.ctx.storage.get<string>('meta:orgId');
+		if (storedOrgId && storedOrgId !== parsedIdentity.orgId) {
+			return new Response('Room mismatch', { status: 403 });
+		}
+
 		const userId = parsedIdentity.userId;
 		const userRole = parsedIdentity.role;
 		const userName = parsedIdentity.userName;
