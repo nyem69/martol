@@ -93,9 +93,13 @@ export function createAuth(
 							{ expirationTtl: 60 * 5 } // 5-minute TTL
 						);
 						magicUrl = `${baseURL}/api/auth/magic?token=${magicToken}`;
-					} else {
-						// Dev fallback — no KV available
+					} else if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
+						// Dev-only fallback — raw OTP in URL, acceptable for local testing
 						magicUrl = `${baseURL}/api/auth/verify-otp?email=${encodeURIComponent(email)}&code=${otp}`;
+					} else {
+						// Production without KV — fail hard rather than expose OTP in URL
+						console.error('[Auth] CACHE KV binding missing in production — cannot issue magic link');
+						throw new Error('Magic link service unavailable');
 					}
 
 					const appName = emailConfig.emailName || 'Martol';
@@ -124,7 +128,7 @@ export function createAuth(
 					const { id, email, organization: org, inviter } = data;
 					if (!emailConfig.resendApiKey) {
 						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
-							console.warn(`[Auth] DEV ONLY — Invitation for ${email} to ${org.name} from ${inviter.user.email}`);
+							console.warn(`[Auth] DEV ONLY — Invitation for ${email} to ${org.name} (inviter: ${inviter.user.name || 'unnamed'})`);
 							console.warn(`[Auth] DEV ONLY — Accept link: ${baseURL}/accept-invitation/${id}`);
 						} else {
 							console.error('[Auth] RESEND_API_KEY not configured — cannot send invitation');
@@ -133,7 +137,7 @@ export function createAuth(
 						return;
 					}
 
-					const inviterName = inviter.user.name || inviter.user.email;
+					const inviterName = inviter.user.name || 'A Martol user';
 					const acceptUrl = `${baseURL}/accept-invitation/${id}`;
 					const { subject, html } = invitationEmailTemplate(inviterName, org.name, acceptUrl);
 					const appName = emailConfig.emailName || 'Martol';

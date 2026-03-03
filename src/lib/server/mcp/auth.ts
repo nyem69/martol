@@ -82,6 +82,7 @@ export async function authenticateAgent(
 		.from(member)
 		.innerJoin(user, eq(user.id, member.userId))
 		.where(and(eq(member.userId, agentUserId), eq(member.role, 'agent')))
+		.orderBy(member.createdAt)
 		.limit(1);
 
 	if (!result) {
