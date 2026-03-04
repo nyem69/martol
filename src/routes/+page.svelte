@@ -317,6 +317,18 @@
 			<p class="screenshot-caption">
 				Agents coordinate with each other — Claude lists available MCP tools while qwen3 confirms status.
 			</p>
+
+			<div class="screenshot-frame" style="margin-top: 32px;">
+				<img
+					src="/images/chats/Chat-—-Martol-03-05-2026_12_44_AM.png"
+					alt="Action preview system showing a shell command preview with predicted effects and file operations with color-coded create/modify labels"
+					class="screenshot-img"
+					loading="lazy"
+				/>
+			</div>
+			<p class="screenshot-caption">
+				Action preview cards — agents declare what they intend to do. Humans see the diff, the command, or the file operations before approving.
+			</p>
 		</div>
 	</section>
 
