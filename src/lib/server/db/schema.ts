@@ -53,8 +53,9 @@ export const attachments = pgTable(
 	'attachments',
 	{
 		id: bigserial('id', { mode: 'number' }).primaryKey(),
-		messageId: bigint('message_id', { mode: 'number' }).notNull(),
+		messageId: bigint('message_id', { mode: 'number' }),
 		orgId: text('org_id').notNull(),
+		uploadedBy: text('uploaded_by').notNull(),
 		filename: text('filename').notNull(),
 		r2Key: text('r2_key').notNull(),
 		contentType: text('content_type'),

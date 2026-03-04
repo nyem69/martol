@@ -261,6 +261,7 @@ export const load: PageServerLoad = async (event) => {
 		roomInvitations: filteredInvitations,
 		initialMessages,
 		hasAgents,
-		hmacSecret
+		hmacSecret,
+		enableUploads: platform?.env?.ENABLE_UPLOADS === 'true'
 	};
 };

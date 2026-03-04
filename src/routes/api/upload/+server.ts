@@ -10,6 +10,7 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
+import { attachments } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -30,14 +31,32 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 	'image/jpeg': [[0xFF, 0xD8, 0xFF]],
 	'image/png': [[0x89, 0x50, 0x4E, 0x47]],
 	'image/gif': [[0x47, 0x49, 0x46, 0x38]],
+	// WebP: RIFF header (bytes 0-3) + WEBP signature (bytes 8-11)
 	'image/webp': [[0x52, 0x49, 0x46, 0x46]],
 	'application/pdf': [[0x25, 0x50, 0x44, 0x46]]
 };
 
+// Patterns that indicate HTML/script injection in text/plain files
+const DANGEROUS_TEXT_PATTERNS = /(<script|<html|<svg|<iframe|javascript:|on\w+\s*=)/i;
+
 function validateMagicBytes(buffer: ArrayBuffer, claimedType: string): boolean {
-	const sigs = MAGIC_BYTES[claimedType];
-	if (!sigs) return true; // text/plain — no reliable magic bytes
 	const bytes = new Uint8Array(buffer);
+
+	// text/plain: scan for HTML injection markers
+	if (claimedType === 'text/plain') {
+		const text = new TextDecoder().decode(bytes.slice(0, 512));
+		return !DANGEROUS_TEXT_PATTERNS.test(text);
+	}
+
+	// WebP: also verify WEBP signature at bytes 8-11
+	if (claimedType === 'image/webp') {
+		if (bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46) return false;
+		if (bytes[8] !== 0x57 || bytes[9] !== 0x45 || bytes[10] !== 0x42 || bytes[11] !== 0x50) return false;
+		return true;
+	}
+
+	const sigs = MAGIC_BYTES[claimedType];
+	if (!sigs) return true;
 	return sigs.some((sig) => sig.every((byte, i) => bytes[i] === byte));
 }
 
@@ -83,15 +102,31 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const timestamp = Date.now();
 	const r2Key = `${activeOrgId}/${timestamp}-${safeName}`;
 
+	// Images served inline; non-images forced to download
+	const isImage = file.type.startsWith('image/');
+	const disposition = isImage
+		? `inline; filename="${safeName}"`
+		: `attachment; filename="${safeName}"`;
+
 	await r2.put(r2Key, buffer, {
 		httpMetadata: {
 			contentType: file.type,
-			contentDisposition: `attachment; filename="${safeName}"`
+			contentDisposition: disposition
 		},
 		customMetadata: {
 			uploadedBy: locals.user.id,
 			orgId: activeOrgId
 		}
+	});
+
+	// Record in attachments table (message_id backfilled when message is persisted)
+	await locals.db.insert(attachments).values({
+		orgId: activeOrgId,
+		uploadedBy: locals.user.id,
+		filename: safeName,
+		r2Key,
+		contentType: file.type,
+		sizeBytes: file.size
 	});
 
 	return json({
@@ -127,10 +162,20 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	const object = await r2.get(key);
 	if (!object) error(404, 'File not found');
 
+	// Re-validate stored content type against allowlist — never trust R2 metadata blindly
+	const storedType = object.httpMetadata?.contentType || 'application/octet-stream';
+	const contentType = ALLOWED_TYPES.has(storedType) ? storedType : 'application/octet-stream';
+
+	// Images served inline for <img> rendering; non-images forced to download
+	const isImage = contentType.startsWith('image/');
+	const disposition = isImage
+		? (object.httpMetadata?.contentDisposition?.replace('attachment', 'inline') || 'inline')
+		: (object.httpMetadata?.contentDisposition || 'attachment');
+
 	return new Response(object.body as ReadableStream, {
 		headers: {
-			'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
-			'Content-Disposition': object.httpMetadata?.contentDisposition || 'attachment',
+			'Content-Type': contentType,
+			'Content-Disposition': disposition,
 			'X-Content-Type-Options': 'nosniff',
 			'Cache-Control': 'private, max-age=3600'
 		}

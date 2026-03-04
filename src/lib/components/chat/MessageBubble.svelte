@@ -3,6 +3,7 @@
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import * as m from '$lib/paraglide/messages';
 	import { Flag, Reply, RotateCcw } from '@lucide/svelte';
+	import ImageModal from './ImageModal.svelte';
 
 	let {
 		message,
@@ -22,6 +23,9 @@
 	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
 	const htmlBody = $derived(renderMarkdown(message.body));
 
+	let lightboxSrc = $state<string | null>(null);
+	let lightboxAlt = $state('');
+
 	$effect(() => {
 		const interval = setInterval(() => {
 			now = Date.now();
@@ -39,6 +43,13 @@
 		if (hours < 24) return `${hours}h`;
 		const days = Math.floor(hours / 24);
 		return `${days}d`;
+	}
+
+	function handleImageClick(e: MouseEvent) {
+		const img = (e.target as HTMLElement).closest('img.r2-image') as HTMLImageElement | null;
+		if (!img) return;
+		lightboxSrc = img.getAttribute('src');
+		lightboxAlt = img.getAttribute('alt') || '';
 	}
 
 	function scrollToParent() {
@@ -89,7 +100,8 @@
 				</span>
 			</div>
 		{/if}
-		<article class="prose text-sm" style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};">
+		<!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions a11y_click_events_have_key_events -->
+		<article class="prose text-sm" style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};" onclick={handleImageClick}>
 			{@html htmlBody}
 		</article>
 		{#if message.pending}
@@ -152,6 +164,10 @@
 	</div>
 </div>
 
+{#if lightboxSrc}
+	<ImageModal src={lightboxSrc} alt={lightboxAlt} onClose={() => (lightboxSrc = null)} />
+{/if}
+
 <style>
 	.side-col {
 		min-width: 2rem;
@@ -187,5 +203,14 @@
 	@keyframes flash {
 		0%, 15% { background: color-mix(in oklch, var(--accent) 20%, transparent); }
 		100% { background: transparent; }
+	}
+
+	:global(.r2-image) {
+		max-width: 300px;
+		max-height: 240px;
+		border-radius: 0.375rem;
+		object-fit: cover;
+		display: block;
+		margin: 0.5rem 0;
 	}
 </style>

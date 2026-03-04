@@ -1,11 +1,17 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Send } from '@lucide/svelte';
+	import { Send, Paperclip } from '@lucide/svelte';
 	import { matchCommands, parseCommand, type SlashCommand } from '$lib/chat/commands';
 	import SlashMenu from './SlashMenu.svelte';
 	import MentionPopup from './MentionPopup.svelte';
 	import type { MentionUser } from '$lib/types/chat';
 	import ReplyPreview from './ReplyPreview.svelte';
+
+	const ALLOWED_TYPES = new Set([
+		'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+		'application/pdf', 'text/plain'
+	]);
+	const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
 	let {
 		onSend,
@@ -18,7 +24,8 @@
 		replyTo,
 		onCancelReply,
 		pendingMention = null,
-		onMentionConsumed
+		onMentionConsumed,
+		uploadEnabled = false
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
@@ -31,10 +38,17 @@
 		onCancelReply?: () => void;
 		pendingMention?: string | null;
 		onMentionConsumed?: () => void;
+		uploadEnabled?: boolean;
 	} = $props();
 
 	let value = $state('');
 	let textarea: HTMLTextAreaElement | undefined = $state();
+	let fileInput: HTMLInputElement | undefined = $state();
+
+	// Upload state
+	let uploading = $state(false);
+	let uploadProgress = $state(0);
+	let uploadError = $state('');
 
 	// Slash menu state
 	let showSlashMenu = $state(false);
@@ -211,6 +225,89 @@
 		}
 		showMentionPopup = false;
 	}
+
+	function uploadFile(file: File) {
+		if (!ALLOWED_TYPES.has(file.type)) {
+			uploadError = m.chat_upload_type_not_allowed();
+			setTimeout(() => (uploadError = ''), 4000);
+			return;
+		}
+		if (file.size > MAX_SIZE) {
+			uploadError = m.chat_upload_too_large();
+			setTimeout(() => (uploadError = ''), 4000);
+			return;
+		}
+
+		uploading = true;
+		uploadProgress = 0;
+		uploadError = '';
+
+		const xhr = new XMLHttpRequest();
+		const formData = new FormData();
+		formData.append('file', file);
+
+		xhr.upload.onprogress = (e) => {
+			if (e.lengthComputable) uploadProgress = e.loaded / e.total;
+		};
+
+		xhr.onload = () => {
+			uploading = false;
+			if (xhr.status >= 200 && xhr.status < 300) {
+				try {
+					const json = JSON.parse(xhr.responseText);
+					if (json.ok && json.key) {
+						// Insert markdown image at cursor position
+						const marker = `![${file.name}](r2:${json.key})`;
+						const pos = textarea?.selectionStart ?? value.length;
+						value = value.slice(0, pos) + marker + value.slice(pos);
+						resize();
+					} else {
+						uploadError = m.chat_upload_failed();
+						setTimeout(() => (uploadError = ''), 4000);
+					}
+				} catch {
+					uploadError = m.chat_upload_failed();
+					setTimeout(() => (uploadError = ''), 4000);
+				}
+			} else {
+				uploadError = m.chat_upload_failed();
+				setTimeout(() => (uploadError = ''), 4000);
+			}
+		};
+
+		xhr.onerror = () => {
+			uploading = false;
+			uploadError = m.chat_upload_failed();
+			setTimeout(() => (uploadError = ''), 4000);
+		};
+
+		xhr.open('POST', '/api/upload');
+		xhr.send(formData);
+	}
+
+	function onFileSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (file) uploadFile(file);
+		// Reset so the same file can be re-selected
+		input.value = '';
+	}
+
+	function onPaste(e: ClipboardEvent) {
+		if (!uploadEnabled) return;
+		const items = e.clipboardData?.items;
+		if (!items) return;
+		for (const item of items) {
+			if (item.kind === 'file' && ALLOWED_TYPES.has(item.type)) {
+				const file = item.getAsFile();
+				if (file) {
+					e.preventDefault();
+					uploadFile(file);
+					return;
+				}
+			}
+		}
+	}
 </script>
 
 <div
@@ -231,6 +328,16 @@
 		/>
 	{/if}
 
+	{#if uploading}
+		<div class="mb-1.5 h-1 overflow-hidden rounded-full" style="background: var(--bg-elevated);">
+			<div class="h-full rounded-full transition-all" style="width: {uploadProgress * 100}%; background: var(--accent);"></div>
+		</div>
+	{/if}
+
+	{#if uploadError}
+		<div class="mb-1.5 text-xs" style="color: var(--danger);">{uploadError}</div>
+	{/if}
+
 	<!-- Popup container (positioned relative to input area) -->
 	<div class="relative">
 		{#if showSlashMenu}
@@ -248,15 +355,39 @@
 			/>
 		{/if}
 
+		{#if uploadEnabled}
+			<input
+				bind:this={fileInput}
+				type="file"
+				accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain"
+				class="hidden"
+				onchange={onFileSelect}
+				data-testid="file-input"
+			/>
+		{/if}
+
 		<div
 			class="flex items-end gap-2 rounded-lg px-3 py-2"
 			style="background: var(--bg); border: 1px solid var(--border);"
 		>
+			{#if uploadEnabled}
+				<button
+					onclick={() => fileInput?.click()}
+					disabled={disabled || uploading}
+					data-testid="attach-button"
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-all hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+					style="color: var(--text-muted);"
+					aria-label={m.chat_attach_file()}
+				>
+					<Paperclip size={16} />
+				</button>
+			{/if}
 			<textarea
 				bind:this={textarea}
 				bind:value
 				oninput={onInput}
 				onkeydown={onKeydown}
+				onpaste={onPaste}
 				placeholder={m.chat_placeholder()}
 				rows="1"
 				{disabled}

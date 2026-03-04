@@ -210,5 +210,10 @@
   "invite_invalid": "This invitation is no longer valid.",
   "invite_go_to_chat": "Go to chat",
   "invite_not_found": "This invitation link is invalid or has been removed.",
-  "invite_not_found_title": "Invitation not found"
+  "invite_not_found_title": "Invitation not found",
+  "chat_attach_file": "Attach file",
+  "chat_uploading": "Uploading...",
+  "chat_upload_failed": "Upload failed",
+  "chat_upload_too_large": "File too large (max 10 MB)",
+  "chat_upload_type_not_allowed": "File type not allowed"
 }

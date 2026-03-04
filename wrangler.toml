@@ -41,7 +41,7 @@ zone_name = "plitix.com"
 [[r2_buckets]]
 binding = "STORAGE"
 bucket_name = "opensesame"
-preview_bucket_name = "opensesame"
+preview_bucket_name = "opensesame-dev"
 remote = true
 
 [[hyperdrive]]

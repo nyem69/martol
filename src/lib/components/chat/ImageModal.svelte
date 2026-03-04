@@ -12,8 +12,22 @@
 		onClose: () => void;
 	} = $props();
 
+	let closeBtn: HTMLButtonElement | undefined = $state();
+	let prevFocus: HTMLElement | null = null;
+
+	$effect(() => {
+		prevFocus = document.activeElement as HTMLElement;
+		closeBtn?.focus();
+		return () => prevFocus?.focus();
+	});
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
+		// Trap focus within modal
+		if (e.key === 'Tab') {
+			e.preventDefault();
+			closeBtn?.focus();
+		}
 	}
 </script>
 
@@ -35,6 +49,7 @@
 	></button>
 
 	<button
+		bind:this={closeBtn}
 		class="absolute top-4 right-4 z-10 cursor-pointer rounded-full p-2 transition-opacity hover:opacity-70"
 		style="background: var(--bg-elevated); color: var(--text);"
 		onclick={onClose}

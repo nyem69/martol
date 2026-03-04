@@ -211,6 +211,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isActionApproval =
 		/^\/api\/actions\/\d+\/(approve|reject)$/.test(event.url.pathname) &&
 		event.request.method === 'POST';
+	const isUpload =
+		event.url.pathname === '/api/upload' && event.request.method === 'POST';
 
 	// ── Turnstile CAPTCHA verification (OTP send only) ──
 	// Turnstile tokens are single-use. Enforce only on send, not verify.
@@ -371,6 +373,25 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (!inviteLimit.allowed) {
 				return new Response(
 					JSON.stringify({ error: { message: 'Too many invitations. Try again later.' } }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+	}
+
+	// ── Upload rate limit: 20 per user per minute ──
+	if (isUpload && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (kv) {
+			const userId = event.locals.user.id;
+			const uploadLimit = await checkRateLimit(kv, {
+				key: `upload:${userId}`,
+				maxRequests: 20,
+				windowSeconds: 60
+			});
+			if (!uploadLimit.allowed) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Too many uploads. Try again later.' } }),
 					{ status: 429, headers: { 'Content-Type': 'application/json' } }
 				);
 			}
