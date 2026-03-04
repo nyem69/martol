@@ -101,6 +101,9 @@ export class MessagesStore {
 			case 'presence':
 				this.handlePresence(msg.senderId, msg.senderName, msg.senderRole, msg.status);
 				break;
+			case 'roster':
+				this.handleRoster(msg.members);
+				break;
 			case 'clear':
 				this.handleClear(msg.clearedBy);
 				break;
@@ -235,6 +238,14 @@ export class MessagesStore {
 				this.typingUsers.delete(senderId);
 			}
 			this.addSystemEvent('leave', senderName);
+		}
+	}
+
+	private handleRoster(members: Array<{ id: string; name: string; role: string }>): void {
+		for (const m of members) {
+			if (!this.onlineUsers.has(m.id)) {
+				this.onlineUsers.set(m.id, { name: m.name, role: m.role });
+			}
 		}
 	}
 

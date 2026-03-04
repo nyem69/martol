@@ -229,6 +229,26 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			server
 		);
 
+		// Send roster of already-connected users to the new socket
+		const existingSockets = this.ctx.getWebSockets();
+		const seen = new Set<string>();
+		const members: Array<{ id: string; name: string; role: string }> = [];
+		for (const s of existingSockets) {
+			if (s === server) continue;
+			const sTags = this.ctx.getTags(s);
+			const sId = this.extractTag(sTags, 'user:');
+			if (!sId || seen.has(sId)) continue;
+			seen.add(sId);
+			members.push({
+				id: sId,
+				name: this.extractTag(sTags, 'name:'),
+				role: this.extractTag(sTags, 'role:')
+			});
+		}
+		if (members.length > 0) {
+			this.safeSend(server, { type: 'roster', members });
+		}
+
 		// [M5] Wrap delta sync in try/catch to prevent zombie sockets on failure
 		const lastKnownId = url.searchParams.get('lastKnownId');
 		if (lastKnownId) {
