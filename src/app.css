@@ -247,6 +247,9 @@ textarea:focus-visible {
 		border-collapse: collapse;
 		margin: 0.5em 0;
 		font-size: 0.875em;
+		display: block;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.prose th, .prose td {
@@ -258,6 +261,7 @@ textarea:focus-visible {
 	.prose th {
 		background: var(--bg-surface);
 		font-weight: 600;
+		white-space: nowrap;
 	}
 }
 

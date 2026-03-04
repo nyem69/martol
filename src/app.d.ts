@@ -20,6 +20,7 @@ interface CloudflareEnv {
 }
 
 declare global {
+	const __BUILD_NUMBER__: string;
 	namespace App {
 		interface Locals {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any

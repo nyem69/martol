@@ -1,6 +1,7 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
+import { execSync } from 'node:child_process';
 import { defineConfig, type Plugin } from 'vite';
 
 /**
@@ -23,7 +24,19 @@ function stripParaglideSourcemaps(): Plugin {
 	};
 }
 
+// Derive build number from git commit count (auto-increments every commit)
+const buildNumber = (() => {
+	try {
+		return execSync('git rev-list --count HEAD', { encoding: 'utf-8' }).trim();
+	} catch {
+		return '0';
+	}
+})();
+
 export default defineConfig({
+	define: {
+		__BUILD_NUMBER__: JSON.stringify(buildNumber)
+	},
 	plugins: [
 		stripParaglideSourcemaps(),
 		tailwindcss(),

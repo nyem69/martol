@@ -22,6 +22,9 @@
 		onToggleMembers: () => void;
 	} = $props();
 
+	// Derive displayed name from rooms array so it updates after rename + invalidateAll
+	let displayName = $derived(rooms.find((r) => r.id === roomId)?.name ?? roomName);
+
 	let dropdownOpen = $state(false);
 	let userMenuOpen = $state(false);
 	let creating = $state(false);
@@ -43,13 +46,13 @@
 	}
 
 	function startRename() {
-		renameValue = roomName;
+		renameValue = displayName;
 		renaming = true;
 	}
 
 	async function renameRoom() {
 		const name = renameValue.trim();
-		if (!name || name === roomName || renameLoading) return;
+		if (!name || name === displayName || renameLoading) return;
 		renameLoading = true;
 		try {
 			const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -135,6 +138,7 @@
 		>
 			MARTOL
 		</span>
+		<span class="text-xs tabular-nums" style="color: var(--text-muted); font-family: var(--font-mono);">v{__BUILD_NUMBER__}</span>
 		<span class="text-xs" style="color: var(--text-muted);">/</span>
 		<button
 			class="room-switcher-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium transition-colors"
@@ -143,7 +147,7 @@
 			aria-haspopup="listbox"
 			data-testid="room-switcher"
 		>
-			<span style="color: var(--text);">{roomName}</span>
+			<span style="color: var(--text);">{displayName}</span>
 			<span
 				class="transition-transform duration-150"
 				style="color: var(--text-muted); transform: rotate({dropdownOpen ? '180' : '0'}deg);"
@@ -176,7 +180,7 @@
 							<button
 								type="submit"
 								class="create-room-submit"
-								disabled={renameLoading || !renameValue.trim() || renameValue.trim() === roomName}
+								disabled={renameLoading || !renameValue.trim() || renameValue.trim() === displayName}
 								data-testid="rename-room-submit"
 							>
 								{#if renameLoading}
