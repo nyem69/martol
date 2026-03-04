@@ -1,11 +1,12 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Send } from '@lucide/svelte';
+	import { Send, ImagePlus } from '@lucide/svelte';
 	import { matchCommands, parseCommand, type SlashCommand } from '$lib/chat/commands';
 	import SlashMenu from './SlashMenu.svelte';
 	import MentionPopup from './MentionPopup.svelte';
 	import type { MentionUser } from '$lib/types/chat';
 	import ReplyPreview from './ReplyPreview.svelte';
+	import UploadProgress from './UploadProgress.svelte';
 
 	let {
 		onSend,
@@ -18,7 +19,10 @@
 		replyTo,
 		onCancelReply,
 		pendingMention = null,
-		onMentionConsumed
+		onMentionConsumed,
+		onUploadImage,
+		uploadProgress = 0,
+		uploadFilename = ''
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
@@ -31,10 +35,40 @@
 		onCancelReply?: () => void;
 		pendingMention?: string | null;
 		onMentionConsumed?: () => void;
+		onUploadImage?: (file: File) => void;
+		uploadProgress?: number;
+		uploadFilename?: string;
 	} = $props();
 
 	let value = $state('');
 	let textarea: HTMLTextAreaElement | undefined = $state();
+	let fileInput: HTMLInputElement | undefined = $state();
+	let dragging = $state(false);
+
+	const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp';
+
+	function handleFileSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (file && onUploadImage) onUploadImage(file);
+		input.value = '';
+	}
+
+	function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		dragging = false;
+		const file = e.dataTransfer?.files?.[0];
+		if (file?.type.startsWith('image/') && onUploadImage) onUploadImage(file);
+	}
+
+	function handleDragOver(e: DragEvent) {
+		e.preventDefault();
+		dragging = true;
+	}
+
+	function handleDragLeave() {
+		dragging = false;
+	}
 
 	// Slash menu state
 	let showSlashMenu = $state(false);
@@ -213,9 +247,13 @@
 	}
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="relative px-4 pt-2"
-	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
+	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));{dragging ? ' outline: 2px dashed var(--accent); outline-offset: -2px;' : ''}"
+	ondrop={handleDrop}
+	ondragover={handleDragOver}
+	ondragleave={handleDragLeave}
 >
 	{#if typingText}
 		<div class="mb-1.5 text-xs" style="color: var(--text-muted);" aria-live="polite">
@@ -248,10 +286,33 @@
 			/>
 		{/if}
 
+		<UploadProgress progress={uploadProgress} filename={uploadFilename} />
+
+		<input
+			bind:this={fileInput}
+			type="file"
+			accept={IMAGE_ACCEPT}
+			class="hidden"
+			onchange={handleFileSelect}
+			data-testid="file-input"
+		/>
+
 		<div
 			class="flex items-end gap-2 rounded-lg px-3 py-2"
 			style="background: var(--bg); border: 1px solid var(--border);"
 		>
+			{#if onUploadImage}
+				<button
+					onclick={() => fileInput?.click()}
+					disabled={disabled || uploadProgress > 0}
+					data-testid="upload-button"
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+					style="color: var(--text-muted);"
+					aria-label={m.upload_attach_image()}
+				>
+					<ImagePlus size={18} />
+				</button>
+			{/if}
 			<textarea
 				bind:this={textarea}
 				bind:value

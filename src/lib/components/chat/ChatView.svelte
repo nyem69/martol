@@ -13,6 +13,7 @@
 	import ReportModal from './ReportModal.svelte';
 	import OnlineBar from './OnlineBar.svelte';
 	import UsernamePrompt from './UsernamePrompt.svelte';
+	import UpgradeModal from './UpgradeModal.svelte';
 
 	let { data }: { data: any } = $props();
 
@@ -48,6 +49,9 @@
 	let pendingActions = $state<PendingAction[]>([]);
 	let loadingHistory = $state(false);
 	let hasMoreHistory = $state(initialMessages.length >= 50);
+	let uploadProgress = $state(0);
+	let uploadFilename = $state('');
+	let showUpgradeModal = $state(false);
 
 	const canViewActions = userRole === 'owner' || userRole === 'lead';
 	const canApproveActions = userRole === 'owner' || userRole === 'lead';
@@ -151,6 +155,61 @@
 		reportTarget = { messageId, messageBody };
 	}
 
+	const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+	const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+	async function handleUploadImage(file: File) {
+		if (!ALLOWED_IMAGE_TYPES.has(file.type)) return;
+		if (file.size > MAX_FILE_SIZE) return;
+
+		// Check quota before uploading
+		try {
+			const quotaRes = await fetch('/api/upload/quota');
+			if (quotaRes.ok) {
+				const quota = await quotaRes.json();
+				if (!quota.canUpload) {
+					showUpgradeModal = true;
+					return;
+				}
+			}
+		} catch {
+			// Non-critical — server will enforce quota anyway
+		}
+
+		uploadFilename = file.name;
+		uploadProgress = 10;
+
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+
+			uploadProgress = 30;
+			const res = await fetch('/api/upload', { method: 'POST', body: formData });
+			uploadProgress = 80;
+
+			if (res.status === 402) {
+				showUpgradeModal = true;
+				return;
+			}
+			if (!res.ok) {
+				const err = await res.json().catch(() => null);
+				store.error = err?.message || 'Upload failed';
+				return;
+			}
+
+			const data = await res.json();
+			uploadProgress = 100;
+
+			// Send as message with r2: image marker
+			store.sendMessage(`![${data.filename}](r2:${data.key})`);
+		} catch {
+			store.error = 'Upload failed';
+		} finally {
+			uploadProgress = 0;
+			uploadFilename = '';
+		}
+	}
+
 	onMount(() => {
 		store.connect();
 		loadPendingActions();
@@ -223,6 +282,9 @@
 			onCancelReply={() => (replyTo = null)}
 			{pendingMention}
 			onMentionConsumed={() => (pendingMention = null)}
+			onUploadImage={handleUploadImage}
+			{uploadProgress}
+			{uploadFilename}
 		/>
 
 		{#if store.error}
@@ -267,4 +329,8 @@
 		messageBody={reportTarget.messageBody}
 		onClose={() => (reportTarget = null)}
 	/>
+{/if}
+
+{#if showUpgradeModal}
+	<UpgradeModal onClose={() => (showUpgradeModal = false)} />
 {/if}
