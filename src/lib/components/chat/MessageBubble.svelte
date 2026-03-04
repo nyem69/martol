@@ -100,8 +100,13 @@
 				</span>
 			</div>
 		{/if}
-		<!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions a11y_click_events_have_key_events -->
-		<article class="prose text-sm" style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};" onclick={handleImageClick}>
+		<article
+			class="prose text-sm"
+			style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};"
+			role="presentation"
+			onclick={handleImageClick}
+			onkeydown={(e) => { if (e.key === 'Enter') handleImageClick(e as unknown as MouseEvent); }}
+		>
 			{@html htmlBody}
 		</article>
 		{#if message.pending}

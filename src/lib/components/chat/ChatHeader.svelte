@@ -170,6 +170,7 @@
 							onsubmit={(e) => { e.preventDefault(); renameRoom(); }}
 						>
 							<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--accent);"></span>
+							<!-- svelte-ignore a11y_autofocus -->
 							<input
 								type="text"
 								bind:value={renameValue}
@@ -206,14 +207,17 @@
 							{/if}
 							<span class="flex-1 truncate">{room.name}</span>
 							{#if room.id === roomId && (userRole === 'owner' || userRole === 'lead')}
-								<button
+								<span
 									class="rename-btn rounded p-0.5 transition-opacity hover:opacity-70"
-									style="color: var(--text-muted);"
+									style="color: var(--text-muted); cursor: pointer;"
+									role="button"
+									tabindex={0}
 									onclick={(e) => { e.stopPropagation(); startRename(); }}
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); startRename(); } }}
 									aria-label="Rename room"
 								>
 									<Pencil size={12} />
-								</button>
+								</span>
 							{/if}
 						</button>
 					{/if}
@@ -225,6 +229,7 @@
 							class="flex items-center gap-1.5 px-3 py-2"
 							onsubmit={(e) => { e.preventDefault(); createRoom(); }}
 						>
+							<!-- svelte-ignore a11y_autofocus -->
 							<input
 								type="text"
 								bind:value={newRoomName}

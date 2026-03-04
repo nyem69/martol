@@ -64,7 +64,7 @@ EMAIL_NAME="Martol"
 
 # Public key — embedded in client HTML for Turnstile widget
 TURNSTILE_SITE_KEY = "0x4AAAAAACkQpeHr3nM8lyRa"
-ENABLE_UPLOADS = "false"
+ENABLE_UPLOADS = "true"
 
 # Stripe publishable key (safe for client)
 STRIPE_PUBLISHABLE_KEY = ""

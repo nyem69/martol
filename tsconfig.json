@@ -12,6 +12,7 @@
     "moduleResolution": "bundler"
   },
   "exclude": [
-    "src/lib/paraglide/**"
+    "src/lib/paraglide/**",
+    "src/paraglide/**"
   ]
 }

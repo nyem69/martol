@@ -43,7 +43,7 @@
 
 	let value = $state('');
 	let textarea: HTMLTextAreaElement | undefined;
-	let fileInput: HTMLInputElement | undefined;
+	let fileInput = $state<HTMLInputElement | undefined>();
 
 	// Upload state
 	let uploading = $state(false);
