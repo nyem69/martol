@@ -53,8 +53,9 @@ export const attachments = pgTable(
 	'attachments',
 	{
 		id: bigserial('id', { mode: 'number' }).primaryKey(),
-		messageId: bigint('message_id', { mode: 'number' }).notNull(),
+		messageId: bigint('message_id', { mode: 'number' }),
 		orgId: text('org_id').notNull(),
+		uploadedBy: text('uploaded_by').notNull(),
 		filename: text('filename').notNull(),
 		r2Key: text('r2_key').notNull(),
 		contentType: text('content_type'),
@@ -63,7 +64,8 @@ export const attachments = pgTable(
 	},
 	(table) => [
 		index('idx_attachments_message_id').on(table.messageId),
-		index('idx_attachments_org_message').on(table.orgId, table.messageId)
+		index('idx_attachments_org_message').on(table.orgId, table.messageId),
+		index('idx_attachments_uploaded_by').on(table.uploadedBy)
 	]
 );
 
@@ -313,6 +315,28 @@ export const contentReports = pgTable(
 	(table) => [
 		index('idx_content_reports_org').on(table.orgId, table.status),
 		index('idx_content_reports_message').on(table.messageId)
+	]
+);
+
+/**
+ * Subscriptions — Stripe subscription records for paid features (e.g. image upload).
+ */
+export const subscriptions = pgTable(
+	'subscriptions',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id').notNull(),
+		stripeCustomerId: text('stripe_customer_id').notNull(),
+		stripeSubscriptionId: text('stripe_subscription_id').unique(),
+		plan: text('plan').notNull().default('free').$type<'free' | 'image_upload'>(),
+		status: text('status').notNull().default('active').$type<'active' | 'canceled' | 'past_due'>(),
+		currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_subscriptions_user').on(table.userId),
+		index('idx_subscriptions_stripe_customer').on(table.stripeCustomerId)
 	]
 );
 
