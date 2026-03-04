@@ -262,6 +262,6 @@ export const load: PageServerLoad = async (event) => {
 		initialMessages,
 		hasAgents,
 		hmacSecret,
-		enableUploads: platform?.env?.ENABLE_UPLOADS === 'true'
+		enableUploads: (platform?.env?.ENABLE_UPLOADS ?? process.env.ENABLE_UPLOADS) === 'true'
 	};
 };
