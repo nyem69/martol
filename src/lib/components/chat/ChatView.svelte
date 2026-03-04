@@ -166,7 +166,7 @@
 		try {
 			const quotaRes = await fetch('/api/upload/quota');
 			if (quotaRes.ok) {
-				const quota = await quotaRes.json();
+				const quota = (await quotaRes.json()) as { canUpload: boolean };
 				if (!quota.canUpload) {
 					showUpgradeModal = true;
 					return;
@@ -192,12 +192,13 @@
 				return;
 			}
 			if (!res.ok) {
-				const err = await res.json().catch(() => null);
-				store.error = err?.message || 'Upload failed';
+				let errMsg = 'Upload failed';
+				try { const d = (await res.json()) as { message?: string }; errMsg = d?.message || errMsg; } catch {}
+				store.error = errMsg;
 				return;
 			}
 
-			const data = await res.json();
+			const data = (await res.json()) as { filename: string; key: string };
 			uploadProgress = 100;
 
 			// Send as message with r2: image marker

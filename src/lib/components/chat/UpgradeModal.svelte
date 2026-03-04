@@ -13,10 +13,11 @@
 		try {
 			const res = await fetch('/api/checkout', { method: 'POST' });
 			if (!res.ok) {
-				const data = await res.json().catch(() => null);
-				throw new Error(data?.message || 'Checkout failed');
+				let msg = 'Checkout failed';
+				try { const d = (await res.json()) as { message?: string }; msg = d?.message || msg; } catch {}
+				throw new Error(msg);
 			}
-			const { url } = await res.json();
+			const { url } = (await res.json()) as { url?: string };
 			if (url) window.location.href = url;
 		} catch (err) {
 			errorMsg = err instanceof Error ? err.message : 'Something went wrong';
