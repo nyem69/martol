@@ -54,6 +54,20 @@ export const actionSubmitSchema = z.object({
 		trigger_message_id: z.number().int().positive(),
 		description: z.string().min(1).max(2000),
 		payload: z.record(z.string(), z.unknown()).optional(),
+		simulation: z.object({
+			type: z.enum(['code_diff', 'shell_preview', 'api_call', 'file_ops', 'custom']),
+			preview: z.record(z.string(), z.unknown()),
+			impact: z.object({
+				files_modified: z.number().int().nonnegative().optional(),
+				services_affected: z.array(z.string()).optional(),
+				reversible: z.boolean().optional(),
+			}).optional(),
+			risk_factors: z.array(z.object({
+				factor: z.string().max(100),
+				severity: z.enum(['low', 'medium', 'high']),
+				detail: z.string().max(500),
+			})).max(10).optional(),
+		}).optional(),
 	}),
 });
 
@@ -131,6 +145,7 @@ export interface ChatWhoResult {
 export interface ActionSubmitResult {
 	action_id: number;
 	status: 'approved' | 'pending' | 'rejected';
+	server_risk: string;
 }
 
 export interface ActionStatusResult {
