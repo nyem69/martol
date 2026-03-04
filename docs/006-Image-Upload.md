@@ -340,3 +340,108 @@ Priority order: Critical security → Critical DB → Important security → Imp
 | 15 | I2 | Document ENABLE_UPLOADS GET behavior | Low | [ ] |
 | 16 | I6 | Streaming upload with size limit | Low | [ ] |
 | 17 | I8 | Investigate nonce-based CSP | Low | [ ] |
+
+---
+
+## Review Round 2 — Client UI Flow
+
+**Reviewed:** 2026-03-04
+**Agents:** Security, Database, Stripe/Billing, UI/UX, Cloudflare Infra, Svelte 5, Devil's Advocate (7 agents)
+
+### Critical Findings
+
+#### [C1] R2 put + DB insert non-atomic
+**Severity:** Critical | **Files:** `src/routes/api/upload/+server.ts`
+DB failure after R2 put orphans the R2 object with no compensation. **Fixed:** try/catch with compensating `r2.delete()`.
+
+#### [C3] Rate limit fails open when KV missing
+**Severity:** Critical | **File:** `src/hooks.server.ts`
+Upload rate limiting silently bypassed when CACHE KV binding missing (no warning, no block). **Fixed:** fail-closed with 503 + console.error.
+
+#### [C4] `file.name` raw in markdown marker
+**Severity:** Critical | **File:** `src/lib/components/chat/ChatInput.svelte`
+`]` in filename breaks markdown parser; injection vector. **Fixed:** use server-returned `safeName` with bracket stripping.
+
+#### [C5] Unescaped alt/title in markdown renderer
+**Severity:** Critical | **File:** `src/lib/utils/markdown.ts`
+Pre-DOMPurify HTML injection via alt/title attributes. **Fixed:** added `esc()` helper for HTML entity encoding.
+
+#### [C6] ImageModal $effect re-runs on closeBtn $state
+**Severity:** Critical | **File:** `src/lib/components/chat/ImageModal.svelte`
+Focus restore captures stale prevFocus (always restores to close button itself). **Fixed:** `untrack()` + plain `let` for bind:this.
+
+#### [C7] XHR not aborted on component destroy
+**Severity:** Critical | **File:** `src/lib/components/chat/ChatInput.svelte`
+Stale state writes after room switch. **Fixed:** stored `activeXhr` ref, `$effect` cleanup calls `abort()`.
+
+#### [C8] ENABLE_UPLOADS missing from wrangler.toml
+**Severity:** Critical | **File:** `wrangler.toml`
+Uploads permanently 403 in production. **Fixed:** added `ENABLE_UPLOADS = "false"` to `[vars]`.
+
+#### [C9] No UNIQUE on r2_key
+**Severity:** Critical | **File:** `src/lib/server/db/schema.ts`
+Duplicate rows on retry, no index for key lookups. **Fixed:** `uniqueIndex` on `r2Key`.
+
+#### [C10] sizeBytes/contentType nullable
+**Severity:** Critical | **File:** `src/lib/server/db/schema.ts`
+SUM() quota queries undercount. **Fixed:** `.notNull()` on both columns.
+
+### Important Findings
+
+#### [I1] object-fit: cover crops images
+**Severity:** Important | **File:** `src/lib/components/chat/MessageBubble.svelte`
+Portrait/panorama content lost silently. **Fixed:** changed to `object-fit: contain` with bg color + `cursor: zoom-in`.
+
+#### [I2] Progress bar invisible on slow connections
+**Severity:** Important | **File:** `src/lib/components/chat/ChatInput.svelte`
+4px bar with no label or ARIA. **Fixed:** increased to `h-2`, added % label, ARIA progressbar role, cancel button.
+
+#### [I3] Error auto-dismisses with no role="alert"
+**Severity:** Important | **File:** `src/lib/components/chat/ChatInput.svelte`
+Screen readers miss errors. **Fixed:** added `role="alert"` and dismiss button.
+
+#### [I5] No upload cancel button
+**Severity:** Important | **File:** `src/lib/components/chat/ChatInput.svelte`
+XHR ref was lost, user trapped on slow connections. **Fixed:** cancel button calls `xhr.abort()`.
+
+#### [I6] Reply preview shows raw r2: markers
+**Severity:** Important | **File:** `src/lib/components/chat/MessageBubble.svelte`
+Leaks R2 keys, confusing UX. **Fixed:** regex strips `![...](...)` → `[image]`.
+
+#### [I8] text/plain scan only first 512 bytes
+**Severity:** Important | **File:** `src/routes/api/upload/+server.ts`
+Bypassed by padding. **Fixed:** scan full content. Extended pattern to cover `<style`, `<object`, etc.
+
+#### [I10] bind:this with $state() instead of plain let
+**Severity:** Important | **Files:** ChatInput.svelte, ImageModal.svelte
+Causes unwanted reactive re-runs. **Fixed:** changed to plain `let`.
+
+#### [I11] Concurrent paste during upload
+**Severity:** Important | **File:** `src/lib/components/chat/ChatInput.svelte`
+Second upload resets progress, race conditions. **Fixed:** `if (uploading) return;` guard at top of `uploadFile()`.
+
+#### [I12] BETTER_AUTH_SECRET leaked as HMAC fallback
+**Severity:** Important | **File:** `src/routes/chat/+page.server.ts`
+Auth master secret to browser if HMAC_SIGNING_SECRET unset. **Fixed:** removed `|| BETTER_AUTH_SECRET` fallback.
+
+#### [I15] remote=true on R2 binding
+**Severity:** Important | **File:** `wrangler.toml`
+Local dev hits production R2 bucket. **Fixed:** removed `remote = true`.
+
+### Open / Deferred
+
+| # | ID | Finding | Status |
+|---|-----|---------|--------|
+| 1 | I4 | No drag-and-drop (file drop navigates away) | [ ] |
+| 2 | I7 | CSP img-src: https: allows tracking pixels | [ ] |
+| 3 | I9 | No FK from attachments.messageId → messages.id | [ ] |
+| 4 | I13 | Cache-Control: private bypasses CDN | [ ] |
+| 5 | I14 | r2: prefix not exclusive to upload pipeline | [ ] |
+| 6 | I16 | messageId never backfilled after message send | [ ] |
+| 7 | I17 | No Content-Length check before formData() buffering | [ ] |
+| 8 | S1 | No subscriptions table | Deferred (Stripe) |
+| 9 | S2 | No quota enforcement (free tier unlimited) | Deferred (Stripe) |
+| 10 | S3 | ENABLE_UPLOADS is global binary, not per-plan | Deferred (Stripe) |
+| 11 | S4 | No UpgradeModal / quota endpoint / checkout | Deferred (Stripe) |
+| 12 | S5 | Stripe secrets not in CloudflareEnv types | Deferred (Stripe) |
+| 13 | S6 | No cleanup policy on subscription cancellation | Deferred (Stripe) |

@@ -42,13 +42,19 @@
 	} = $props();
 
 	let value = $state('');
-	let textarea: HTMLTextAreaElement | undefined = $state();
-	let fileInput: HTMLInputElement | undefined = $state();
+	let textarea: HTMLTextAreaElement | undefined;
+	let fileInput: HTMLInputElement | undefined;
 
 	// Upload state
 	let uploading = $state(false);
 	let uploadProgress = $state(0);
 	let uploadError = $state('');
+	let activeXhr: XMLHttpRequest | null = null;
+
+	// Abort in-flight upload when component is destroyed (e.g. room switch)
+	$effect(() => {
+		return () => { activeXhr?.abort(); };
+	});
 
 	// Slash menu state
 	let showSlashMenu = $state(false);
@@ -226,7 +232,16 @@
 		showMentionPopup = false;
 	}
 
+	function cancelUpload() {
+		activeXhr?.abort();
+		activeXhr = null;
+		uploading = false;
+		uploadProgress = 0;
+	}
+
 	function uploadFile(file: File) {
+		if (uploading) return; // Prevent concurrent uploads
+
 		if (!ALLOWED_TYPES.has(file.type)) {
 			uploadError = m.chat_upload_type_not_allowed();
 			setTimeout(() => (uploadError = ''), 4000);
@@ -243,6 +258,7 @@
 		uploadError = '';
 
 		const xhr = new XMLHttpRequest();
+		activeXhr = xhr;
 		const formData = new FormData();
 		formData.append('file', file);
 
@@ -251,13 +267,15 @@
 		};
 
 		xhr.onload = () => {
+			activeXhr = null;
 			uploading = false;
 			if (xhr.status >= 200 && xhr.status < 300) {
 				try {
 					const json = JSON.parse(xhr.responseText);
 					if (json.ok && json.key) {
-						// Insert markdown image at cursor position
-						const marker = `![${file.name}](r2:${json.key})`;
+						// Use server-sanitized filename to avoid markdown injection from raw file.name
+						const safeAlt = (json.filename as string).replace(/[[\]]/g, '');
+						const marker = `![${safeAlt}](r2:${json.key})`;
 						const pos = textarea?.selectionStart ?? value.length;
 						value = value.slice(0, pos) + marker + value.slice(pos);
 						resize();
@@ -276,6 +294,7 @@
 		};
 
 		xhr.onerror = () => {
+			activeXhr = null;
 			uploading = false;
 			uploadError = m.chat_upload_failed();
 			setTimeout(() => (uploadError = ''), 4000);
@@ -329,13 +348,30 @@
 	{/if}
 
 	{#if uploading}
-		<div class="mb-1.5 h-1 overflow-hidden rounded-full" style="background: var(--bg-elevated);">
-			<div class="h-full rounded-full transition-all" style="width: {uploadProgress * 100}%; background: var(--accent);"></div>
+		<div class="mb-1.5 flex items-center gap-2">
+			<div
+				class="h-2 flex-1 overflow-hidden rounded-full"
+				style="background: var(--bg-elevated);"
+				role="progressbar"
+				aria-valuenow={Math.round(uploadProgress * 100)}
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-label={m.chat_uploading()}
+			>
+				<div class="h-full rounded-full transition-all" style="width: {uploadProgress * 100}%; background: var(--accent);"></div>
+			</div>
+			<span class="shrink-0 text-[10px]" style="color: var(--text-muted);">{Math.round(uploadProgress * 100)}%</span>
+			<button onclick={cancelUpload} class="shrink-0 text-[10px] underline" style="color: var(--text-muted);" aria-label={m.chat_dismiss()}>
+				{m.chat_dismiss()}
+			</button>
 		</div>
 	{/if}
 
 	{#if uploadError}
-		<div class="mb-1.5 text-xs" style="color: var(--danger);">{uploadError}</div>
+		<div class="mb-1.5 flex items-center justify-between text-xs" style="color: var(--danger);" role="alert">
+			<span>{uploadError}</span>
+			<button onclick={() => (uploadError = '')} class="ml-2 underline" aria-label={m.chat_dismiss()}>{m.chat_dismiss()}</button>
+		</div>
 	{/if}
 
 	<!-- Popup container (positioned relative to input area) -->

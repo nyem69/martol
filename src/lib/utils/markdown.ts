@@ -9,17 +9,22 @@
 import { marked } from 'marked';
 import DOMPurify, { type Config } from 'dompurify';
 
+/** Escape HTML special chars for safe attribute interpolation */
+function esc(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // Custom renderer: rewrite r2: image URLs to /api/upload?key=...
 const renderer: import('marked').RendererObject = {
 	image({ href, title, text }) {
+		const safeAlt = esc(text || '');
+		const safeTitle = title ? ` title="${esc(title)}"` : '';
 		if (href.startsWith('r2:')) {
 			const key = href.slice(3);
-			const titleAttr = title ? ` title="${title}"` : '';
-			return `<img src="/api/upload?key=${encodeURIComponent(key)}" alt="${text || ''}"${titleAttr} loading="lazy" class="r2-image cursor-pointer">`;
+			return `<img src="/api/upload?key=${encodeURIComponent(key)}" alt="${safeAlt}"${safeTitle} loading="lazy" class="r2-image cursor-pointer">`;
 		}
 		// External images — DOMPurify will validate src
-		const titleAttr = title ? ` title="${title}"` : '';
-		return `<img src="${href}" alt="${text || ''}"${titleAttr} loading="lazy">`;
+		return `<img src="${esc(href)}" alt="${safeAlt}"${safeTitle} loading="lazy">`;
 	}
 };
 

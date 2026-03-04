@@ -84,7 +84,7 @@
 				onclick={scrollToParent}
 			>
 				<span class="shrink-0 font-medium" style="color: var(--accent);">{replyParent.senderName}</span>
-				<span class="ml-1 truncate">{replyParent.body.slice(0, 80)}</span>
+				<span class="ml-1 truncate">{replyParent.body.replace(/!\[[^\]]*\]\([^)]+\)/g, '[image]').slice(0, 80)}</span>
 			</button>
 		{/if}
 		{#if !message.isOwn}
@@ -205,12 +205,14 @@
 		100% { background: transparent; }
 	}
 
-	:global(.r2-image) {
+	:global(article.prose .r2-image) {
 		max-width: 300px;
 		max-height: 240px;
 		border-radius: 0.375rem;
-		object-fit: cover;
+		object-fit: contain;
+		background: var(--bg-elevated);
 		display: block;
 		margin: 0.5rem 0;
+		cursor: zoom-in;
 	}
 </style>

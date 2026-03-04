@@ -248,7 +248,7 @@ export const load: PageServerLoad = async (event) => {
 	// Expose HMAC secret for owner/lead (needed by external clients like martol-client)
 	let hmacSecret: string | null = null;
 	if ((userRole === 'owner' || userRole === 'lead') && platform?.env) {
-		hmacSecret = platform.env.HMAC_SIGNING_SECRET || platform.env.BETTER_AUTH_SECRET || null;
+		hmacSecret = platform.env.HMAC_SIGNING_SECRET ?? null;
 	}
 
 	return {

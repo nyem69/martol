@@ -42,7 +42,6 @@ zone_name = "plitix.com"
 binding = "STORAGE"
 bucket_name = "opensesame"
 preview_bucket_name = "opensesame-dev"
-remote = true
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
@@ -65,6 +64,7 @@ EMAIL_NAME="Martol"
 
 # Public key — embedded in client HTML for Turnstile widget
 TURNSTILE_SITE_KEY = "0x4AAAAAACkQpeHr3nM8lyRa"
+ENABLE_UPLOADS = "false"
 
 # secrets
 # TURNSTILE_SECRET_KEY

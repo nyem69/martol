@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { X } from '@lucide/svelte';
 
@@ -12,12 +13,13 @@
 		onClose: () => void;
 	} = $props();
 
-	let closeBtn: HTMLButtonElement | undefined = $state();
+	let closeBtn: HTMLButtonElement | undefined;
 	let prevFocus: HTMLElement | null = null;
 
 	$effect(() => {
 		prevFocus = document.activeElement as HTMLElement;
-		closeBtn?.focus();
+		// Use untrack so this effect doesn't re-run when closeBtn is assigned
+		untrack(() => closeBtn?.focus());
 		return () => prevFocus?.focus();
 	});
 

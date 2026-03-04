@@ -37,14 +37,14 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 };
 
 // Patterns that indicate HTML/script injection in text/plain files
-const DANGEROUS_TEXT_PATTERNS = /(<script|<html|<svg|<iframe|javascript:|on\w+\s*=)/i;
+const DANGEROUS_TEXT_PATTERNS = /(<script|<html|<svg|<iframe|<object|<embed|<style|<link|<meta|<base|javascript:|on\w+\s*=)/i;
 
 function validateMagicBytes(buffer: ArrayBuffer, claimedType: string): boolean {
 	const bytes = new Uint8Array(buffer);
 
-	// text/plain: scan for HTML injection markers
+	// text/plain: scan full content for HTML injection markers
 	if (claimedType === 'text/plain') {
-		const text = new TextDecoder().decode(bytes.slice(0, 512));
+		const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 		return !DANGEROUS_TEXT_PATTERNS.test(text);
 	}
 
@@ -120,14 +120,21 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	});
 
 	// Record in attachments table (message_id backfilled when message is persisted)
-	await locals.db.insert(attachments).values({
-		orgId: activeOrgId,
-		uploadedBy: locals.user.id,
-		filename: safeName,
-		r2Key,
-		contentType: file.type,
-		sizeBytes: file.size
-	});
+	// Compensate on DB failure: delete the R2 object to prevent orphans
+	try {
+		await locals.db.insert(attachments).values({
+			orgId: activeOrgId,
+			uploadedBy: locals.user.id,
+			filename: safeName,
+			r2Key,
+			contentType: file.type,
+			sizeBytes: file.size
+		});
+	} catch (dbErr) {
+		await r2.delete(r2Key).catch(() => {}); // best-effort R2 rollback
+		console.error('[Upload] DB insert failed, R2 object deleted:', dbErr);
+		error(500, 'Failed to record upload');
+	}
 
 	return json({
 		ok: true,

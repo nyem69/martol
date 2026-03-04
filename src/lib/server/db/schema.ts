@@ -58,13 +58,15 @@ export const attachments = pgTable(
 		uploadedBy: text('uploaded_by').notNull(),
 		filename: text('filename').notNull(),
 		r2Key: text('r2_key').notNull(),
-		contentType: text('content_type'),
-		sizeBytes: bigint('size_bytes', { mode: 'number' }),
+		contentType: text('content_type').notNull(),
+		sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
+		uniqueIndex('idx_attachments_r2_key').on(table.r2Key),
 		index('idx_attachments_message_id').on(table.messageId),
-		index('idx_attachments_org_message').on(table.orgId, table.messageId)
+		index('idx_attachments_org_message').on(table.orgId, table.messageId),
+		index('idx_attachments_org_uploaded_by').on(table.orgId, table.uploadedBy)
 	]
 );
 

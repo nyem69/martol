@@ -380,8 +380,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	// ── Upload rate limit: 20 per user per minute ──
+	// Fail CLOSED: uploads blocked when KV is missing (unlike OTP which fails open)
 	if (isUpload && event.locals.user) {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (!kv && hasHyperdrive) {
+			console.error('[Upload] CACHE KV binding missing — uploads blocked');
+			return new Response(
+				JSON.stringify({ error: { message: 'Upload service temporarily unavailable.' } }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
 		if (kv) {
 			const userId = event.locals.user.id;
 			const uploadLimit = await checkRateLimit(kv, {
