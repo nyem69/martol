@@ -71,7 +71,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	let actions;
 	if (statusFilter === 'recent') {
 		// [I2] Two indexed queries instead of OR — each arm uses (org_id, status, created_at)
-		// [I4] All pending uncapped to prevent LIMIT from dropping unresolved actions
+		// [I4] Safety cap at 200 — 200+ pending actions indicates a system problem
 		const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
 		const [allPending, recentResolved] = await Promise.all([
@@ -82,7 +82,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 					eq(pendingActions.orgId, orgId),
 					eq(pendingActions.status, 'pending')
 				))
-				.orderBy(desc(pendingActions.createdAt)),
+				.orderBy(desc(pendingActions.createdAt))
+				.limit(200),
 			locals.db
 				.select(selectFields)
 				.from(pendingActions)

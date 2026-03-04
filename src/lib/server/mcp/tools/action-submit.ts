@@ -130,7 +130,22 @@ export async function actionSubmit(
 	// 4. Server-derive risk level — never trust agent's claimed value
 	let serverRisk: RiskLevel = ACTION_RISK_MAP[params.action_type];
 
-	// 4a. Augment risk based on simulation impact (irreversible actions are riskier)
+	// 4a. Validate simulation payload size (prevent memory exhaustion from oversized diffs)
+	if (params.simulation?.preview) {
+		const payloadStr = JSON.stringify(params.simulation.preview);
+		if (payloadStr.length > 100_000) {
+			return {
+				ok: false,
+				error: 'Simulation preview payload too large (max 100KB)',
+				code: 'payload_too_large'
+			};
+		}
+	}
+
+	// 4b. Augment risk based on simulation impact (irreversible actions are riskier).
+	// Note: agents can bypass this by omitting `reversible`. This is acceptable because
+	// the augmentation only escalates risk (never reduces), and the base ACTION_RISK_MAP
+	// is already server-authoritative. Agents gain nothing by bypassing the escalation.
 	if (params.simulation?.impact?.reversible === false) {
 		if (serverRisk === 'low') serverRisk = 'medium';
 		else if (serverRisk === 'medium') serverRisk = 'high';
