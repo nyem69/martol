@@ -27,6 +27,9 @@
 		onLoadMore?: () => void;
 	} = $props();
 
+	// Lookup map for reply threading: dbId → message
+	const messageByDbId = $derived(new Map(messages.filter((m) => m.dbId).map((m) => [m.dbId!, m])));
+
 	let container: HTMLDivElement | undefined = $state();
 	let isAtBottom = $state(true);
 	let hasNewMessages = $state(false);
@@ -146,7 +149,7 @@
 
 		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.data.id)}
 			{#if item.kind === 'message'}
-				<MessageBubble message={item.data} {onRetry} {onReply} {onReport} />
+				<MessageBubble message={item.data} replyParent={item.data.replyTo ? messageByDbId.get(item.data.replyTo) : undefined} {onRetry} {onReply} {onReport} />
 			{:else}
 				{@const event = item.data}
 				<SystemLine

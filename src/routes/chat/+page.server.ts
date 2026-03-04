@@ -6,7 +6,7 @@ import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	const { locals } = event;
+	const { locals, platform } = event;
 	if (!locals.user || !locals.session) redirect(302, '/login');
 
 	const db = locals.db;
@@ -79,7 +79,7 @@ export const load: PageServerLoad = async (event) => {
 						const orgId = generateId();
 						const memberId = generateId();
 						const now = new Date();
-						const userName = locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`;
+						const userName = locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`;
 						const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
 
 						await tx.insert(organization).values({
@@ -145,6 +145,7 @@ export const load: PageServerLoad = async (event) => {
 			senderId: messagesTable.senderId,
 			senderRole: messagesTable.senderRole,
 			body: messagesTable.body,
+			replyTo: messagesTable.replyTo,
 			createdAt: messagesTable.createdAt
 		})
 		.from(messagesTable)
@@ -157,11 +158,11 @@ export const load: PageServerLoad = async (event) => {
 	const senderNameMap = new Map<string, string>();
 	if (senderIds.length > 0) {
 		const users = await db
-			.select({ id: user.id, name: user.name })
+			.select({ id: user.id, name: user.name, username: user.username })
 			.from(user)
 			.where(inArray(user.id, senderIds));
 		for (const u of users) {
-			senderNameMap.set(u.id, u.name);
+			senderNameMap.set(u.id, u.username || u.name || `User-${u.id.slice(0, 6)}`);
 		}
 	}
 
@@ -172,6 +173,7 @@ export const load: PageServerLoad = async (event) => {
 		senderName: senderNameMap.get(msg.senderId) ?? 'Unknown',
 		senderRole: msg.senderRole,
 		body: msg.body,
+		replyTo: msg.replyTo ?? undefined,
 		createdAt: msg.createdAt.toISOString()
 	}));
 
@@ -243,15 +245,22 @@ export const load: PageServerLoad = async (event) => {
 			username: inv.username || inv.userName || null
 		}));
 
+	// Expose HMAC secret for owner/lead (needed by external clients like martol-client)
+	let hmacSecret: string | null = null;
+	if ((userRole === 'owner' || userRole === 'lead') && platform?.env) {
+		hmacSecret = platform.env.HMAC_SIGNING_SECRET || platform.env.BETTER_AUTH_SECRET || null;
+	}
+
 	return {
 		roomId,
 		userId: locals.user.id,
-		userName: locals.user.name || (locals.user as any).username || `User-${locals.user.id.slice(0, 6)}`,
+		userName: locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`,
 		userRole,
 		roomName: org?.name || 'Chat',
 		userRooms,
 		roomInvitations: filteredInvitations,
 		initialMessages,
-		hasAgents
+		hasAgents,
+		hmacSecret
 	};
 };

@@ -29,7 +29,7 @@ export interface ServerMessagePayload {
 export type ServerMessage =
 	| { type: 'message'; message: ServerMessagePayload }
 	| { type: 'typing'; senderId: string; senderName: string; active: boolean }
-	| { type: 'presence'; senderId: string; senderName: string; status: 'online' | 'offline' }
+	| { type: 'presence'; senderId: string; senderName: string; senderRole: string; status: 'online' | 'offline' }
 	| { type: 'history'; messages: ServerMessagePayload[] }
 	| { type: 'id_map'; mappings: Array<{ localId: string; dbId: number }> }
 	| { type: 'clear'; clearedBy: string }

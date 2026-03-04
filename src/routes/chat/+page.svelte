@@ -9,6 +9,6 @@
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-{#key data.roomId}
+{#key `${data.roomId}:${data.roomName}`}
 	<ChatView {data} />
 {/key}

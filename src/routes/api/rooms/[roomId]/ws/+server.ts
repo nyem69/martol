@@ -73,7 +73,7 @@ export const GET: RequestHandler = async ({ params, locals, platform, request })
 			error(401, 'Authentication required');
 		}
 		userId = locals.user.id;
-		userName = locals.user.name || locals.user.username || `User-${locals.user.id.slice(0, 6)}`;
+		userName = locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`;
 	}
 
 	// 2. Verify org membership and get role

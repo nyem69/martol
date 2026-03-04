@@ -16,7 +16,9 @@
 		userRole = 'member',
 		onlineUsers,
 		replyTo,
-		onCancelReply
+		onCancelReply,
+		pendingMention = null,
+		onMentionConsumed
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
@@ -24,9 +26,11 @@
 		disabled: boolean;
 		typingNames: string[];
 		userRole?: string;
-		onlineUsers?: Map<string, string>;
+		onlineUsers?: Map<string, { name: string; role: string }>;
 		replyTo?: { dbId: number; senderName: string; body: string } | null;
 		onCancelReply?: () => void;
+		pendingMention?: string | null;
+		onMentionConsumed?: () => void;
 	} = $props();
 
 	let value = $state('');
@@ -42,6 +46,15 @@
 	let mentionIndex = $state(0);
 	let mentionMatches = $state<MentionUser[]>([]);
 	let mentionStart = $state(-1);
+
+	// Insert @mention from OnlineBar click
+	$effect(() => {
+		if (pendingMention) {
+			value = value ? `${value}@${pendingMention} ` : `@${pendingMention} `;
+			onMentionConsumed?.();
+			textarea?.focus();
+		}
+	});
 
 	const canSend = $derived(value.trim().length > 0 && !disabled);
 
@@ -186,8 +199,8 @@
 			if (atIdx !== -1 && (atIdx === 0 || textBeforeCursor[atIdx - 1] === ' ')) {
 				const query = textBeforeCursor.slice(atIdx + 1).toLowerCase();
 				const matches = [...onlineUsers.entries()]
-					.filter(([_, name]) => name.toLowerCase().startsWith(query))
-					.map(([id, name]) => ({ id, name }))
+					.filter(([_, u]) => u.name.toLowerCase().startsWith(query))
+					.map(([id, u]) => ({ id, name: u.name }))
 					.slice(0, 8);
 				mentionMatches = matches;
 				mentionIndex = 0;

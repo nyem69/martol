@@ -2,15 +2,17 @@
 	import type { DisplayMessage } from '$lib/stores/messages.svelte';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import * as m from '$lib/paraglide/messages';
-	import { Flag } from '@lucide/svelte';
+	import { Flag, Reply, RotateCcw } from '@lucide/svelte';
 
 	let {
 		message,
+		replyParent,
 		onRetry,
 		onReply,
 		onReport
 	}: {
 		message: DisplayMessage;
+		replyParent?: DisplayMessage;
 		onRetry?: (localId: string) => void;
 		onReply?: (message: DisplayMessage) => void;
 		onReport?: (messageId: number, messageBody: string) => void;
@@ -20,7 +22,6 @@
 	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
 	const htmlBody = $derived(renderMarkdown(message.body));
 
-	// Tick every 30s to keep relative timestamps fresh
 	$effect(() => {
 		const interval = setInterval(() => {
 			now = Date.now();
@@ -33,33 +34,55 @@
 		const seconds = Math.floor(diff / 1000);
 		if (seconds < 60) return 'now';
 		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
+		if (minutes < 60) return `${minutes}m`;
 		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return `${hours}h ago`;
+		if (hours < 24) return `${hours}h`;
 		const days = Math.floor(hours / 24);
-		return `${days}d ago`;
+		return `${days}d`;
+	}
+
+	function scrollToParent() {
+		if (!replyParent?.dbId) return;
+		const target = document.querySelector(`[data-dbid="${replyParent.dbId}"]`);
+		if (target) {
+			target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			target.classList.add('highlight-flash');
+			setTimeout(() => target.classList.remove('highlight-flash'), 1500);
+		}
 	}
 </script>
 
 <div
-	class="group flex {message.isOwn ? 'justify-end' : 'justify-start'} px-4 py-1"
+	class="msg-row group flex items-end gap-1.5 px-4 py-0.5 {message.isOwn ? 'flex-row-reverse' : ''}"
 	style:opacity={message.pending ? '0.6' : '1'}
+	data-dbid={message.dbId ?? undefined}
 >
+	<!-- Bubble -->
 	<div
-		class="max-w-[80%] rounded-lg px-3 py-2"
+		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
 		style="background: {message.isOwn
 			? 'var(--bubble-own)'
 			: 'var(--bg-surface)'}; border: 1px solid {message.failed
 			? 'var(--danger)'
 			: 'var(--border-subtle)'};"
 	>
+		{#if replyParent}
+			<button
+				class="reply-quote mb-1 flex w-full cursor-pointer items-center truncate rounded border-l-2 px-1.5 py-0.5 text-left text-[10px] transition-colors"
+				style="border-color: var(--accent); background: color-mix(in oklch, var(--bg) 50%, transparent); color: var(--text-muted);"
+				onclick={scrollToParent}
+			>
+				<span class="shrink-0 font-medium" style="color: var(--accent);">{replyParent.senderName}</span>
+				<span class="ml-1 truncate">{replyParent.body.slice(0, 80)}</span>
+			</button>
+		{/if}
 		{#if !message.isOwn}
-			<div class="mb-1 flex items-center gap-2">
-				<span class="text-xs font-medium" style="color: var(--accent);">
+			<div class="mb-0.5 flex items-center gap-1.5">
+				<span class="text-[11px] font-medium" style="color: var(--accent);">
 					{message.senderName}
 				</span>
 				<span
-					class="rounded px-1 py-0.5 text-[11px] uppercase"
+					class="rounded px-1 text-[9px] uppercase"
 					style="background: var(--bg-elevated); color: var(--text-muted); font-family: var(--font-mono);"
 				>
 					{message.senderRole}
@@ -69,69 +92,100 @@
 		<article class="prose text-sm" style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};">
 			{@html htmlBody}
 		</article>
-		<div class="mt-1 flex items-center justify-end gap-2">
-			{#if message.pending}
-				<span class="text-[11px] animate-pulse" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 70%, transparent)' : 'var(--text-muted)'};">
-					{m.chat_sending()}
-				</span>
-			{:else if message.failed}
-				<span class="text-[11px]" style="color: var(--danger);">
-					{m.chat_failed()}
-				</span>
+		{#if message.pending}
+			<span class="text-[10px] animate-pulse" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 70%, transparent)' : 'var(--text-muted)'};">
+				{m.chat_sending()}
+			</span>
+		{:else if message.failed}
+			<div class="flex items-center gap-1">
+				<span class="text-[10px]" style="color: var(--danger);">{m.chat_failed()}</span>
 				{#if onRetry}
 					<button
-						class="rounded px-2 py-1 text-xs underline"
+						class="rounded p-0.5"
 						style="color: var(--danger);"
 						onclick={() => onRetry(message.localId)}
+						aria-label={m.chat_retry()}
 					>
-						{m.chat_retry()}
+						<RotateCcw size={11} />
 					</button>
 				{/if}
-			{:else if message.dbId}
+			</div>
+		{/if}
+	</div>
+
+	<!-- Side column: time + actions -->
+	<div class="side-col flex shrink-0 flex-col items-center gap-0.5 pb-0.5 {message.isOwn ? 'items-end' : 'items-start'}">
+		{#if timeStr !== 'now'}
+			<time
+				datetime={message.timestamp}
+				class="text-[10px] leading-none"
+				style="color: var(--text-muted); font-family: var(--font-mono);"
+			>
+				{timeStr}
+			</time>
+		{/if}
+		{#if !message.pending && !message.failed && message.dbId}
+			<div class="msg-actions flex items-center gap-0.5">
 				{#if onReply}
 					<button
-						class="msg-action text-[11px]"
-						style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
+						class="msg-action rounded p-0.5 transition-colors"
+						style="color: var(--text-muted);"
 						onclick={() => onReply(message)}
 						aria-label={m.chat_reply_to({ name: message.senderName })}
 					>
-						{m.chat_reply()}
+						<Reply size={12} />
 					</button>
 				{/if}
 				{#if onReport && !message.isOwn}
 					<button
-						class="msg-action"
-						style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};"
+						class="msg-action rounded p-0.5 transition-colors"
+						style="color: var(--text-muted);"
 						onclick={() => onReport(message.dbId!, message.body)}
 						aria-label={m.report_title()}
 						data-testid="report-button"
 					>
-						<Flag size={12} />
+						<Flag size={11} />
 					</button>
 				{/if}
-			{/if}
-			<time datetime={message.timestamp} class="text-[11px]" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};">
-				{timeStr}
-			</time>
-		</div>
+			</div>
+		{/if}
 	</div>
 </div>
 
 <style>
-	/* Desktop: show on hover */
+	.side-col {
+		min-width: 2rem;
+	}
+
 	.msg-action {
 		opacity: 0;
 		transition: opacity 150ms ease;
+	}
+
+	.msg-action:hover {
+		background: color-mix(in oklch, var(--bg-surface) 60%, transparent);
 	}
 
 	:global(.group):hover .msg-action {
 		opacity: 1;
 	}
 
-	/* Touch devices: always show actions */
 	@media (hover: none) {
 		.msg-action {
 			opacity: 0.6;
 		}
+	}
+
+	.reply-quote:hover {
+		background: color-mix(in oklch, var(--bg) 30%, transparent) !important;
+	}
+
+	:global(.highlight-flash) {
+		animation: flash 1.5s ease-out;
+	}
+
+	@keyframes flash {
+		0%, 15% { background: color-mix(in oklch, var(--accent) 20%, transparent); }
+		100% { background: transparent; }
 	}
 </style>

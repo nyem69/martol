@@ -20,6 +20,7 @@ export interface DisplayMessage {
 	senderName: string;
 	senderRole: string;
 	body: string;
+	replyTo?: number;
 	timestamp: string;
 	pending: boolean;
 	failed: boolean;
@@ -36,7 +37,7 @@ export interface SystemEvent {
 export class MessagesStore {
 	messages = $state<DisplayMessage[]>([]);
 	typingUsers = $state(new SvelteMap<string, { name: string; timeout: ReturnType<typeof setTimeout> }>());
-	onlineUsers = $state(new SvelteMap<string, string>());
+	onlineUsers = $state(new SvelteMap<string, { name: string; role: string }>());
 	lastServerSeqId = $state(0);
 	systemEvents = $state<SystemEvent[]>([]);
 	error = $state<string | null>(null);
@@ -61,6 +62,9 @@ export class MessagesStore {
 		this.userId = userId;
 		this.userName = userName;
 		this.userRole = userRole;
+
+		// Add self to onlineUsers (self is never received via WS presence)
+		this.onlineUsers.set(userId, { name: userName, role: userRole });
 
 		if (initialMessages && initialMessages.length > 0) {
 			this.messages = initialMessages;
@@ -95,7 +99,7 @@ export class MessagesStore {
 				this.handleTyping(msg.senderId, msg.senderName, msg.active);
 				break;
 			case 'presence':
-				this.handlePresence(msg.senderId, msg.senderName, msg.status);
+				this.handlePresence(msg.senderId, msg.senderName, msg.senderRole, msg.status);
 				break;
 			case 'clear':
 				this.handleClear(msg.clearedBy);
@@ -116,6 +120,7 @@ export class MessagesStore {
 			senderName: payload.senderName,
 			senderRole: payload.senderRole,
 			body: payload.body,
+			replyTo: payload.replyTo,
 			timestamp: payload.timestamp,
 			pending: false,
 			failed: false,
@@ -164,6 +169,7 @@ export class MessagesStore {
 					senderName: p.senderName,
 					senderRole: p.senderRole,
 					body: p.body,
+					replyTo: p.replyTo,
 					timestamp: p.timestamp,
 					pending: false,
 					failed: false,
@@ -216,9 +222,9 @@ export class MessagesStore {
 		}
 	}
 
-	private handlePresence(senderId: string, senderName: string, status: 'online' | 'offline'): void {
+	private handlePresence(senderId: string, senderName: string, senderRole: string, status: 'online' | 'offline'): void {
 		if (status === 'online') {
-			this.onlineUsers.set(senderId, senderName);
+			this.onlineUsers.set(senderId, { name: senderName, role: senderRole });
 			this.addSystemEvent('join', senderName);
 		} else {
 			this.onlineUsers.delete(senderId);
@@ -302,6 +308,7 @@ export class MessagesStore {
 			senderName: this.userName,
 			senderRole: this.userRole,
 			body,
+			replyTo,
 			timestamp: new Date().toISOString(),
 			pending: true,
 			failed: false,

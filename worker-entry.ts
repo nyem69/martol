@@ -201,7 +201,7 @@ async function handleWebSocketUpgrade(
 				return new Response('Authentication required', { status: 401 });
 			}
 			userId = session.user.id;
-			userName = session.user.name || session.user.username || `User-${userId.slice(0, 6)}`;
+			userName = session.user.username || session.user.name || `User-${userId.slice(0, 6)}`;
 		}
 
 		// Verify org membership

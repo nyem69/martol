@@ -210,15 +210,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// [C3] Persist orgId for alarm-triggered flush (when no sockets connected)
 		await this.ctx.storage.put('meta:orgId', orgId);
 
-		// Close old connection if same userId already connected (last-writer-wins)
-		for (const ws of this.ctx.getWebSockets()) {
-			const tags = this.ctx.getTags(ws);
-			const existingUserId = this.extractTag(tags, 'user:');
-			if (existingUserId === userId) {
-				ws.close(4002, 'Replaced by new connection');
-				break;
-			}
-		}
+		// Allow multiple connections per user (multi-tab support).
+		// Presence "offline" is only broadcast when the LAST connection closes.
 
 		const pair = new WebSocketPair();
 		const [client, server] = [pair[0], pair[1]];
@@ -232,7 +225,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		]);
 
 		await this.broadcast(
-			{ type: 'presence', senderId: userId, senderName: userName, status: 'online' },
+			{ type: 'presence', senderId: userId, senderName: userName, senderRole: userRole, status: 'online' },
 			server
 		);
 
@@ -1115,12 +1108,22 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			const tags = this.ctx.getTags(ws);
 			const userId = this.extractTag(tags, 'user:');
 			const name = this.extractTag(tags, 'name:');
+			const role = this.extractTag(tags, 'role:');
 
 			if (userId) {
-				await this.broadcast(
-					{ type: 'presence', senderId: userId, senderName: name, status: 'offline' },
-					ws
-				);
+				// Only broadcast offline if no other connections remain for this user
+				const remaining = this.ctx.getWebSockets().filter((s) => {
+					if (s === ws) return false;
+					const sUserId = this.extractTag(this.ctx.getTags(s), 'user:');
+					return sUserId === userId;
+				});
+
+				if (remaining.length === 0) {
+					await this.broadcast(
+						{ type: 'presence', senderId: userId, senderName: name, senderRole: role, status: 'offline' },
+						ws
+					);
+				}
 			}
 		} catch {
 			// WebSocket may already be closed

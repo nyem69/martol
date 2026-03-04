@@ -11,6 +11,7 @@
 	import PendingActionLine from './PendingActionLine.svelte';
 	import AIDisclosureModal from './AIDisclosureModal.svelte';
 	import ReportModal from './ReportModal.svelte';
+	import OnlineBar from './OnlineBar.svelte';
 	import UsernamePrompt from './UsernamePrompt.svelte';
 
 	let { data }: { data: any } = $props();
@@ -18,7 +19,7 @@
 	// These values are stable for this component instance.
 	// When roomId changes, the parent {#key} destroys and recreates this component.
 	// svelte-ignore state_referenced_locally — intentional: {#key} guarantees fresh instance per room.
-	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents } = data;
+	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret } = data;
 
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
@@ -31,6 +32,7 @@
 		senderName: msg.senderId === userId ? userName : (msg.senderName ?? msg.senderId),
 		senderRole: msg.senderRole,
 		body: msg.body,
+		replyTo: msg.replyTo,
 		timestamp: msg.createdAt,
 		pending: false,
 		failed: false,
@@ -40,6 +42,7 @@
 	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages);
 
 	let memberPanelOpen = $state(false);
+	let pendingMention = $state<string | null>(null);
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
 	let reportTarget = $state<{ messageId: number; messageBody: string } | null>(null);
 	let pendingActions = $state<PendingAction[]>([]);
@@ -167,8 +170,15 @@
 			{roomId}
 			rooms={userRooms}
 			{userName}
+			{userRole}
 			onlineCount={store.onlineUsers.size}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
+		/>
+
+		<OnlineBar
+			onlineUsers={store.onlineUsers}
+			{userId}
+			onMention={(name) => (pendingMention = name)}
 		/>
 
 		<UsernamePrompt username={userName} />
@@ -211,6 +221,8 @@
 			onlineUsers={store.onlineUsers}
 			{replyTo}
 			onCancelReply={() => (replyTo = null)}
+			{pendingMention}
+			onMentionConsumed={() => (pendingMention = null)}
 		/>
 
 		{#if store.error}
@@ -238,6 +250,7 @@
 		{userRole}
 		{roomId}
 		invitations={roomInvitations}
+		{hmacSecret}
 	/>
 </main>
 

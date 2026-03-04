@@ -84,9 +84,10 @@ describe('WebSocket protocol types', () => {
 				type: 'presence',
 				senderId: 'user-1',
 				senderName: 'Alice',
+				senderRole: 'member',
 				status: 'online'
 			};
-			expect(msg.status).toBe('online');
+			expect(msg.type === 'presence' && msg.status).toBe('online');
 		});
 
 		it('validates typing type', () => {

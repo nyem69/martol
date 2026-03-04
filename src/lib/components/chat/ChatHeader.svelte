@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut } from '@lucide/svelte';
+	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check } from '@lucide/svelte';
 	import { organization, signOut } from '$lib/auth-client';
 	import { invalidateAll, goto } from '$app/navigation';
 
@@ -9,6 +9,7 @@
 		roomId,
 		rooms,
 		userName,
+		userRole,
 		onlineCount,
 		onToggleMembers
 	}: {
@@ -16,6 +17,7 @@
 		roomId: string;
 		rooms: Array<{ id: string; name: string }>;
 		userName: string;
+		userRole: string;
 		onlineCount: number;
 		onToggleMembers: () => void;
 	} = $props();
@@ -23,7 +25,10 @@
 	let dropdownOpen = $state(false);
 	let userMenuOpen = $state(false);
 	let creating = $state(false);
+	let renaming = $state(false);
 	let newRoomName = $state('');
+	let renameValue = $state('');
+	let renameLoading = $state(false);
 	let createLoading = $state(false);
 
 	function toggleDropdown() {
@@ -34,6 +39,27 @@
 	function closeDropdown() {
 		dropdownOpen = false;
 		creating = false;
+		renaming = false;
+	}
+
+	function startRename() {
+		renameValue = roomName;
+		renaming = true;
+	}
+
+	async function renameRoom() {
+		const name = renameValue.trim();
+		if (!name || name === roomName || renameLoading) return;
+		renameLoading = true;
+		try {
+			const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+			await organization.update({ data: { name, slug }, organizationId: roomId });
+			renaming = false;
+			closeDropdown();
+			await invalidateAll();
+		} finally {
+			renameLoading = false;
+		}
 	}
 
 	function toggleUserMenu() {
@@ -81,6 +107,7 @@
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
+			if (renaming) { renaming = false; return; }
 			closeDropdown();
 			closeUserMenu();
 		}
@@ -133,21 +160,59 @@
 				aria-label={m.chat_room_switch()}
 			>
 				{#each rooms as room (room.id)}
-					<button
-						class="room-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-						style="color: {room.id === roomId ? 'var(--accent)' : 'var(--text)'};"
-						onclick={() => switchRoom(room.id)}
-						role="option"
-						aria-selected={room.id === roomId}
-						data-testid="room-option"
-					>
-						{#if room.id === roomId}
+					{#if renaming && room.id === roomId}
+						<form
+							class="flex items-center gap-1.5 px-3 py-2"
+							onsubmit={(e) => { e.preventDefault(); renameRoom(); }}
+						>
 							<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--accent);"></span>
-						{:else}
-							<span class="inline-block h-1.5 w-1.5 shrink-0"></span>
-						{/if}
-						<span class="truncate">{room.name}</span>
-					</button>
+							<input
+								type="text"
+								bind:value={renameValue}
+								class="create-room-input flex-1"
+								data-testid="rename-room-input"
+								autofocus
+							/>
+							<button
+								type="submit"
+								class="create-room-submit"
+								disabled={renameLoading || !renameValue.trim() || renameValue.trim() === roomName}
+								data-testid="rename-room-submit"
+							>
+								{#if renameLoading}
+									<Loader size={12} class="animate-spin" />
+								{:else}
+									<Check size={12} />
+								{/if}
+							</button>
+						</form>
+					{:else}
+						<button
+							class="room-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
+							style="color: {room.id === roomId ? 'var(--accent)' : 'var(--text)'};"
+							onclick={() => switchRoom(room.id)}
+							role="option"
+							aria-selected={room.id === roomId}
+							data-testid="room-option"
+						>
+							{#if room.id === roomId}
+								<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--accent);"></span>
+							{:else}
+								<span class="inline-block h-1.5 w-1.5 shrink-0"></span>
+							{/if}
+							<span class="flex-1 truncate">{room.name}</span>
+							{#if room.id === roomId && (userRole === 'owner' || userRole === 'lead')}
+								<button
+									class="rename-btn rounded p-0.5 transition-opacity hover:opacity-70"
+									style="color: var(--text-muted);"
+									onclick={(e) => { e.stopPropagation(); startRename(); }}
+									aria-label="Rename room"
+								>
+									<Pencil size={12} />
+								</button>
+							{/if}
+						</button>
+					{/if}
 				{/each}
 
 				<div style="border-top: 1px solid var(--border);">
