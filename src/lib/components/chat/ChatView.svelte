@@ -67,7 +67,11 @@
 					requestedRole: a.requested_role as string,
 					agentName: (a.agent_user_id as string) ?? 'Agent',
 					status: a.status as PendingAction['status'],
-					timestamp: a.created_at as string
+					timestamp: a.created_at as string,
+				simulationType: (a.simulation_type as string) ?? null,
+				simulationPayload: (a.simulation_payload as Record<string, unknown>) ?? null,
+				riskFactors: (a.risk_factors as { factor: string; severity: string; detail: string }[]) ?? null,
+				estimatedImpact: (a.estimated_impact as { files_modified?: number; services_affected?: string[]; reversible?: boolean }) ?? null
 				}));
 			}
 		} catch {

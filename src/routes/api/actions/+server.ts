@@ -61,7 +61,11 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		status: pendingActions.status,
 		approvedBy: pendingActions.approvedBy,
 		approvedAt: pendingActions.approvedAt,
-		createdAt: pendingActions.createdAt
+		createdAt: pendingActions.createdAt,
+		simulationType: pendingActions.simulationType,
+		simulationPayload: pendingActions.simulationPayload,
+		riskFactors: pendingActions.riskFactors,
+		estimatedImpact: pendingActions.estimatedImpact
 	};
 
 	let actions;
@@ -128,7 +132,11 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			status: a.status,
 			approved_by: a.approvedBy,
 			approved_at: a.approvedAt?.toISOString() ?? null,
-			created_at: a.createdAt.toISOString()
+			created_at: a.createdAt.toISOString(),
+			simulation_type: a.simulationType ?? null,
+			simulation_payload: a.simulationPayload ?? null,
+			risk_factors: a.riskFactors ?? null,
+			estimated_impact: a.estimatedImpact ?? null
 		}))
 	});
 };
