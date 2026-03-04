@@ -125,22 +125,28 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	// Atomic quota-enforced insert: only succeeds if count < limit (prevents race condition)
 	let inserted: { id: number }[];
-	if (isSubscribed) {
-		inserted = await locals.db.insert(attachments).values({
-			orgId: activeOrgId,
-			uploadedBy: locals.user.id,
-			filename: safeName,
-			r2Key: r2Key,
-			contentType: file.type,
-			sizeBytes: file.size
-		}).returning({ id: attachments.id });
-	} else {
-		inserted = await locals.db.execute(sql`
-			INSERT INTO attachments (org_id, uploaded_by, filename, r2_key, content_type, size_bytes)
-			SELECT ${activeOrgId}, ${locals.user.id}, ${safeName}, ${r2Key}, ${file.type}, ${file.size}
-			WHERE (SELECT count(*) FROM attachments WHERE uploaded_by = ${locals.user.id}) < ${FREE_UPLOAD_LIMIT}
-			RETURNING id
-		`);
+	try {
+		if (isSubscribed) {
+			inserted = await locals.db.insert(attachments).values({
+				orgId: activeOrgId,
+				uploadedBy: locals.user.id,
+				filename: safeName,
+				r2Key: r2Key,
+				contentType: file.type,
+				sizeBytes: file.size
+			}).returning({ id: attachments.id });
+		} else {
+			inserted = await locals.db.execute(sql`
+				INSERT INTO attachments (org_id, uploaded_by, filename, r2_key, content_type, size_bytes)
+				SELECT ${activeOrgId}, ${locals.user.id}, ${safeName}, ${r2Key}, ${file.type}, ${file.size}
+				WHERE (SELECT count(*) FROM attachments WHERE uploaded_by = ${locals.user.id}) < ${FREE_UPLOAD_LIMIT}
+				RETURNING id
+			`);
+		}
+	} catch (dbErr) {
+		// DB failed after R2 write — clean up orphaned R2 object
+		await r2.delete(r2Key).catch(() => {});
+		throw dbErr;
 	}
 
 	if (!inserted.length) {

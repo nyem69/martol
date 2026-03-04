@@ -67,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			break;
 		}
 
-		case 'invoice.payment_succeeded': {
+		case 'invoice.paid': {
 			const invoice = event.data.object as Stripe.Invoice;
 			// Stripe SDK v20: subscription ref moved to parent.subscription_details
 			const subRef = invoice.parent?.subscription_details?.subscription;
@@ -87,6 +87,23 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 						currentPeriodEnd: new Date(periodEnd * 1000)
 					})
 					.where(eq(subscriptions.stripeSubscriptionId, subId));
+			}
+			break;
+		}
+
+		case 'customer.subscription.updated': {
+			const sub = event.data.object as Stripe.Subscription;
+			const statusMap: Record<string, 'active' | 'canceled' | 'past_due'> = {
+				active: 'active',
+				past_due: 'past_due',
+				canceled: 'canceled'
+			};
+			const newStatus = statusMap[sub.status];
+			if (newStatus) {
+				await db
+					.update(subscriptions)
+					.set({ status: newStatus })
+					.where(eq(subscriptions.stripeSubscriptionId, sub.id));
 			}
 			break;
 		}

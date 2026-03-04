@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { X } from '@lucide/svelte';
+	import { trapFocus } from '$lib/utils/focus-trap';
 
 	let {
 		src,
@@ -12,14 +14,21 @@
 		onClose: () => void;
 	} = $props();
 
+	let dialogEl: HTMLDivElement | undefined = $state();
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
 	}
+
+	onMount(() => {
+		if (dialogEl) return trapFocus(dialogEl);
+	});
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
 <div
+	bind:this={dialogEl}
 	class="fixed inset-0 z-50 flex items-center justify-center p-4"
 	style="background: rgba(0, 0, 0, 0.85);"
 	role="dialog"

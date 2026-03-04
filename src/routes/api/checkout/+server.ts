@@ -44,7 +44,7 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 			stripeCustomerId: customerId,
 			plan: 'free',
 			status: 'active'
-		});
+		}).onConflictDoNothing();
 	}
 
 	const session = await stripe.checkout.sessions.create({

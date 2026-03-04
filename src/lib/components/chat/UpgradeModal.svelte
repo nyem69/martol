@@ -1,8 +1,15 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { X, ImagePlus } from '@lucide/svelte';
+	import { trapFocus } from '$lib/utils/focus-trap';
 
 	let { onClose }: { onClose: () => void } = $props();
+	let dialogEl: HTMLDivElement | undefined = $state();
+
+	onMount(() => {
+		if (dialogEl) return trapFocus(dialogEl);
+	});
 
 	let status = $state<'idle' | 'loading' | 'error'>('idle');
 	let errorMsg = $state('');
@@ -47,6 +54,7 @@
 	></button>
 
 	<div
+		bind:this={dialogEl}
 		class="relative z-10 w-full max-w-sm rounded-lg p-6"
 		style="background: var(--bg-surface); border: 1px solid var(--border);"
 	>

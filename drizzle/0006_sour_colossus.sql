@@ -14,6 +14,6 @@ CREATE TABLE "subscriptions" (
 ALTER TABLE "attachments" ALTER COLUMN "message_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "attachments" ADD COLUMN "uploaded_by" text NOT NULL;--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "twoFactorEnabled" boolean DEFAULT false;--> statement-breakpoint
-CREATE INDEX "idx_subscriptions_user" ON "subscriptions" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_subscriptions_user" ON "subscriptions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_subscriptions_stripe_customer" ON "subscriptions" USING btree ("stripe_customer_id");--> statement-breakpoint
 CREATE INDEX "idx_attachments_uploaded_by" ON "attachments" USING btree ("uploaded_by");
