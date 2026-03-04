@@ -200,9 +200,11 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		.limit(1);
 	if (!attachment) error(404, 'File not found');
 
-	// Serve from Cloudflare edge cache if available.
+	// SECURITY NOTE: Auth + membership + DB validation run ABOVE this line.
+	// Cache lookup is safe here — it only returns previously-authenticated responses
+	// keyed by org-scoped R2 key. Unauthenticated requests never reach this point.
+	//
 	// Caching image responses enables CSAM scanning (Caching > Configuration in dashboard).
-	// Auth is checked above — cache key uses only the validated R2 key (org-scoped).
 	// private directive: Workers Cache API ignores it for cache.put(), but prevents CDN bypass.
 	const cache = platform?.caches?.default;
 	const cacheKey = new Request(`${url.origin}/api/upload?key=${key}`, { method: 'GET' });

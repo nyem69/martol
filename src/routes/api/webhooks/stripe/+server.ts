@@ -74,7 +74,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			const subId = typeof subRef === 'string' ? subRef : subRef?.id;
 			if (!subId) break;
 
-			// Get current_period_end from the first subscription item
+			// Stripe SDK v20 breaking change: current_period_end moved from Subscription
+			// to SubscriptionItem. Must expand items.data and read from items[0].
+			// See: https://github.com/stripe/stripe-node/blob/master/CHANGELOG.md (v20.0.0)
 			const stripeSub = await stripe.subscriptions.retrieve(subId, {
 				expand: ['items.data']
 			});
