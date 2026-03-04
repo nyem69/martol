@@ -205,7 +205,7 @@
 				mentionMatches = matches;
 				mentionIndex = 0;
 				mentionStart = atIdx;
-				showMentionPopup = true;
+				showMentionPopup = matches.length > 0;
 				return;
 			}
 		}
