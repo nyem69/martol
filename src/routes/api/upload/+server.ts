@@ -86,6 +86,12 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!memberRecord) error(403, 'Not a member of this organization');
 	if (memberRecord.role === 'viewer') error(403, 'Viewers cannot upload files');
 
+	// Early reject oversized requests before buffering the full body
+	const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+	if (contentLength > MAX_FILE_SIZE + 4096) {
+		error(413, 'Request too large');
+	}
+
 	const formData = await request.formData();
 	const file = formData.get('file');
 	if (!file || !(file instanceof File)) error(400, 'No file provided');
@@ -184,7 +190,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 			'Content-Type': contentType,
 			'Content-Disposition': disposition,
 			'X-Content-Type-Options': 'nosniff',
-			'Cache-Control': 'private, max-age=3600'
+			'Cache-Control': 'private, max-age=86400, immutable'
 		}
 	});
 };

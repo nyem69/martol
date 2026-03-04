@@ -15,7 +15,7 @@ import type {
 	ErrorCode
 } from '../types/ws';
 import { createHyperdriveDb } from './db/hyperdrive';
-import { messages as messagesTable, readCursors, pendingActions } from './db/schema';
+import { messages as messagesTable, readCursors, pendingActions, attachments } from './db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -709,6 +709,31 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 			if (mappings.length > 0) {
 				await this.broadcast({ type: 'id_map', mappings });
+			}
+
+			// Backfill messageId on attachments for r2: references in message bodies
+			const r2Re = /!\[[^\]]*\]\(r2:([^)]+)\)/g;
+			for (const { stored } of toFlush) {
+				if (!stored.dbId) continue;
+				const keys: string[] = [];
+				let match: RegExpExecArray | null;
+				while ((match = r2Re.exec(stored.body)) !== null) {
+					keys.push(match[1]);
+				}
+				r2Re.lastIndex = 0;
+				if (keys.length > 0) {
+					for (const key of keys) {
+						await db
+							.update(attachments)
+							.set({ messageId: stored.dbId })
+							.where(and(
+								eq(attachments.r2Key, key),
+								eq(attachments.orgId, orgId),
+								eq(attachments.uploadedBy, stored.senderId)
+							))
+							.catch((err: unknown) => console.error('[ChatRoom] Attachment backfill failed:', err));
+					}
+				}
 			}
 
 			await this.pruneOldEntries();

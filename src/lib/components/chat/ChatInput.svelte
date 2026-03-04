@@ -50,6 +50,7 @@
 	let uploadProgress = $state(0);
 	let uploadError = $state('');
 	let activeXhr: XMLHttpRequest | null = null;
+	let draggingOver = $state(false);
 
 	// Abort in-flight upload when component is destroyed (e.g. room switch)
 	$effect(() => {
@@ -327,11 +328,36 @@
 			}
 		}
 	}
+
+	function onDragOver(e: DragEvent) {
+		if (!uploadEnabled) return;
+		e.preventDefault();
+		draggingOver = true;
+	}
+
+	function onDragLeave(e: DragEvent) {
+		// Only hide when leaving the container (not entering a child)
+		if (e.currentTarget && !((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node))) {
+			draggingOver = false;
+		}
+	}
+
+	function onDrop(e: DragEvent) {
+		if (!uploadEnabled) return;
+		e.preventDefault();
+		draggingOver = false;
+		const file = e.dataTransfer?.files?.[0];
+		if (file) uploadFile(file);
+	}
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="relative px-4 pt-2"
 	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
+	ondragover={onDragOver}
+	ondragleave={onDragLeave}
+	ondrop={onDrop}
 >
 	{#if typingText}
 		<div class="mb-1.5 text-xs" style="color: var(--text-muted);" aria-live="polite">
@@ -371,6 +397,15 @@
 		<div class="mb-1.5 flex items-center justify-between text-xs" style="color: var(--danger);" role="alert">
 			<span>{uploadError}</span>
 			<button onclick={() => (uploadError = '')} class="ml-2 underline" aria-label={m.chat_dismiss()}>{m.chat_dismiss()}</button>
+		</div>
+	{/if}
+
+	{#if draggingOver && uploadEnabled}
+		<div
+			class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed"
+			style="border-color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, transparent);"
+		>
+			<span class="text-sm font-medium" style="color: var(--accent);">{m.chat_attach_file()}</span>
 		</div>
 	{/if}
 

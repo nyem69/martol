@@ -428,20 +428,25 @@ Auth master secret to browser if HMAC_SIGNING_SECRET unset. **Fixed:** removed `
 **Severity:** Important | **File:** `wrangler.toml`
 Local dev hits production R2 bucket. **Fixed:** removed `remote = true`.
 
-### Open / Deferred
+### Review Round 3 — All Open Items Fixed
 
 | # | ID | Finding | Status |
 |---|-----|---------|--------|
-| 1 | I4 | No drag-and-drop (file drop navigates away) | [ ] |
-| 2 | I7 | CSP img-src: https: allows tracking pixels | [ ] |
-| 3 | I9 | No FK from attachments.messageId → messages.id | [ ] |
-| 4 | I13 | Cache-Control: private bypasses CDN | [ ] |
-| 5 | I14 | r2: prefix not exclusive to upload pipeline | [ ] |
-| 6 | I16 | messageId never backfilled after message send | [ ] |
-| 7 | I17 | No Content-Length check before formData() buffering | [ ] |
+| 1 | I4 | No drag-and-drop (file drop navigates away) | **Fixed** — dragover/drop/dragleave handlers + visual drop zone |
+| 2 | I7 | CSP img-src: https: allows tracking pixels | **Fixed** — restricted to `'self'` only |
+| 3 | I9 | No FK from attachments.messageId → messages.id | **Fixed** — `.references(() => messages.id)` |
+| 4 | I13 | Cache-Control: private bypasses CDN | **Fixed** — `private, max-age=86400, immutable` (auth required, so private is correct) |
+| 5 | I14 | r2: prefix not exclusive to upload pipeline | **Fixed** — backfill WHERE checks `uploadedBy = senderId` |
+| 6 | I16 | messageId never backfilled after message send | **Fixed** — DO flushToDb parses r2: keys and UPDATEs attachments |
+| 7 | I17 | No Content-Length check before formData() buffering | **Fixed** — early 413 if Content-Length > MAX_FILE_SIZE + 4KB |
+
+### Deferred (Stripe)
+
+| # | ID | Finding | Status |
+|---|-----|---------|--------|
 | 8 | S1 | No subscriptions table | Deferred (Stripe) |
 | 9 | S2 | No quota enforcement (free tier unlimited) | Deferred (Stripe) |
 | 10 | S3 | ENABLE_UPLOADS is global binary, not per-plan | Deferred (Stripe) |
 | 11 | S4 | No UpgradeModal / quota endpoint / checkout | Deferred (Stripe) |
-| 12 | S5 | Stripe secrets not in CloudflareEnv types | Deferred (Stripe) |
+| 12 | S5 | Stripe secrets not in Cloudflare types | Deferred (Stripe) |
 | 13 | S6 | No cleanup policy on subscription cancellation | Deferred (Stripe) |
