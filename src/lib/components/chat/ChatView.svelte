@@ -49,7 +49,7 @@
 	let pendingActions = $state<PendingAction[]>([]);
 	let loadingHistory = $state(false);
 	let hasMoreHistory = $state(initialMessages.length >= 50);
-	let uploadProgress = $state(0);
+	let uploading = $state(false);
 	let uploadFilename = $state('');
 	let showUpgradeModal = $state(false);
 
@@ -159,8 +159,14 @@
 	const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 	async function handleUploadImage(file: File) {
-		if (!ALLOWED_IMAGE_TYPES.has(file.type)) return;
-		if (file.size > MAX_FILE_SIZE) return;
+		if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+			store.error = m.upload_error_type();
+			return;
+		}
+		if (file.size > MAX_FILE_SIZE) {
+			store.error = m.upload_error_size();
+			return;
+		}
 
 		// Check quota before uploading
 		try {
@@ -177,17 +183,17 @@
 		}
 
 		uploadFilename = file.name;
-		uploadProgress = 10;
+		uploading = true;
 
 		try {
 			const formData = new FormData();
 			formData.append('file', file);
 
-			uploadProgress = 30;
 			const res = await fetch('/api/upload', { method: 'POST', body: formData });
-			uploadProgress = 80;
 
 			if (res.status === 402) {
+				uploading = false;
+				uploadFilename = '';
 				showUpgradeModal = true;
 				return;
 			}
@@ -199,14 +205,13 @@
 			}
 
 			const data = (await res.json()) as { filename: string; key: string };
-			uploadProgress = 100;
 
 			// Send as message with r2: image marker
 			store.sendMessage(`![${data.filename}](r2:${data.key})`);
 		} catch {
 			store.error = 'Upload failed';
 		} finally {
-			uploadProgress = 0;
+			uploading = false;
 			uploadFilename = '';
 		}
 	}
@@ -284,7 +289,7 @@
 			{pendingMention}
 			onMentionConsumed={() => (pendingMention = null)}
 			onUploadImage={handleUploadImage}
-			{uploadProgress}
+			{uploading}
 			{uploadFilename}
 		/>
 

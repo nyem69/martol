@@ -38,7 +38,14 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 
 function validateMagicBytes(buffer: ArrayBuffer, claimedType: string): boolean {
 	const sigs = MAGIC_BYTES[claimedType];
-	if (!sigs) return true; // text/plain — no reliable magic bytes
+	if (!sigs) {
+		// text/plain: reject files that look like markup (SVG bypass prevention)
+		if (claimedType === 'text/plain') {
+			const head = new TextDecoder().decode(new Uint8Array(buffer).slice(0, 32)).trimStart();
+			if (head.startsWith('<')) return false;
+		}
+		return true;
+	}
 	const bytes = new Uint8Array(buffer);
 	return sigs.some((sig) => sig.every((byte, i) => bytes[i] === byte));
 }
@@ -184,6 +191,14 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		.where(and(eq(member.organizationId, orgId), eq(member.userId, locals.user.id)))
 		.limit(1);
 	if (!memberRecord) error(403, 'Not a member of this organization');
+
+	// Verify attachment exists in DB for this org (prevents cross-org key guessing)
+	const [attachment] = await locals.db
+		.select({ id: attachments.id })
+		.from(attachments)
+		.where(and(eq(attachments.r2Key, key), eq(attachments.orgId, orgId)))
+		.limit(1);
+	if (!attachment) error(404, 'File not found');
 
 	// Serve from Cloudflare edge cache if available.
 	// Caching image responses enables CSAM scanning (Caching > Configuration in dashboard).

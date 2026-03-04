@@ -44,12 +44,35 @@
 		return `${days}d`;
 	}
 
-	function onBubbleClick(e: MouseEvent) {
-		const target = e.target as HTMLElement;
+	let bubbleEl: HTMLDivElement | undefined = $state();
+
+	// Make inline images keyboard-accessible after markdown renders
+	$effect(() => {
+		if (!bubbleEl) return;
+		const imgs = bubbleEl.querySelectorAll<HTMLImageElement>('img.chat-img-thumb');
+		for (const img of imgs) {
+			if (!img.hasAttribute('tabindex')) {
+				img.setAttribute('tabindex', '0');
+				img.setAttribute('role', 'button');
+			}
+		}
+	});
+
+	function openLightbox(target: HTMLElement) {
 		if (target.tagName === 'IMG' && target.classList.contains('chat-img-thumb')) {
 			const img = target as HTMLImageElement;
 			lightboxSrc = img.src;
 			lightboxAlt = img.alt;
+		}
+	}
+
+	function onBubbleClick(e: MouseEvent) {
+		openLightbox(e.target as HTMLElement);
+	}
+
+	function onBubbleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			openLightbox(e.target as HTMLElement);
 		}
 	}
 
@@ -72,6 +95,7 @@
 	<!-- Bubble -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
+		bind:this={bubbleEl}
 		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
 		style="background: {message.isOwn
 			? 'var(--bubble-own)'
@@ -79,6 +103,7 @@
 			? 'var(--danger)'
 			: 'var(--border-subtle)'};"
 		onclick={onBubbleClick}
+		onkeydown={onBubbleKeydown}
 	>
 		{#if replyParent}
 			<button

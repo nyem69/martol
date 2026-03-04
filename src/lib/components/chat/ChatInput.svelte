@@ -21,7 +21,7 @@
 		pendingMention = null,
 		onMentionConsumed,
 		onUploadImage,
-		uploadProgress = 0,
+		uploading = false,
 		uploadFilename = ''
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
@@ -36,7 +36,7 @@
 		pendingMention?: string | null;
 		onMentionConsumed?: () => void;
 		onUploadImage?: (file: File) => void;
-		uploadProgress?: number;
+		uploading?: boolean;
 		uploadFilename?: string;
 	} = $props();
 
@@ -66,8 +66,11 @@
 		dragging = true;
 	}
 
-	function handleDragLeave() {
-		dragging = false;
+	function handleDragLeave(e: DragEvent) {
+		const target = e.currentTarget as Element;
+		if (!target.contains(e.relatedTarget as Node)) {
+			dragging = false;
+		}
 	}
 
 	// Slash menu state
@@ -286,7 +289,7 @@
 			/>
 		{/if}
 
-		<UploadProgress progress={uploadProgress} filename={uploadFilename} />
+		<UploadProgress active={uploading} filename={uploadFilename} />
 
 		<input
 			bind:this={fileInput}
@@ -304,7 +307,7 @@
 			{#if onUploadImage}
 				<button
 					onclick={() => fileInput?.click()}
-					disabled={disabled || uploadProgress > 0}
+					disabled={disabled || uploading}
 					data-testid="upload-button"
 					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
 					style="color: var(--text-muted);"

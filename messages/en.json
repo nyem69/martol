@@ -217,5 +217,7 @@
   "upgrade_loading": "Redirecting to checkout...",
   "upgrade_cancel_anytime": "Cancel anytime from billing settings.",
   "upload_attach_image": "Attach image",
-  "upload_uploading": "Uploading {filename}..."
+  "upload_uploading": "Uploading {filename}...",
+  "upload_error_type": "Only JPEG, PNG, GIF, and WebP images are supported.",
+  "upload_error_size": "Image must be under 10 MB."
 }
