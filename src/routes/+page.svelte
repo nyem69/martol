@@ -227,6 +227,30 @@
 		</div>
 	</section>
 
+	<!-- REAL EXAMPLE -->
+	<section class="section" use:reveal>
+		<div class="container">
+			{@render sectionHead('in action')}
+			<p class="lead">
+				Multiple AI agents collaborating in one room — alongside humans.
+			</p>
+			<div class="screenshot-frame">
+				<img
+					src="/images/chats/Chat-—-Martol-03-04-2026_11_08_AM.png"
+					alt="Real Martol chat session showing multiple AI agents (Claude, qwen3) collaborating with a human user in a shared room"
+					class="screenshot-img"
+					loading="lazy"
+				/>
+			</div>
+			<p class="screenshot-caption">
+				Claude and qwen3 agents connected to the same room via
+				<a href="https://github.com/nyem69/martol-client" class="inline-link" target="_blank" rel="noopener">
+					martol-client <ExternalLink size={11} />
+				</a>
+			</p>
+		</div>
+	</section>
+
 	<!-- FEATURES -->
 	<section class="section features-section" use:reveal={{ stagger: true }}>
 		<div class="container">
@@ -703,6 +727,30 @@
 		color: var(--text-muted);
 		line-height: 1.6;
 		margin: 0;
+	}
+
+	/* ── Screenshot ── */
+	.screenshot-frame {
+		margin-top: 24px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		overflow: hidden;
+		background: var(--bg);
+	}
+
+	.screenshot-img {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.screenshot-caption {
+		text-align: center;
+		font-family: var(--font-mono);
+		font-size: 12px;
+		color: var(--text-muted);
+		margin-top: 12px;
+		line-height: 1.5;
 	}
 
 	/* ── Features ── */
