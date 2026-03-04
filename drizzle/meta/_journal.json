@@ -50,6 +50,13 @@
       "when": 1772607389710,
       "tag": "0006_sour_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1772609559280,
+      "tag": "0007_new_serpent_society",
+      "breakpoints": true
     }
   ]
 }

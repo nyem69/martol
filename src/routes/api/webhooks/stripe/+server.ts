@@ -17,7 +17,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	let event: Stripe.Event;
 	try {
-		event = stripe.webhooks.constructEvent(body, sig, env.STRIPE_WEBHOOK_SECRET);
+		// Must use async variant — Cloudflare Workers only support SubtleCrypto (async)
+		event = await stripe.webhooks.constructEventAsync(body, sig, env.STRIPE_WEBHOOK_SECRET);
 	} catch {
 		error(400, 'Invalid signature');
 	}

@@ -181,9 +181,10 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 
 	// Serve from Cloudflare edge cache if available.
 	// Caching image responses enables CSAM scanning (Caching > Configuration in dashboard).
-	// Auth is checked above — cache key includes the R2 key (org-scoped), not user identity.
+	// Auth is checked above — cache key uses only the validated R2 key (org-scoped).
+	// private directive: Workers Cache API ignores it for cache.put(), but prevents CDN bypass.
 	const cache = platform?.caches?.default;
-	const cacheKey = new Request(url.toString(), { method: 'GET' });
+	const cacheKey = new Request(`${url.origin}/api/upload?key=${key}`, { method: 'GET' });
 
 	if (cache) {
 		const cached = await cache.match(cacheKey);
@@ -198,7 +199,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 			'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
 			'Content-Disposition': object.httpMetadata?.contentDisposition || 'attachment',
 			'X-Content-Type-Options': 'nosniff',
-			'Cache-Control': 'public, max-age=86400'
+			'Cache-Control': 'private, max-age=86400, no-transform'
 		}
 	});
 

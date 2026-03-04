@@ -9,15 +9,19 @@
 import { marked, type Tokens } from 'marked';
 import DOMPurify, { type Config } from 'dompurify';
 
+function escapeAttr(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 const renderer = new marked.Renderer();
 const originalImage = renderer.image.bind(renderer);
 renderer.image = function (token: Tokens.Image) {
 	if (token.href.startsWith('r2:')) {
 		const r2Key = token.href.slice(3);
 		const src = `/api/upload?key=${encodeURIComponent(r2Key)}`;
-		const alt = token.text || '';
-		const title = token.title || '';
-		return `<img src="${src}" alt="${alt}" title="${title}" class="chat-img-thumb" data-r2key="${r2Key}" loading="lazy" />`;
+		const alt = escapeAttr(token.text || '');
+		const title = escapeAttr(token.title || '');
+		return `<img src="${src}" alt="${alt}" title="${title}" class="chat-img-thumb" loading="lazy" />`;
 	}
 	return originalImage(token);
 };
@@ -31,21 +35,28 @@ const PURIFY_CONFIG: Config = {
 		'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'img'
 	],
-	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'data-r2key', 'loading'],
+	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'loading'],
 	ALLOW_DATA_ATTR: false
 };
 
 // Scoped DOMPurify instance — prevents hook from affecting other DOMPurify consumers
 const purify = DOMPurify();
 
-// Force external links to open in new tab with noopener
 purify.addHook('afterSanitizeAttributes', (node) => {
+	// Force external links to open in new tab with noopener
 	if (node.tagName === 'A') {
 		node.setAttribute('rel', 'noopener noreferrer');
 		node.setAttribute('target', '_blank');
 		const href = node.getAttribute('href') || '';
 		if (!/^(https?:|mailto:|#)/.test(href)) {
 			node.removeAttribute('href');
+		}
+	}
+	// Re-apply thumbnail class on R2 images (class attr is not in allowlist to prevent UI spoofing)
+	if (node.tagName === 'IMG') {
+		const src = node.getAttribute('src') || '';
+		if (src.startsWith('/api/upload?key=')) {
+			node.setAttribute('class', 'chat-img-thumb');
 		}
 	}
 });
