@@ -257,5 +257,16 @@
   "security_infra_audit": "Append-only audit — role changes, action approvals, and content reports logged immutably.",
   "security_cta": "Try it",
   "security_cta_github": "View source on GitHub",
-  "security_back": "Back to home"
+  "security_back": "Back to home",
+  "action_simulation_preview": "Preview",
+  "action_simulation_impact": "{count} file(s)",
+  "action_simulation_reversible": "reversible",
+  "action_simulation_irreversible": "irreversible",
+  "action_simulation_collapse": "Hide preview",
+  "action_simulation_expand": "Show preview",
+  "action_simulation_diff_header": "{file}",
+  "action_simulation_shell_command": "Command",
+  "action_simulation_shell_effects": "Predicted effects",
+  "action_simulation_api_method": "{method} {url}",
+  "action_simulation_file_ops": "File operations"
 }
