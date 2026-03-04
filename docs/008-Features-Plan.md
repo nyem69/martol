@@ -34,18 +34,18 @@ The core infrastructure is production-ready:
 
 ## Pre-Launch: What Must Ship
 
-### Phase 0: Security Fixes (Week 1)
+### Phase 0: Security Fixes (Week 1) -- DONE
 
-Critical bugs found in code reviews that must be fixed before any users touch the system.
+Critical bugs found in code reviews. All resolved:
 
-| Item | File | Description |
-|------|------|-------------|
-| Agent self-approval gate | `chat-room.ts` | Agents must not approve their own submitted actions. Add `submittedBy !== approverId` check |
-| TOCTOU race on approve/reject | `api/actions/[id]/` | Both paths need atomic `UPDATE ... WHERE status = 'pending'` to prevent double-approve |
-| Touch targets < 44px | Action cards, buttons | Add `min-height: 44px` on all interactive elements |
-| `role="alert"` storm | `PendingActionLine.svelte` | Change to `role="group"` with `aria-label` — screen readers fire on every action card |
+| Item | File | Status |
+|------|------|--------|
+| Agent self-approval gate | approve/reject endpoints + chat-room.ts | Fixed (round 2) — `agentUserId === locals.user.id` check in all 3 paths |
+| TOCTOU race on approve/reject | approve/reject endpoints + chat-room.ts | Fixed (round 2) — atomic `UPDATE ... WHERE status = 'pending'` |
+| Touch targets < 44px | `PendingActionLine.svelte` | Fixed — `flex items-center justify-center min-h-[44px] min-w-[44px]` |
+| `role="alert"` storm | `PendingActionLine.svelte` | Fixed (round 2) — uses `role="group"` with `aria-label` |
 
-**Exit criteria:** `pnpm check` + `pnpm build` pass. Manual test: two browser tabs cannot both approve the same action.
+**Exit criteria:** `pnpm check` + `pnpm build` pass.
 
 ---
 

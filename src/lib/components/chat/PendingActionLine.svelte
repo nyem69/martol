@@ -61,7 +61,7 @@
 	<div class="mt-2 flex items-center gap-2">
 		{#if action.status === 'pending' && canApprove}
 			<button
-				class="min-h-[44px] min-w-[72px] rounded px-3 py-2.5 text-xs font-medium transition-opacity hover:opacity-80 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+				class="flex items-center justify-center min-h-[44px] min-w-[44px] rounded px-3 py-2.5 text-xs font-medium transition-opacity hover:opacity-80 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
 				style="background: var(--success); color: var(--bg);"
 				onclick={() => onApprove?.(action.id)}
 				disabled={loading}
@@ -75,7 +75,7 @@
 				{/if}
 			</button>
 			<button
-				class="min-h-[44px] min-w-[72px] rounded px-3 py-2.5 text-xs font-medium transition-opacity hover:opacity-80 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+				class="flex items-center justify-center min-h-[44px] min-w-[44px] rounded px-3 py-2.5 text-xs font-medium transition-opacity hover:opacity-80 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
 				style="background: var(--danger); color: var(--bg);"
 				onclick={() => onReject?.(action.id)}
 				disabled={loading}
