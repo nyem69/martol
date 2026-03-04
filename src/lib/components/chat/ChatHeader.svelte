@@ -138,7 +138,7 @@
 		>
 			MARTOL
 		</span>
-		<span class="text-xs tabular-nums" style="color: var(--text-muted); font-family: var(--font-mono);">v{__BUILD_NUMBER__}</span>
+		<span class="text-xs tabular-nums" style="color: var(--text-muted); font-family: var(--font-mono);">b{__BUILD_NUMBER__}</span>
 		<span class="text-xs" style="color: var(--text-muted);">/</span>
 		<button
 			class="room-switcher-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium transition-colors"
