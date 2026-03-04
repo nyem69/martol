@@ -66,8 +66,24 @@
 			| { kind: 'message'; data: DisplayMessage }
 			| { kind: 'system'; data: SystemEvent };
 
+		// Deduplicate agent intro messages — keep only the latest per sender.
+		// Agent intros start with "[AI Agent]" and repeat on every reconnect.
+		const lastIntroId = new Map<string, string>();
+		for (const msg of messages) {
+			if (msg.senderRole === 'agent' && msg.body.startsWith('[AI Agent]')) {
+				lastIntroId.set(msg.senderId, msg.localId);
+			}
+		}
+
+		const filtered = messages.filter((msg) => {
+			if (msg.senderRole === 'agent' && msg.body.startsWith('[AI Agent]')) {
+				return msg.localId === lastIntroId.get(msg.senderId);
+			}
+			return true;
+		});
+
 		const items: TimelineItem[] = [
-			...messages.map((m) => ({ kind: 'message' as const, data: m })),
+			...filtered.map((m) => ({ kind: 'message' as const, data: m })),
 			...systemEvents.map((e) => ({ kind: 'system' as const, data: e }))
 		];
 
