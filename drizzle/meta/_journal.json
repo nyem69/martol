@@ -43,6 +43,13 @@
       "when": 1772404040220,
       "tag": "0005_flowery_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772638625530,
+      "tag": "0006_dashing_black_widow",
+      "breakpoints": true
     }
   ]
 }

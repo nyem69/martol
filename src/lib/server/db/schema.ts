@@ -167,6 +167,10 @@ export const pendingActions = pgTable(
 		riskLevel: text('risk_level').notNull().$type<'low' | 'medium' | 'high'>(),
 		description: text('description').notNull(),
 		payloadJson: jsonb('payload_json'),
+		simulationType: text('simulation_type').$type<'code_diff' | 'shell_preview' | 'api_call' | 'file_ops' | 'custom'>(),
+		simulationPayload: jsonb('simulation_payload'),
+		riskFactors: jsonb('risk_factors'),
+		estimatedImpact: jsonb('estimated_impact'),
 		status: text('status')
 			.notNull()
 			.default('pending')
