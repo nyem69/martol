@@ -17,6 +17,9 @@ interface CloudflareEnv {
 	TURNSTILE_SITE_KEY: string;
 	TURNSTILE_SECRET_KEY: string;
 	ENABLE_UPLOADS: string;
+	STRIPE_SECRET_KEY: string;
+	STRIPE_WEBHOOK_SECRET: string;
+	STRIPE_PRICE_ID: string;
 }
 
 declare global {
