@@ -39,7 +39,7 @@
 	<button
 		class="absolute inset-0 cursor-default border-none bg-transparent"
 		onclick={onClose}
-		aria-label={m.chat_close()}
+		aria-label={m.image_close()}
 		tabindex="-1"
 	></button>
 
@@ -47,7 +47,7 @@
 		class="absolute top-4 right-4 z-10 cursor-pointer rounded-full p-2 transition-opacity hover:opacity-70"
 		style="background: var(--bg-elevated); color: var(--text);"
 		onclick={onClose}
-		aria-label={m.chat_close()}
+		aria-label={m.image_close()}
 	>
 		<X size={20} />
 	</button>

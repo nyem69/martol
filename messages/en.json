@@ -219,5 +219,7 @@
   "upload_attach_image": "Attach image",
   "upload_uploading": "Uploading {filename}...",
   "upload_error_type": "Only JPEG, PNG, GIF, and WebP images are supported.",
-  "upload_error_size": "Image must be under 10 MB."
+  "upload_error_size": "Image must be under 10 MB.",
+  "upgrade_close": "Close upgrade dialog",
+  "image_close": "Close image preview"
 }

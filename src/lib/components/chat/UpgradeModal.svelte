@@ -25,6 +25,7 @@
 				throw new Error(msg);
 			}
 			const { url } = (await res.json()) as { url?: string };
+			// External redirect to Stripe checkout — goto() only handles in-app routes
 			if (url) window.location.href = url;
 		} catch (err) {
 			errorMsg = err instanceof Error ? err.message : 'Something went wrong';
@@ -49,7 +50,7 @@
 	<button
 		class="absolute inset-0 cursor-default border-none bg-transparent"
 		onclick={onClose}
-		aria-label={m.chat_close()}
+		aria-label={m.upgrade_close()}
 		tabindex="-1"
 	></button>
 
@@ -62,7 +63,7 @@
 			class="absolute top-3 right-3 cursor-pointer rounded-full p-1.5 transition-opacity hover:opacity-70"
 			style="background: var(--bg-elevated); color: var(--text);"
 			onclick={onClose}
-			aria-label={m.chat_close()}
+			aria-label={m.upgrade_close()}
 		>
 			<X size={16} />
 		</button>
