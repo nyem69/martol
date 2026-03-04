@@ -4,7 +4,7 @@
 	import { X, ImagePlus } from '@lucide/svelte';
 	import { trapFocus } from '$lib/utils/focus-trap';
 
-	let { onClose }: { onClose: () => void } = $props();
+	let { onClose, wasCanceled = false }: { onClose: () => void; wasCanceled?: boolean } = $props();
 	let dialogEl: HTMLDivElement | undefined = $state();
 
 	onMount(() => {
@@ -76,12 +76,12 @@
 				<ImagePlus size={20} />
 			</div>
 			<h2 class="text-base font-semibold" style="color: var(--text);">
-				{m.upgrade_title()}
+				{wasCanceled ? m.upgrade_expired_title() : m.upgrade_title()}
 			</h2>
 		</div>
 
 		<p class="mb-5 text-sm leading-relaxed" style="color: var(--text-muted);">
-			{m.upgrade_description()}
+			{wasCanceled ? m.upgrade_expired_description() : m.upgrade_description()}
 		</p>
 
 		{#if status === 'error'}

@@ -50,6 +50,13 @@
       "when": 1772607389710,
       "tag": "0006_sour_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1772613156248,
+      "tag": "0007_shiny_electro",
+      "breakpoints": true
     }
   ]
 }

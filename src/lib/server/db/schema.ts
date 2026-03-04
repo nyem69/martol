@@ -53,7 +53,6 @@ export const attachments = pgTable(
 	'attachments',
 	{
 		id: bigserial('id', { mode: 'number' }).primaryKey(),
-		messageId: bigint('message_id', { mode: 'number' }),
 		orgId: text('org_id').notNull(),
 		uploadedBy: text('uploaded_by').notNull(),
 		filename: text('filename').notNull(),
@@ -62,11 +61,7 @@ export const attachments = pgTable(
 		sizeBytes: bigint('size_bytes', { mode: 'number' }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [
-		index('idx_attachments_message_id').on(table.messageId),
-		index('idx_attachments_org_message').on(table.orgId, table.messageId),
-		index('idx_attachments_uploaded_by').on(table.uploadedBy)
-	]
+	(table) => [index('idx_attachments_uploaded_by').on(table.uploadedBy)]
 );
 
 /**

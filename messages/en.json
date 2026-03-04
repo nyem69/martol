@@ -216,6 +216,8 @@
   "upgrade_button": "Subscribe — $5/month",
   "upgrade_loading": "Redirecting to checkout...",
   "upgrade_cancel_anytime": "Cancel anytime from billing settings.",
+  "upgrade_expired_title": "Subscription expired",
+  "upgrade_expired_description": "Your subscription has ended. Resubscribe for $5/month to continue uploading images.",
   "upload_attach_image": "Attach image",
   "upload_uploading": "Uploading {filename}...",
   "upload_error_type": "Only JPEG, PNG, GIF, and WebP images are supported.",

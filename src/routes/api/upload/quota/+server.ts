@@ -27,6 +27,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 		sub.status === 'active' &&
 		(!sub.currentPeriodEnd || sub.currentPeriodEnd > new Date());
 
+	const wasCanceled =
+		sub?.plan === 'image_upload' && (sub.status === 'canceled' || sub.status === 'past_due');
+
 	// Count uploads by this user
 	const [result] = await db
 		.select({ total: count() })
@@ -40,6 +43,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		used,
 		limit: isSubscribed ? -1 : FREE_UPLOAD_LIMIT,
 		canUpload,
-		plan: isSubscribed ? 'image_upload' : 'free'
+		plan: isSubscribed ? 'image_upload' : 'free',
+		canceled: wasCanceled
 	});
 };

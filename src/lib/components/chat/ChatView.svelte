@@ -52,6 +52,7 @@
 	let uploading = $state(false);
 	let uploadFilename = $state('');
 	let showUpgradeModal = $state(false);
+	let upgradeWasCanceled = $state(false);
 
 	const canViewActions = userRole === 'owner' || userRole === 'lead';
 	const canApproveActions = userRole === 'owner' || userRole === 'lead';
@@ -172,8 +173,9 @@
 		try {
 			const quotaRes = await fetch('/api/upload/quota');
 			if (quotaRes.ok) {
-				const quota = (await quotaRes.json()) as { canUpload: boolean };
+				const quota = (await quotaRes.json()) as { canUpload: boolean; canceled?: boolean };
 				if (!quota.canUpload) {
+					upgradeWasCanceled = quota.canceled ?? false;
 					showUpgradeModal = true;
 					return;
 				}
@@ -338,5 +340,5 @@
 {/if}
 
 {#if showUpgradeModal}
-	<UpgradeModal onClose={() => (showUpgradeModal = false)} />
+	<UpgradeModal wasCanceled={upgradeWasCanceled} onClose={() => (showUpgradeModal = false)} />
 {/if}
