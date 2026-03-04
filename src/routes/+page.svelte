@@ -1,7 +1,9 @@
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages';
 	import {
 		ArrowRight,
 		ExternalLink,
+		Lock,
 		MessageSquare,
 		ShieldCheck,
 		Bot,
@@ -60,13 +62,13 @@
 {/snippet}
 
 <svelte:head>
-	<title>Martol — Chat with your AI agents from anywhere</title>
-	<meta name="description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser. Your API keys never leave your machine." />
+	<title>Martol — See what your AI agents will do — before they do it</title>
+	<meta name="description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
 	<link rel="canonical" href="https://martol.plitix.com/" />
 
 	<!-- Open Graph -->
-	<meta property="og:title" content="Martol — Chat with your AI agents from anywhere" />
-	<meta property="og:description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser. Your API keys never leave your machine." />
+	<meta property="og:title" content="Martol — See what your AI agents will do — before they do it" />
+	<meta property="og:description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="https://martol.plitix.com/" />
 	<meta property="og:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
@@ -76,8 +78,8 @@
 
 	<!-- Twitter Card -->
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Martol — Chat with your AI agents from anywhere" />
-	<meta name="twitter:description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser." />
+	<meta name="twitter:title" content="Martol — See what your AI agents will do — before they do it" />
+	<meta name="twitter:description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
 	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 
 	<!-- Structured Data -->
@@ -87,7 +89,7 @@
 		"name": "Martol",
 		"applicationCategory": "DeveloperApplication",
 		"operatingSystem": "Web",
-		"description": "Multi-user AI collaboration workspace. Chat with your AI coding agents from any device — no SSH, no VPN, just a browser.",
+		"description": "Server-enforced governance for AI agents. Every action previewed, every decision audited.",
 		"url": "https://martol.plitix.com",
 		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
 		"license": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -112,10 +114,10 @@
 			<span class="beta-badge">BETA</span>
 			<div class="hero-divider"></div>
 			<p class="tagline">
-				Chat with your AI agents<br />from anywhere.
+				{m.hero_tagline()}
 			</p>
 			<p class="subtitle">
-				No SSH. No VPN. Just a browser.<span class="cursor">_</span>
+				{m.hero_subtitle()}<span class="cursor">_</span>
 			</p>
 			<a href="/login" class="cta" data-testid="hero-cta">
 				Get started <ArrowRight size={16} />
@@ -219,12 +221,66 @@
 			</div>
 			<div class="diagram-note">
 				<ShieldCheck size={14} />
-				<span>When agents want to do something risky — deploy, delete, modify — they ask first. You approve from the chat.</span>
+				<span>Agents submit structured intents — not raw commands. The server validates every action against a role x risk matrix before anything executes.</span>
 			</div>
 			<p class="aside">
-				You and your AI agents share a chat room.<br />
-				You talk. They work. You check in when you want.
+				Human previews the action with risk score. Approves, edits, or rejects.<br />
+				Execution only after approval. Every decision audited.
 			</p>
+		</div>
+	</section>
+
+	<!-- SECURITY ARCHITECTURE -->
+	<section class="section" use:reveal>
+		<div class="container">
+			{@render sectionHead(m.section_security_title())}
+			<div class="comparison-table-wrap">
+				<table class="comparison-table">
+					<thead>
+						<tr>
+							<th></th>
+							<th class="col-unsafe">{m.section_security_unsafe()}</th>
+							<th class="col-martol">{m.section_security_martol()}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="row-label">Where agents run</td>
+							<td class="cell-unsafe">Your machine, your privileges</td>
+							<td class="cell-martol">Server-side, sandboxed per room</td>
+						</tr>
+						<tr>
+							<td class="row-label">What agents can do</td>
+							<td class="cell-unsafe">Anything — shell, files, network</td>
+							<td class="cell-martol">Only submit structured intents</td>
+						</tr>
+						<tr>
+							<td class="row-label">Who decides</td>
+							<td class="cell-unsafe">Agent decides and executes</td>
+							<td class="cell-martol">Server validates against role x risk matrix</td>
+						</tr>
+						<tr>
+							<td class="row-label">Dangerous actions</td>
+							<td class="cell-unsafe">Execute immediately</td>
+							<td class="cell-martol">Queued for human approval</td>
+						</tr>
+						<tr>
+							<td class="row-label">Audit trail</td>
+							<td class="cell-unsafe">Local logs (modifiable)</td>
+							<td class="cell-martol">Append-only server DB</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<p class="security-summary">
+				<Lock size={14} />
+				<span>{m.section_security_summary()}</span>
+			</p>
+			<div class="security-cta-row">
+				<a href="/security" class="security-link">
+					{m.section_security_cta()} <ArrowRight size={14} />
+				</a>
+			</div>
 		</div>
 	</section>
 
@@ -317,6 +373,7 @@
 			</div>
 			<nav class="footer-links" aria-label="Footer navigation">
 				<a href="https://github.com/nyem69/martol" target="_blank" rel="noopener">GitHub</a>
+				<a href="/security">Security</a>
 				<a href="/legal/terms">Terms</a>
 				<a href="/legal/privacy">Privacy</a>
 				<a href="/legal/aup">Acceptable Use</a>
@@ -943,6 +1000,107 @@
 		margin: 8px 0 0;
 	}
 
+	/* ── Comparison table ── */
+	.comparison-table-wrap {
+		overflow-x: auto;
+		margin-bottom: 20px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+	}
+
+	.comparison-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-family: var(--font-sans);
+		font-size: 13px;
+	}
+
+	.comparison-table thead {
+		background: var(--bg-elevated);
+	}
+
+	.comparison-table th {
+		padding: 12px 16px;
+		font-family: var(--font-mono);
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.5px;
+		text-align: left;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.comparison-table th:first-child {
+		width: 30%;
+	}
+
+	.col-unsafe {
+		color: var(--danger);
+	}
+
+	.col-martol {
+		color: var(--success);
+	}
+
+	.comparison-table td {
+		padding: 10px 16px;
+		border-bottom: 1px solid var(--border-subtle);
+		line-height: 1.5;
+	}
+
+	.comparison-table tr:last-child td {
+		border-bottom: none;
+	}
+
+	.row-label {
+		font-family: var(--font-mono);
+		font-size: 12px;
+		color: var(--text-muted);
+		font-weight: 500;
+	}
+
+	.cell-unsafe {
+		color: var(--text-muted);
+	}
+
+	.cell-martol {
+		color: var(--text);
+	}
+
+	.security-summary {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		font-family: var(--font-sans);
+		font-size: 14px;
+		color: var(--text-muted);
+		line-height: 1.6;
+		margin: 0 0 16px;
+	}
+
+	.security-summary :global(svg) {
+		color: var(--accent);
+		flex-shrink: 0;
+		margin-top: 3px;
+	}
+
+	.security-cta-row {
+		text-align: center;
+	}
+
+	.security-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--font-mono);
+		font-size: 13px;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.security-link:hover {
+		text-decoration: underline;
+	}
+
 	/* ── Scroll reveal (classes added dynamically by reveal() action) ── */
 	.section:global(.reveal) {
 		opacity: 0;
@@ -1000,6 +1158,10 @@
 
 		.features-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.comparison-table th:first-child {
+			width: auto;
 		}
 
 		.footer-inner {
