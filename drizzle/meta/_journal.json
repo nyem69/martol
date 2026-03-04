@@ -50,6 +50,13 @@
       "when": 1772638625530,
       "tag": "0006_dashing_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1772664277802,
+      "tag": "0007_curly_thor",
+      "breakpoints": true
     }
   ]
 }

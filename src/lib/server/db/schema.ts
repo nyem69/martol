@@ -324,6 +324,36 @@ export const contentReports = pgTable(
 );
 
 /**
+ * Subscriptions — org-level billing via Stripe
+ * One subscription per org. Free orgs may not have a row (default to free).
+ */
+export const subscriptions = pgTable(
+	'subscriptions',
+	{
+		id: text('id').primaryKey(), // nanoid
+		orgId: text('org_id').notNull(),
+		stripeCustomerId: text('stripe_customer_id').notNull(),
+		stripeSubscriptionId: text('stripe_subscription_id').unique(),
+		plan: text('plan').notNull().default('free').$type<'free' | 'pro'>(),
+		status: text('status')
+			.notNull()
+			.default('active')
+			.$type<'active' | 'past_due' | 'canceled' | 'incomplete'>(),
+		quantity: integer('quantity').notNull().default(1),
+		foundingMember: integer('founding_member').notNull().default(0),
+		currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+		cancelAtPeriodEnd: integer('cancel_at_period_end').notNull().default(0),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_subscriptions_org').on(table.orgId),
+		index('idx_subscriptions_stripe_customer').on(table.stripeCustomerId),
+		index('idx_subscriptions_stripe_sub').on(table.stripeSubscriptionId)
+	]
+);
+
+/**
  * User Sanctions — moderation actions applied to users.
  * Types: warning, mute (timed), suspend, ban.
  */

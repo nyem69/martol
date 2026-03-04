@@ -66,11 +66,18 @@ EMAIL_NAME="Martol"
 TURNSTILE_SITE_KEY = "0x4AAAAAACkQpeHr3nM8lyRa"
 ENABLE_UPLOADS = "false"
 
+# Stripe publishable key (safe for client)
+STRIPE_PUBLISHABLE_KEY = ""
+# Stripe price ID for Pro plan (created in Stripe Dashboard)
+STRIPE_PRO_PRICE_ID = ""
+
 # secrets
 # TURNSTILE_SECRET_KEY
 # RESEND_API_KEY
 # BETTER_AUTH_SECRET
 # HMAC_SIGNING_SECRET
+# STRIPE_SECRET_KEY
+# STRIPE_WEBHOOK_SECRET
 
 [triggers]
 crons = ["0 * * * *"]

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X } from '@lucide/svelte';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare } from '@lucide/svelte';
 	import { signOut } from '$lib/auth-client';
 
 	let { data } = $props();
@@ -148,6 +148,71 @@
 			errorMsg = m.error_generic();
 		}
 		exporting = false;
+	}
+
+	// ── Billing state ──
+	// svelte-ignore state_referenced_locally
+	const billing = data.billing;
+	// svelte-ignore state_referenced_locally
+	const isOwnerOrLead = data.isOwnerOrLead;
+	let upgrading = $state(false);
+	let managing = $state(false);
+	let billingError = $state('');
+	let billingSuccess = $state('');
+
+	// Check URL params for billing redirect result
+	$effect(() => {
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('billing') === 'success') {
+			billingSuccess = m.billing_success();
+			setTimeout(() => (billingSuccess = ''), 5000);
+			// Clean URL
+			const url = new URL(window.location.href);
+			url.searchParams.delete('billing');
+			window.history.replaceState({}, '', url.toString());
+		}
+	});
+
+	async function handleUpgrade() {
+		upgrading = true;
+		billingError = '';
+		try {
+			const res = await fetch('/api/billing/checkout', { method: 'POST' });
+			const result: { url?: string; error?: { message?: string } } = await res.json();
+			if (res.ok && result.url) {
+				window.location.href = result.url;
+				return; // Don't reset upgrading — page is navigating away
+			}
+			billingError = m.billing_error();
+		} catch {
+			billingError = m.billing_error();
+		}
+		upgrading = false;
+	}
+
+	async function handleManageBilling() {
+		managing = true;
+		billingError = '';
+		try {
+			const res = await fetch('/api/billing/portal', { method: 'POST' });
+			const result: { url?: string; error?: { message?: string } } = await res.json();
+			if (res.ok && result.url) {
+				window.location.href = result.url;
+				return;
+			}
+			billingError = m.billing_error();
+		} catch {
+			billingError = m.billing_error();
+		}
+		managing = false;
+	}
+
+	function formatDate(iso: string): string {
+		return new Date(iso).toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric'
+		});
 	}
 
 	// ── Account deletion state ──
@@ -469,6 +534,180 @@
 				{/if}
 			</button>
 		</section>
+
+		<!-- ═══ BILLING SECTION ═══ -->
+		{#if billing}
+			<section
+				class="mb-6 rounded-lg p-5"
+				style="background: var(--bg-surface); border: 1px solid var(--border);"
+			>
+				<div class="mb-4 flex items-center gap-2">
+					<CreditCard size={16} style="color: var(--accent);" />
+					<h2
+						class="text-sm font-bold uppercase tracking-wider"
+						style="color: var(--text); font-family: var(--font-mono);"
+					>
+						{m.billing_title()}
+					</h2>
+				</div>
+
+				<!-- Plan badge -->
+				<div class="mb-4">
+					<span class="mb-1 block text-xs" style="color: var(--text-muted);">
+						{m.billing_current_plan()}
+					</span>
+					<div class="flex items-center gap-2">
+						<span
+							class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-bold uppercase tracking-wider"
+							style="background: {billing.plan === 'pro'
+								? 'color-mix(in oklch, var(--accent) 15%, transparent)'
+								: 'var(--bg)'}; border: 1px solid {billing.plan === 'pro'
+								? 'color-mix(in oklch, var(--accent) 40%, transparent)'
+								: 'var(--border)'}; color: {billing.plan === 'pro'
+								? 'var(--accent)'
+								: 'var(--text-muted)'}; font-family: var(--font-mono);"
+						>
+							{#if billing.plan === 'pro'}
+								<Crown size={14} />
+							{/if}
+							{billing.plan === 'pro' ? m.billing_plan_pro() : m.billing_plan_free()}
+						</span>
+						{#if billing.foundingMember}
+							<span
+								class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+								style="background: color-mix(in oklch, var(--success) 15%, transparent); color: var(--success);"
+							>
+								{m.billing_founding()}
+							</span>
+						{/if}
+						{#if billing.status === 'past_due'}
+							<span
+								class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+								style="background: color-mix(in oklch, var(--danger) 15%, transparent); color: var(--danger);"
+							>
+								{m.billing_past_due()}
+							</span>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Renewal / cancellation info -->
+				{#if billing.plan === 'pro' && billing.currentPeriodEnd}
+					<div
+						class="mb-4 rounded-md px-3 py-2 text-xs"
+						style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);"
+					>
+						{#if billing.cancelAtPeriodEnd}
+							{m.billing_cancels({ date: formatDate(billing.currentPeriodEnd) })}
+						{:else}
+							{m.billing_renews({ date: formatDate(billing.currentPeriodEnd) })}
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Usage stats -->
+				<div class="mb-4">
+					<span class="mb-2 block text-xs" style="color: var(--text-muted);">
+						{m.billing_usage()}
+					</span>
+					<div class="space-y-1.5">
+						<div
+							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+						>
+							<Users size={12} style="color: var(--text-muted); flex-shrink: 0;" />
+							{m.billing_users({ count: String(billing.usage.users), limit: String(billing.limits.maxUsers) })}
+						</div>
+						<div
+							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+						>
+							<Bot size={12} style="color: var(--text-muted); flex-shrink: 0;" />
+							{m.billing_agents({ count: String(billing.usage.agents), limit: String(billing.limits.maxAgents) })}
+						</div>
+						<div
+							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+						>
+							<MessageSquare size={12} style="color: var(--text-muted); flex-shrink: 0;" />
+							{m.billing_messages({ count: String(billing.usage.msgsToday), limit: String(billing.limits.maxMsgsPerDay) })}
+						</div>
+						<div
+							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
+							style="background: var(--bg); border: 1px solid var(--border); color: {billing.limits.uploadsEnabled
+								? 'var(--text)'
+								: 'var(--text-muted)'}; font-family: var(--font-mono);"
+						>
+							<Upload size={12} style="color: var(--text-muted); flex-shrink: 0;" />
+							{m.billing_uploads()} —
+							{#if billing.limits.uploadsEnabled}
+								<span style="color: var(--success);">{m.billing_uploads_enabled()}</span>
+							{:else}
+								<span style="color: var(--text-muted);">{m.billing_uploads_disabled()}</span>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				<!-- Billing errors / success -->
+				{#if billingError}
+					<div
+						class="mb-3 rounded-md px-3 py-2 text-xs"
+						style="background: color-mix(in oklch, var(--danger) 10%, transparent); color: var(--danger);"
+						role="alert"
+					>
+						{billingError}
+					</div>
+				{/if}
+				{#if billingSuccess}
+					<div
+						class="mb-3 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
+						style="background: color-mix(in oklch, var(--success) 10%, transparent); color: var(--success);"
+						role="status"
+					>
+						<Check size={14} />
+						{billingSuccess}
+					</div>
+				{/if}
+
+				<!-- Action buttons (owner/lead only) -->
+				{#if isOwnerOrLead}
+					{#if billing.plan === 'free'}
+						<button
+							onclick={handleUpgrade}
+							disabled={upgrading}
+							data-testid="upgrade-btn"
+							class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+							style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
+						>
+							{#if upgrading}
+								<Loader size={14} class="animate-spin" />
+								{m.billing_upgrading()}
+							{:else}
+								<Crown size={14} />
+								{m.billing_upgrade()}
+							{/if}
+						</button>
+					{:else}
+						<button
+							onclick={handleManageBilling}
+							disabled={managing}
+							data-testid="manage-billing-btn"
+							class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+						>
+							{#if managing}
+								<Loader size={14} class="animate-spin" />
+								{m.billing_managing()}
+							{:else}
+								<CreditCard size={14} />
+								{m.billing_manage()}
+							{/if}
+						</button>
+					{/if}
+				{/if}
+			</section>
+		{/if}
 
 		<!-- ═══ DANGER ZONE ═══ -->
 		<section
