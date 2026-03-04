@@ -210,5 +210,12 @@
   "invite_invalid": "This invitation is no longer valid.",
   "invite_go_to_chat": "Go to chat",
   "invite_not_found": "This invitation link is invalid or has been removed.",
-  "invite_not_found_title": "Invitation not found"
+  "invite_not_found_title": "Invitation not found",
+  "upgrade_title": "Upload limit reached",
+  "upgrade_description": "You've used your 5 free image uploads. Subscribe for $5/month to unlock unlimited image uploads.",
+  "upgrade_button": "Subscribe — $5/month",
+  "upgrade_loading": "Redirecting to checkout...",
+  "upgrade_cancel_anytime": "Cancel anytime from billing settings.",
+  "upload_attach_image": "Attach image",
+  "upload_uploading": "Uploading {filename}..."
 }
