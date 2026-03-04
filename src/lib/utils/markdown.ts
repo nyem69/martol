@@ -6,19 +6,32 @@
  * Only runs client-side (chat route has ssr = false).
  */
 
-import { marked } from 'marked';
+import { marked, type Tokens } from 'marked';
 import DOMPurify, { type Config } from 'dompurify';
 
-marked.setOptions({ async: false, gfm: true, breaks: true });
+const renderer = new marked.Renderer();
+const originalImage = renderer.image.bind(renderer);
+renderer.image = function (token: Tokens.Image) {
+	if (token.href.startsWith('r2:')) {
+		const r2Key = token.href.slice(3);
+		const src = `/api/upload?key=${encodeURIComponent(r2Key)}`;
+		const alt = token.text || '';
+		const title = token.title || '';
+		return `<img src="${src}" alt="${alt}" title="${title}" class="chat-img-thumb" data-r2key="${r2Key}" loading="lazy" />`;
+	}
+	return originalImage(token);
+};
+
+marked.setOptions({ async: false, gfm: true, breaks: true, renderer });
 
 // Restrict to tags needed for chat markdown — no <style>, <form>, <svg>, etc.
 const PURIFY_CONFIG: Config = {
 	ALLOWED_TAGS: [
 		'p', 'br', 'strong', 'em', 'del', 'code', 'pre', 'blockquote',
 		'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span'
+		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'img'
 	],
-	ALLOWED_ATTR: ['href', 'src', 'alt', 'title'],
+	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'data-r2key', 'loading'],
 	ALLOW_DATA_ATTR: false
 };
 

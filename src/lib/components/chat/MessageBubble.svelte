@@ -3,6 +3,7 @@
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import * as m from '$lib/paraglide/messages';
 	import { Flag, Reply, RotateCcw } from '@lucide/svelte';
+	import ImageModal from './ImageModal.svelte';
 
 	let {
 		message,
@@ -19,6 +20,8 @@
 	} = $props();
 
 	let now = $state(Date.now());
+	let lightboxSrc = $state<string | null>(null);
+	let lightboxAlt = $state('');
 	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
 	const htmlBody = $derived(renderMarkdown(message.body));
 
@@ -41,6 +44,15 @@
 		return `${days}d`;
 	}
 
+	function onBubbleClick(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		if (target.tagName === 'IMG' && target.classList.contains('chat-img-thumb')) {
+			const img = target as HTMLImageElement;
+			lightboxSrc = img.src;
+			lightboxAlt = img.alt;
+		}
+	}
+
 	function scrollToParent() {
 		if (!replyParent?.dbId) return;
 		const target = document.querySelector(`[data-dbid="${replyParent.dbId}"]`);
@@ -58,6 +70,7 @@
 	data-dbid={message.dbId ?? undefined}
 >
 	<!-- Bubble -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
 		style="background: {message.isOwn
@@ -65,6 +78,7 @@
 			: 'var(--bg-surface)'}; border: 1px solid {message.failed
 			? 'var(--danger)'
 			: 'var(--border-subtle)'};"
+		onclick={onBubbleClick}
 	>
 		{#if replyParent}
 			<button
@@ -152,6 +166,10 @@
 	</div>
 </div>
 
+{#if lightboxSrc}
+	<ImageModal src={lightboxSrc} alt={lightboxAlt} onClose={() => (lightboxSrc = null)} />
+{/if}
+
 <style>
 	.side-col {
 		min-width: 2rem;
@@ -187,5 +205,12 @@
 	@keyframes flash {
 		0%, 15% { background: color-mix(in oklch, var(--accent) 20%, transparent); }
 		100% { background: transparent; }
+	}
+
+	:global(.chat-img-thumb) {
+		max-width: 300px;
+		border-radius: 0.5rem;
+		cursor: pointer;
+		margin: 0.25rem 0;
 	}
 </style>
