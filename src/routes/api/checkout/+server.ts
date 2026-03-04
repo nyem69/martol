@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import Stripe from 'stripe';
 import { subscriptions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { generateId } from 'better-auth';
 
 export const POST: RequestHandler = async ({ locals, platform, url }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
@@ -29,7 +30,7 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 		error(400, 'Already subscribed');
 	}
 
-	// Reuse existing Stripe customer or create new
+	// Reuse existing Stripe customer or create new (persist immediately to avoid orphans)
 	let customerId = existing?.stripeCustomerId;
 	if (!customerId) {
 		const customer = await stripe.customers.create({
@@ -37,6 +38,13 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 			metadata: { martolUserId: userId }
 		});
 		customerId = customer.id;
+		await locals.db.insert(subscriptions).values({
+			id: generateId(),
+			userId,
+			stripeCustomerId: customerId,
+			plan: 'free',
+			status: 'active'
+		});
 	}
 
 	const session = await stripe.checkout.sessions.create({
@@ -48,5 +56,6 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 		metadata: { martolUserId: userId }
 	});
 
+	if (!session.url) error(503, 'Failed to create checkout session');
 	return json({ url: session.url });
 };

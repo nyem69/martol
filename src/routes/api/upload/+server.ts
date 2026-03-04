@@ -11,7 +11,8 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
 import { attachments, subscriptions } from '$lib/server/db/schema';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, sql } from 'drizzle-orm';
+import { FREE_UPLOAD_LIMIT } from '$lib/server/config';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = new Set([
@@ -84,12 +85,13 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		sub.status === 'active' &&
 		(!sub.currentPeriodEnd || sub.currentPeriodEnd > new Date());
 
+	// Early quota gate (non-atomic, for fast rejection before file parsing)
 	if (!isSubscribed) {
 		const [result] = await locals.db
 			.select({ total: count() })
 			.from(attachments)
 			.where(eq(attachments.uploadedBy, locals.user.id));
-		if ((result?.total ?? 0) >= 5) {
+		if ((result?.total ?? 0) >= FREE_UPLOAD_LIMIT) {
 			error(402, 'Upload quota exceeded — upgrade to continue uploading');
 		}
 	}
@@ -106,7 +108,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	// Sanitize filename
-	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128);
+	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128) || 'upload';
 	const timestamp = Date.now();
 	const r2Key = `${activeOrgId}/${timestamp}-${safeName}`;
 
@@ -121,14 +123,31 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	});
 
-	await locals.db.insert(attachments).values({
-		orgId: activeOrgId,
-		uploadedBy: locals.user.id,
-		filename: safeName,
-		r2Key: r2Key,
-		contentType: file.type,
-		sizeBytes: file.size
-	});
+	// Atomic quota-enforced insert: only succeeds if count < limit (prevents race condition)
+	let inserted: { id: number }[];
+	if (isSubscribed) {
+		inserted = await locals.db.insert(attachments).values({
+			orgId: activeOrgId,
+			uploadedBy: locals.user.id,
+			filename: safeName,
+			r2Key: r2Key,
+			contentType: file.type,
+			sizeBytes: file.size
+		}).returning({ id: attachments.id });
+	} else {
+		inserted = await locals.db.execute(sql`
+			INSERT INTO attachments (org_id, uploaded_by, filename, r2_key, content_type, size_bytes)
+			SELECT ${activeOrgId}, ${locals.user.id}, ${safeName}, ${r2Key}, ${file.type}, ${file.size}
+			WHERE (SELECT count(*) FROM attachments WHERE uploaded_by = ${locals.user.id}) < ${FREE_UPLOAD_LIMIT}
+			RETURNING id
+		`);
+	}
+
+	if (!inserted.length) {
+		// Atomic check failed — clean up R2 object
+		await r2.delete(r2Key).catch(() => {});
+		error(402, 'Upload quota exceeded — upgrade to continue uploading');
+	}
 
 	return json({
 		ok: true,

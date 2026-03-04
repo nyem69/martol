@@ -2,8 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { attachments, subscriptions } from '$lib/server/db/schema';
 import { eq, count } from 'drizzle-orm';
-
-const FREE_UPLOAD_LIMIT = 5;
+import { FREE_UPLOAD_LIMIT } from '$lib/server/config';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');

@@ -332,7 +332,7 @@ export const subscriptions = pgTable(
 		status: text('status').notNull().default('active').$type<'active' | 'canceled' | 'past_due'>(),
 		currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date())
 	},
 	(table) => [
 		index('idx_subscriptions_user').on(table.userId),
