@@ -10,7 +10,8 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
-import { eq, and } from 'drizzle-orm';
+import { attachments, subscriptions } from '$lib/server/db/schema';
+import { eq, and, count } from 'drizzle-orm';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = new Set([
@@ -67,6 +68,32 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!memberRecord) error(403, 'Not a member of this organization');
 	if (memberRecord.role === 'viewer') error(403, 'Viewers cannot upload files');
 
+	// Quota enforcement (defense in depth)
+	const [sub] = await locals.db
+		.select({
+			plan: subscriptions.plan,
+			status: subscriptions.status,
+			currentPeriodEnd: subscriptions.currentPeriodEnd
+		})
+		.from(subscriptions)
+		.where(eq(subscriptions.userId, locals.user.id))
+		.limit(1);
+
+	const isSubscribed =
+		sub?.plan === 'image_upload' &&
+		sub.status === 'active' &&
+		(!sub.currentPeriodEnd || sub.currentPeriodEnd > new Date());
+
+	if (!isSubscribed) {
+		const [result] = await locals.db
+			.select({ total: count() })
+			.from(attachments)
+			.where(eq(attachments.uploadedBy, locals.user.id));
+		if ((result?.total ?? 0) >= 5) {
+			error(402, 'Upload quota exceeded — upgrade to continue uploading');
+		}
+	}
+
 	const formData = await request.formData();
 	const file = formData.get('file');
 	if (!file || !(file instanceof File)) error(400, 'No file provided');
@@ -92,6 +119,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			uploadedBy: locals.user.id,
 			orgId: activeOrgId
 		}
+	});
+
+	await locals.db.insert(attachments).values({
+		orgId: activeOrgId,
+		uploadedBy: locals.user.id,
+		filename: safeName,
+		r2Key: r2Key,
+		contentType: file.type,
+		sizeBytes: file.size
 	});
 
 	return json({
