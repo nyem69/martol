@@ -208,6 +208,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isInvite =
 		event.url.pathname === '/api/auth/organization/invite-member' &&
 		event.request.method === 'POST';
+	const isActionApproval =
+		/^\/api\/actions\/\d+\/(approve|reject)$/.test(event.url.pathname) &&
+		event.request.method === 'POST';
 
 	// ── Turnstile CAPTCHA verification (OTP send only) ──
 	// Turnstile tokens are single-use. Enforce only on send, not verify.
@@ -368,6 +371,25 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (!inviteLimit.allowed) {
 				return new Response(
 					JSON.stringify({ error: { message: 'Too many invitations. Try again later.' } }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+	}
+
+	// ── Action approval rate limit: 60 per user per minute ──
+	if (isActionApproval && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (kv) {
+			const userId = event.locals.user.id;
+			const actionLimit = await checkRateLimit(kv, {
+				key: `action-approval:${userId}`,
+				maxRequests: 60,
+				windowSeconds: 60
+			});
+			if (!actionLimit.allowed) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Too many approval requests. Try again later.' } }),
 					{ status: 429, headers: { 'Content-Type': 'application/json' } }
 				);
 			}

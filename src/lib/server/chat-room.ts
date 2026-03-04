@@ -981,7 +981,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					.select({
 						id: pendingActions.id,
 						status: pendingActions.status,
-						riskLevel: pendingActions.riskLevel
+						riskLevel: pendingActions.riskLevel,
+						agentUserId: pendingActions.agentUserId
 					})
 					.from(pendingActions)
 					.where(and(eq(pendingActions.id, actionId), eq(pendingActions.orgId, orgId)))
@@ -995,13 +996,19 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					this.sendError(ws, 'invalid_message', `Action #${actionId} already ${existing.status}`);
 					return;
 				}
+				// [S1] Block agent self-approval/rejection
+				if (existing.agentUserId === userId) {
+					this.sendError(ws, 'unauthorized', 'Cannot approve/reject your own action');
+					return;
+				}
 				if (action === 'approve' && role === 'lead' && existing.riskLevel === 'high') {
 					this.sendError(ws, 'unauthorized', 'Only owner can approve high-risk actions');
 					return;
 				}
 
+				// [S2] Atomic update — status guard in WHERE prevents TOCTOU race
 				const newStatus = action === 'approve' ? 'approved' : 'rejected';
-				await db
+				const [updated] = await db
 					.update(pendingActions)
 					.set({
 						status: newStatus,
@@ -1009,7 +1016,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							? { approvedBy: userId, approvedAt: new Date() }
 							: {})
 					})
-					.where(eq(pendingActions.id, actionId));
+					.where(and(
+						eq(pendingActions.id, actionId),
+						eq(pendingActions.orgId, orgId),
+						eq(pendingActions.status, 'pending')
+					))
+					.returning({ id: pendingActions.id });
+
+				if (!updated) {
+					this.sendError(ws, 'invalid_message', `Action #${actionId} is no longer pending`);
+					return;
+				}
 
 				// [I6] System messages use serverSeqId: 0 — ephemeral, not persisted
 				// through WAL. Important status changes are queryable via /api/actions.

@@ -1,30 +1,42 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { DisplayMessage, SystemEvent } from '$lib/stores/messages.svelte';
+	import type { PendingAction } from '$lib/types/chat';
 	import * as m from '$lib/paraglide/messages';
 	import MessageBubble from './MessageBubble.svelte';
 	import SystemLine from './SystemLine.svelte';
+	import PendingActionLine from './PendingActionLine.svelte';
 
 	let {
 		messages,
 		systemEvents,
+		actions = [],
+		actionsInFlight = new Set<number>(),
 		loading = false,
 		loadingHistory = false,
 		hasMoreHistory = true,
+		canApproveActions = false,
 		onRetry,
 		onReply,
 		onReport,
-		onLoadMore
+		onLoadMore,
+		onApproveAction,
+		onRejectAction
 	}: {
 		messages: DisplayMessage[];
 		systemEvents: SystemEvent[];
+		actions?: PendingAction[];
+		actionsInFlight?: Set<number>;
 		loading?: boolean;
 		loadingHistory?: boolean;
 		hasMoreHistory?: boolean;
+		canApproveActions?: boolean;
 		onRetry?: (localId: string) => void;
 		onReply?: (message: DisplayMessage) => void;
 		onReport?: (messageId: number, messageBody: string) => void;
 		onLoadMore?: () => void;
+		onApproveAction?: (id: number) => void;
+		onRejectAction?: (id: number) => void;
 	} = $props();
 
 	// Lookup map for reply threading: dbId → message
@@ -60,11 +72,12 @@
 		hasNewMessages = false;
 	}
 
-	// Merge messages and system events into a single timeline
+	// Merge messages, system events, and actions into a single timeline
 	const timeline = $derived.by(() => {
 		type TimelineItem =
 			| { kind: 'message'; data: DisplayMessage }
-			| { kind: 'system'; data: SystemEvent };
+			| { kind: 'system'; data: SystemEvent }
+			| { kind: 'action'; data: PendingAction };
 
 		// Deduplicate agent intro messages — keep only the latest per sender.
 		// Agent intros start with "[AI Agent]" and repeat on every reconnect.
@@ -84,7 +97,8 @@
 
 		const items: TimelineItem[] = [
 			...filtered.map((m) => ({ kind: 'message' as const, data: m })),
-			...systemEvents.map((e) => ({ kind: 'system' as const, data: e }))
+			...systemEvents.map((e) => ({ kind: 'system' as const, data: e })),
+			...actions.map((a) => ({ kind: 'action' as const, data: a }))
 		];
 
 		items.sort(
@@ -94,14 +108,14 @@
 	});
 
 	// Auto-scroll when new messages arrive and user is at bottom
+	// [I8] Only show "new messages" pill for actual messages, not action refreshes
 	$effect(() => {
-		// Access length to track changes
 		const _len = timeline.length;
-		// Read isAtBottom without tracking to avoid re-triggering on scroll
+		const lastItem = timeline[timeline.length - 1];
 		const atBottom = untrack(() => isAtBottom);
 		if (atBottom) {
 			queueMicrotask(() => scrollToBottom());
-		} else {
+		} else if (lastItem?.kind === 'message') {
 			hasNewMessages = true;
 		}
 	});
@@ -163,9 +177,17 @@
 			</div>
 		{/if}
 
-		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.data.id)}
+		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.kind === 'action' ? `action-${item.data.id}` : item.data.id)}
 			{#if item.kind === 'message'}
 				<MessageBubble message={item.data} replyParent={item.data.replyTo ? messageByDbId.get(item.data.replyTo) : undefined} {onRetry} {onReply} {onReport} />
+			{:else if item.kind === 'action'}
+				<PendingActionLine
+					action={item.data}
+					canApprove={canApproveActions}
+					loading={actionsInFlight.has(item.data.id)}
+					onApprove={onApproveAction}
+					onReject={onRejectAction}
+				/>
 			{:else}
 				{@const event = item.data}
 				<SystemLine
