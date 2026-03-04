@@ -109,6 +109,7 @@
 		<div class="hero-content">
 			<img src="/images/martol-hero-2.png" alt="Martol — hammer" class="hero-img" />
 			<h1 class="logo">MARTOL</h1>
+			<span class="beta-badge">BETA</span>
 			<div class="hero-divider"></div>
 			<p class="tagline">
 				Chat with your AI agents<br />from anywhere.
@@ -378,10 +379,11 @@
 	}
 	.hero-content > :global(:nth-child(1)) { animation-delay: 0s; }
 	.hero-content > :global(:nth-child(2)) { animation-delay: 0.15s; }
-	.hero-content > :global(:nth-child(3)) { animation-delay: 0.28s; }
-	.hero-content > :global(:nth-child(4)) { animation-delay: 0.38s; }
-	.hero-content > :global(:nth-child(5)) { animation-delay: 0.5s; }
-	.hero-content > :global(:nth-child(6)) { animation-delay: 0.65s; }
+	.hero-content > :global(:nth-child(3)) { animation-delay: 0.22s; }
+	.hero-content > :global(:nth-child(4)) { animation-delay: 0.32s; }
+	.hero-content > :global(:nth-child(5)) { animation-delay: 0.42s; }
+	.hero-content > :global(:nth-child(6)) { animation-delay: 0.54s; }
+	.hero-content > :global(:nth-child(7)) { animation-delay: 0.68s; }
 
 	@keyframes hero-enter {
 		from { opacity: 0; transform: translateY(16px); }
@@ -405,6 +407,19 @@
 		color: var(--accent);
 		margin: 0;
 		line-height: 1;
+	}
+
+	.beta-badge {
+		display: inline-block;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.15em;
+		color: var(--warning);
+		border: 1px solid var(--warning);
+		border-radius: 3px;
+		padding: 2px 8px;
+		margin-top: 8px;
 	}
 
 	.hero-divider {
