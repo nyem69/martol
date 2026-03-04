@@ -1,15 +1,41 @@
-# Agent Simulation Engine
+# Action Preview System
 
 **Date:** 2026-03-04
 **Status:** Implemented (Phase 2 of pre-launch feature plan)
+**Revised:** 2026-03-05 (post-review hardening)
 
 ---
 
 ## What It Does
 
-The simulation engine lets agents submit structured previews alongside their action intents. Instead of seeing "Agent wants to modify auth.ts", humans see the actual diff, the impact assessment, and the risk factors — then approve, edit, or reject with full context.
+The action preview system lets agents submit structured descriptions of their intended changes alongside action intents. Instead of seeing "Agent wants to modify auth.ts", humans see the declared diff, the impact assessment, and risk factors — then approve, edit, or reject with full context.
 
-This is additive. Agents that don't send simulation data still work exactly as before — the approval card shows the text description only.
+This is additive. Agents that don't send preview data still work exactly as before — the approval card shows the text description only.
+
+---
+
+## Trust Model
+
+**Previews are agent-declared, not server-verified.** The server stores what the agent claims it will do. Nothing enforces that the agent's actual behavior after approval matches its declared preview — the server has no access to the agent's execution environment, no sandbox, and no hook into post-approval execution.
+
+This means:
+
+- A preview showing a one-line diff in `src/auth.ts` does not guarantee the agent will only modify that file
+- Risk factors like "pre-approved by security team" are agent-fabricated text, not system analysis
+- The audit log records the declared preview, not the actual changes
+
+**What IS server-enforced:**
+- Risk level (derived from `ACTION_RISK_MAP`, never from agent claims)
+- Role × risk approval matrix (who can approve what)
+- Agent self-approval gate (agents cannot approve their own actions)
+- Payload size limits (max 50KB serialized)
+
+**What is NOT server-enforced:**
+- Whether the preview matches actual post-approval behavior
+- Whether risk factors are truthful
+- Whether impact assessments are accurate
+
+The preview system improves approval decisions by giving humans structured context, but it is a declaration system, not a verification system.
 
 ---
 
@@ -18,7 +44,7 @@ This is additive. Agents that don't send simulation data still work exactly as b
 ```
 Agent submits action_submit with simulation object
     ↓
-Server validates payload size (max 100KB)
+Server validates total simulation size (max 50KB)
     ↓
 Server derives risk from ACTION_RISK_MAP (never trusts agent)
     ↓
@@ -31,7 +57,7 @@ GET /api/actions returns simulation fields to client
 PendingActionLine renders type-specific preview (diff, shell, API call, file ops, custom)
 ```
 
-No new routes. No new components. No new API endpoints. The simulation engine extends the existing action approval pipeline end-to-end.
+No new routes. No new components. No new API endpoints. The preview system extends the existing action approval pipeline end-to-end.
 
 ---
 
@@ -54,10 +80,10 @@ Migration: `drizzle/0006_dashing_black_widow.sql`
 |--------|------|-------------|
 | `simulation_type` | `TEXT` | `'code_diff'` \| `'shell_preview'` \| `'api_call'` \| `'file_ops'` \| `'custom'` \| `NULL` |
 | `simulation_payload` | `JSONB` | Type-specific preview data (shape depends on `simulation_type`) |
-| `risk_factors` | `JSONB` | Array of `{ factor, severity, detail }` — agent-supplied risk explanations |
-| `estimated_impact` | `JSONB` | `{ files_modified?, services_affected?, reversible? }` |
+| `risk_factors` | `JSONB` | Array of `{ factor, severity, detail }` — **agent-supplied** risk explanations (unverified) |
+| `estimated_impact` | `JSONB` | `{ files_modified?, services_affected?, reversible? }` — **agent-declared** (unverified) |
 
-All nullable. Existing actions (without simulation) have `NULL` in all four columns.
+All nullable. Existing actions (without preview data) have `NULL` in all four columns.
 
 ---
 
@@ -73,7 +99,7 @@ simulation: z.object({
     preview: z.record(z.string(), z.unknown()),  // type-specific shape
     impact: z.object({
         files_modified: z.number().int().nonnegative().optional(),
-        services_affected: z.array(z.string()).optional(),
+        services_affected: z.array(z.string()).max(20).optional(),
         reversible: z.boolean().optional(),
     }).optional(),
     risk_factors: z.array(z.object({
@@ -83,6 +109,10 @@ simulation: z.object({
     })).max(10).optional(),
 }).optional()
 ```
+
+### Size Validation
+
+The server validates the total serialized size of the `simulation` object (not just `preview`). Max 50KB. This is below the MCP transport guard of 64KB at `src/routes/mcp/v1/+server.ts`.
 
 ### Example: Code Diff
 
@@ -226,7 +256,7 @@ The `server_risk` field shows the final risk level after server augmentation, wh
 
 ---
 
-## Simulation Preview Payload Shapes
+## Preview Payload Shapes
 
 | `simulation_type` | `preview` Shape |
 |---|---|
@@ -236,7 +266,7 @@ The `server_risk` field shows the final risk level after server augmentation, wh
 | `file_ops` | `{ operations: { path: string, op: 'create' \| 'modify' \| 'delete' }[] }` |
 | `custom` | `{ markdown: string }` |
 
-The `preview` field is validated as `z.record(z.string(), z.unknown())` at the Zod level — shape enforcement is loose intentionally. The server validates total payload size (max 100KB serialized) and the frontend renders what it can, falling back gracefully for missing fields.
+The `preview` field is validated as `z.record(z.string(), z.unknown())` at the Zod level — shape enforcement is loose intentionally. The server validates total simulation size (max 50KB serialized) and the frontend renders what it can, falling back gracefully for missing fields.
 
 ---
 
@@ -266,7 +296,7 @@ This augmentation only escalates risk, never reduces it. An agent that omits `re
 
 ## Approval Outcome Matrix
 
-Unchanged from the pre-simulation system. The simulation engine extends what humans see, not how authorization works.
+Unchanged from the pre-simulation system. The preview system extends what humans see, not how authorization works.
 
 | Role | Low Risk | Medium Risk | High Risk |
 |------|----------|-------------|-----------|
@@ -298,6 +328,8 @@ Members cannot submit `code_delete`, `deploy`, or `config_change` at any risk le
 │ └──────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │ 1 file(s) · auth · reversible                                    │
+│                                                                  │
+│ Agent assessment (unverified):                                   │
 │ modifies_auth  Changes authentication logic                      │
 │                                                                  │
 │ [✓ Approve] [✗ Reject]                                           │
@@ -308,18 +340,18 @@ Members cannot submit `code_delete`, `deploy`, or `config_change` at any risk le
 
 | Type | Visual |
 |------|--------|
-| `code_diff` | File header with +/- counts, diff lines with green (added) / red (removed) / muted (context) backgrounds |
+| `code_diff` | File header with +/- counts, diff lines with green (added) / red (removed) / muted (context) backgrounds. Max height 400px with scroll. |
 | `shell_preview` | "Command" header, `$ command` in monospace, "Predicted effects" bullet list |
 | `api_call` | **METHOD** URL header, request body in monospace pre block |
 | `file_ops` | "File operations" header, list of `create`/`modify`/`delete` with color-coded op labels |
 | `custom` | Raw text in monospace pre block |
-| `null` (no simulation) | No preview section — description only (backward-compatible) |
+| `null` (no preview) | No preview section — description only (backward-compatible) |
 
 ### Expand/Collapse
 
-- Pending actions with simulation data: **auto-expanded**
+- Pending actions with preview data: **auto-expanded on first render** (one-time, does not override user toggle)
 - Resolved actions (approved/rejected/expired): **collapsed by default**
-- Toggle via "Show preview" / "Hide preview" button with chevron icon in header row
+- Toggle via "Show preview" / "Hide preview" button (44px min touch target) with chevron icon in header row
 
 ### Impact Summary
 
@@ -333,7 +365,7 @@ Rendered below the preview block when `estimatedImpact` is present:
 
 ### Risk Factors
 
-Rendered below impact when `riskFactors` is present. One line per factor:
+Rendered below impact when `riskFactors` is present, with explicit "Agent assessment (unverified):" header. One line per factor:
 
 ```
 {factor}  {detail}
@@ -355,15 +387,28 @@ Factor name color-coded by severity: low = muted, medium = warning, high = dange
 | Role enforcement on approval | Leads blocked from approving high-risk; members blocked from approve/reject |
 | Append-only audit | Action, approver, timestamp, role recorded immutably |
 
-### Added for simulation
+### Added for preview system
 
 | Property | Mechanism |
 |----------|-----------|
-| Payload size limit | Server rejects simulation preview > 100KB serialized |
+| Simulation size limit | Server rejects total simulation object > 50KB serialized (under 64KB MCP transport guard) |
+| Array bounds | `services_affected` capped at 20, `risk_factors` capped at 10 |
 | Query safety cap | `allPending` query limited to 200 rows (prevents memory exhaustion from action flooding) |
-| No code execution | Simulation payload stored as JSONB, rendered as text — never evaluated or executed |
-| No XSS | All simulation content rendered via Svelte text interpolation (auto-escaped), no `{@html}` |
+| No code execution | Preview payload stored as JSONB, rendered as text — never evaluated or executed |
+| No XSS | All preview content rendered via Svelte text interpolation (auto-escaped), no `{@html}` |
 | Risk escalation only | `reversible: false` can bump risk up but nothing can reduce it below `ACTION_RISK_MAP` floor |
+| Unverified label | Agent-supplied risk factors visually distinguished from server-derived risk level |
+
+### Trust boundaries
+
+| What humans see | Source | Verified? |
+|-----------------|--------|-----------|
+| Risk level badge (HIGH/MEDIUM/LOW) | Server-derived from `ACTION_RISK_MAP` | Yes |
+| Action type | Agent-declared, server-validated enum | Yes (valid type) |
+| Description text | Agent-supplied | No |
+| Code diff / shell preview / etc. | Agent-supplied | No |
+| Risk factors | Agent-supplied | No — labeled "unverified" in UI |
+| Impact assessment | Agent-supplied | No |
 
 ---
 
@@ -377,8 +422,8 @@ Factor name color-coded by severity: low = muted, medium = warning, high = dange
 | `src/lib/types/chat.ts:17-20` | Client type: `PendingAction` with simulation fields |
 | `src/routes/api/actions/+server.ts` | API: returns simulation fields in response |
 | `src/lib/components/chat/ChatView.svelte:55-76` | Mapping: API snake_case → camelCase |
-| `src/lib/components/chat/PendingActionLine.svelte` | UI: simulation preview rendering |
-| `messages/en.json` | i18n: 11 simulation-related keys |
+| `src/lib/components/chat/PendingActionLine.svelte` | UI: preview rendering with trust labels |
+| `messages/en.json` | i18n: simulation + status keys |
 | `drizzle/0006_dashing_black_widow.sql` | Migration: ALTER TABLE for 4 new columns |
 
 ---
@@ -389,7 +434,45 @@ The simulation field is optional at every layer:
 
 - **MCP tool**: `simulation` is `z.optional()` — agents that omit it work identically to before
 - **Database**: All 4 columns are nullable — existing rows have `NULL`
-- **API**: Response includes `simulation_type: null` etc. for actions without simulation
+- **API**: Response includes `simulation_type: null` etc. for actions without preview data
 - **UI**: `PendingActionLine` only renders the preview section when `simulationType` and `simulationPayload` are non-null
 
 No breaking changes to existing agents or API consumers.
+
+---
+
+## Known Limitations
+
+1. **Single preview type per action** — Real operations are composite (build + deploy + config). Agents must choose one type or use `custom` markdown. Multi-step preview support deferred to v2.
+2. **No post-approval verification** — The server cannot verify that the agent's actual behavior matches its declared preview. The audit log records the declaration, not the execution.
+3. **Preview trust asymmetry** — Actions with previews may get faster approval than actions without. Users should apply equal scrutiny to both.
+
+---
+
+## Review Findings (2026-03-05)
+
+Six specialized agents reviewed the implementation. Findings and resolutions:
+
+### Fixed
+
+| Finding | Source | Resolution |
+|---------|--------|------------|
+| "Simulation engine" naming implies server verification | Devil's Advocate | Renamed to "action preview system" throughout docs and code comments |
+| Agent-supplied risk factors displayed with same visual authority as server risk | Devil's Advocate, Security | Added "Agent assessment (unverified):" header and distinct styling |
+| martol-client SDK has no `simulation` parameter | Devil's Advocate | Updated `tools.py` with full simulation schema |
+| 100KB payload check is dead code (64KB transport guard) | Cloudflare | Lowered to 50KB, validates full simulation object not just preview |
+| `services_affected` array has no max length | Security | Added `.max(20)` to Zod schema |
+| `$effect` auto-expand overrides user's manual collapse | Devil's Advocate, Svelte, UI/UX | Added `userToggled` guard — auto-expand is one-time only |
+| No max-height on diff blocks | Devil's Advocate, UI/UX | Added `max-height: 400px; overflow-y: auto` to `.sim-diff` |
+| Diff blank-line doubling in `<pre>` template | Svelte | Fixed template whitespace in `{#each}` loop |
+| Expand/collapse toggle has inadequate touch target | UI/UX | Added `min-h-[44px] min-w-[44px]` |
+| Status badge uses raw English | UI/UX | Added i18n keys for all status values |
+
+### Accepted risks
+
+| Finding | Source | Rationale |
+|---------|--------|-----------|
+| Risk augmentation bypass by omitting `reversible` | Security | Agents gain nothing — `ACTION_RISK_MAP` is the floor, augmentation only escalates |
+| Single simulation type per action | Devil's Advocate | Design limitation. `custom` type serves as escape hatch. Multi-step deferred to v2 |
+| Preview trust asymmetry (richer previews get faster approval) | Devil's Advocate | Mitigated by "unverified" label. Cannot fully prevent without verification system |
+| `simulationPayload` is JSONB not TEXT | Database | JSONB enables future query capabilities. Parse overhead negligible for current scale |

@@ -268,5 +268,11 @@
   "action_simulation_shell_command": "Command",
   "action_simulation_shell_effects": "Predicted effects",
   "action_simulation_api_method": "{method} {url}",
-  "action_simulation_file_ops": "File operations"
+  "action_simulation_file_ops": "File operations",
+  "action_status_pending": "pending",
+  "action_status_approved": "approved",
+  "action_status_rejected": "rejected",
+  "action_status_expired": "expired",
+  "action_status_executed": "executed",
+  "action_agent_assessment": "Agent assessment (unverified)"
 }

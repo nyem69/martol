@@ -59,7 +59,7 @@ export const actionSubmitSchema = z.object({
 			preview: z.record(z.string(), z.unknown()),
 			impact: z.object({
 				files_modified: z.number().int().nonnegative().optional(),
-				services_affected: z.array(z.string()).optional(),
+				services_affected: z.array(z.string()).max(20).optional(),
 				reversible: z.boolean().optional(),
 			}).optional(),
 			risk_factors: z.array(z.object({

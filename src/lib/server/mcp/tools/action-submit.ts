@@ -130,13 +130,14 @@ export async function actionSubmit(
 	// 4. Server-derive risk level — never trust agent's claimed value
 	let serverRisk: RiskLevel = ACTION_RISK_MAP[params.action_type];
 
-	// 4a. Validate simulation payload size (prevent memory exhaustion from oversized diffs)
-	if (params.simulation?.preview) {
-		const payloadStr = JSON.stringify(params.simulation.preview);
-		if (payloadStr.length > 100_000) {
+	// 4a. Validate total simulation size (preview + impact + risk_factors).
+	// Limit is 50KB — safely under the 64KB MCP transport guard at /mcp/v1.
+	if (params.simulation) {
+		const simulationStr = JSON.stringify(params.simulation);
+		if (simulationStr.length > 50_000) {
 			return {
 				ok: false,
-				error: 'Simulation preview payload too large (max 100KB)',
+				error: 'Simulation payload too large (max 50KB)',
 				code: 'payload_too_large'
 			};
 		}

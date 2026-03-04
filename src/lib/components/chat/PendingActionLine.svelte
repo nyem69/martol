@@ -18,14 +18,21 @@
 	} = $props();
 
 	const hasSim = $derived(!!action.simulationType && !!action.simulationPayload);
+
+	// Fix: one-time auto-expand, respects user toggle
+	let userToggled = $state(false);
 	let expanded = $state(false);
 
-	// Auto-expand pending actions with simulation data
 	$effect(() => {
-		if (action.status === 'pending' && hasSim) {
+		if (!userToggled && action.status === 'pending' && hasSim) {
 			expanded = true;
 		}
 	});
+
+	function toggleExpanded() {
+		userToggled = true;
+		expanded = !expanded;
+	}
 
 	const riskColor = $derived(
 		action.riskLevel === 'high'
@@ -45,8 +52,27 @@
 					: 'var(--warning)'
 	);
 
+	const statusLabel = $derived(
+		action.status === 'approved' ? m.action_status_approved()
+			: action.status === 'rejected' ? m.action_status_rejected()
+			: action.status === 'expired' ? m.action_status_expired()
+			: action.status === 'executed' ? m.action_status_executed()
+			: m.action_status_pending()
+	);
+
+	// Build diff lines array to avoid template whitespace issues
+	const diffLines = $derived(
+		action.simulationType === 'code_diff' && action.simulationPayload
+			? ((action.simulationPayload as { diff?: string }).diff ?? '').split('\n')
+			: []
+	);
+
 	function severityColor(severity: string): string {
 		return severity === 'high' ? 'var(--danger)' : severity === 'medium' ? 'var(--warning)' : 'var(--text-muted)';
+	}
+
+	function diffClass(line: string): string {
+		return line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-del' : 'diff-ctx';
 	}
 </script>
 
@@ -72,9 +98,9 @@
 		</span>
 		{#if hasSim}
 			<button
-				class="ml-auto flex items-center gap-1 text-[11px]"
+				class="ml-auto flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 text-[11px]"
 				style="color: var(--text-muted); font-family: var(--font-mono);"
-				onclick={() => (expanded = !expanded)}
+				onclick={toggleExpanded}
 				aria-expanded={expanded}
 				aria-label={expanded ? m.action_simulation_collapse() : m.action_simulation_expand()}
 			>
@@ -107,8 +133,8 @@
 							{#if preview.lines_added}<span style="color: var(--success);">+{preview.lines_added}</span>{/if}
 						</span>
 					</div>
-					<pre class="sim-diff">{#each (preview.diff ?? '').split('\n') as line}{@const cls = line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-del' : 'diff-ctx'}<span class={cls}>{line}</span>
-{/each}</pre>
+					<pre class="sim-diff">{#each diffLines as line}<span class={diffClass(line)}>{line}
+</span>{/each}</pre>
 				</div>
 
 			<!-- Shell preview -->
@@ -188,9 +214,12 @@
 				</div>
 			{/if}
 
-			<!-- Risk factors -->
+			<!-- Risk factors — labeled as agent-supplied, unverified -->
 			{#if action.riskFactors?.length}
-				<div class="mt-1">
+				<div class="mt-1.5">
+					<div class="mb-0.5 text-[10px] uppercase tracking-wide" style="color: var(--text-muted); font-family: var(--font-mono);">
+						{m.action_agent_assessment()}
+					</div>
 					{#each action.riskFactors as rf}
 						<div class="flex gap-1.5 text-[11px] leading-relaxed">
 							<span style="color: {severityColor(rf.severity)}; font-family: var(--font-mono); font-weight: 500;">
@@ -242,7 +271,7 @@
 				class="rounded px-2 py-0.5 text-[11px] font-medium uppercase"
 				style="background: {statusColor}; color: var(--bg); font-family: var(--font-mono);"
 			>
-				{action.status}
+				{statusLabel}
 			</span>
 		{:else}
 			<span class="text-[11px]" style="color: var(--text-muted);">
@@ -278,6 +307,8 @@
 		font-size: 12px;
 		line-height: 1.5;
 		overflow-x: auto;
+		overflow-y: auto;
+		max-height: 400px;
 		white-space: pre;
 		background: var(--bg);
 	}
