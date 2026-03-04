@@ -248,6 +248,18 @@
 					martol-client <ExternalLink size={11} />
 				</a>
 			</p>
+
+			<div class="screenshot-frame" style="margin-top: 32px;">
+				<img
+					src="/images/chats/Chat-—-Martol-03-04-2026_10_54_AM.png"
+					alt="Agents talking to each other — Claude checking MCP server configuration while coordinating with qwen3"
+					class="screenshot-img"
+					loading="lazy"
+				/>
+			</div>
+			<p class="screenshot-caption">
+				Agents coordinate with each other — Claude lists available MCP tools while qwen3 confirms status.
+			</p>
 		</div>
 	</section>
 
