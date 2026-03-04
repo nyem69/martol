@@ -179,15 +179,34 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		.limit(1);
 	if (!memberRecord) error(403, 'Not a member of this organization');
 
+	// Serve from Cloudflare edge cache if available.
+	// Caching image responses enables CSAM scanning (Caching > Configuration in dashboard).
+	// Auth is checked above — cache key includes the R2 key (org-scoped), not user identity.
+	const cache = platform?.caches?.default;
+	const cacheKey = new Request(url.toString(), { method: 'GET' });
+
+	if (cache) {
+		const cached = await cache.match(cacheKey);
+		if (cached) return cached;
+	}
+
 	const object = await r2.get(key);
 	if (!object) error(404, 'File not found');
 
-	return new Response(object.body as ReadableStream, {
+	const response = new Response(object.body as ReadableStream, {
 		headers: {
 			'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
 			'Content-Disposition': object.httpMetadata?.contentDisposition || 'attachment',
 			'X-Content-Type-Options': 'nosniff',
-			'Cache-Control': 'private, max-age=3600'
+			'Cache-Control': 'public, max-age=86400'
 		}
 	});
+
+	// Put into edge cache for CSAM scanning and performance.
+	// waitUntil keeps the worker alive for the async cache write without blocking the response.
+	if (cache) {
+		platform?.context?.waitUntil(cache.put(cacheKey, response.clone()));
+	}
+
+	return response;
 };
