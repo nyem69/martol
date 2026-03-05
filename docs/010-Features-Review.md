@@ -186,13 +186,13 @@ These exist in the codebase but aren't mentioned in `/docs`:
 
 ### P2 — Nice to have
 
-| # | Issue | Why |
+| # | Issue | Status |
 |---|---|---|
-| 13 | Add execution confirmation loop | Close the biggest architectural gap |
-| 14 | Make audit log append-only at DB level | Back up the marketing claim |
-| 15 | Add passkey setup UI | Feature is configured but unusable |
-| 16 | Operationalize viewer role | Role exists but does nothing special |
-| 17 | Document all 12 undocumented features | Users can't use what they don't know about |
+| 13 | Add execution confirmation loop | FIXED — `action_confirm` MCP tool: approved → executed transition |
+| 14 | Make audit log append-only at DB level | FIXED — DB trigger prevents UPDATE/DELETE on messages (except soft-delete) |
+| 15 | ~~Add passkey setup UI~~ | FALSE POSITIVE — passkey UI already exists in settings page |
+| 16 | Operationalize viewer role | FIXED — chat input disabled for viewers with read-only message |
+| 17 | Document all 12 undocumented features | FIXED — "Platform Features" section added to /docs |
 
 ---
 

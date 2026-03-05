@@ -77,7 +77,8 @@
 		}
 	});
 
-	const canSend = $derived(value.trim().length > 0 && !disabled);
+	const isViewer = $derived(userRole === 'viewer');
+	const canSend = $derived(value.trim().length > 0 && !disabled && !isViewer);
 
 	const typingText = $derived.by(() => {
 		if (typingNames.length === 0) return '';
@@ -459,13 +460,13 @@
 				oninput={onInput}
 				onkeydown={onKeydown}
 				onpaste={onPaste}
-				placeholder={m.chat_placeholder()}
+				placeholder={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
 				rows="1"
-				{disabled}
+				disabled={disabled || isViewer}
 				data-testid="chat-input"
-				aria-label={m.chat_placeholder()}
+				aria-label={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
 				class="flex-1 resize-none border-0 bg-transparent leading-relaxed outline-none"
-				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;"
+				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;{isViewer ? ' opacity: 0.5;' : ''}"
 			></textarea>
 			<button
 				onclick={send}

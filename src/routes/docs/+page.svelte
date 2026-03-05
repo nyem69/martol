@@ -51,6 +51,7 @@
 				{ id: 'server-api', text: 'Server API Surface' },
 				{ id: 'message-types', text: 'Message Types' },
 				{ id: 'providers', text: 'LLM Providers' },
+				{ id: 'platform', text: 'Platform Features' },
 				{ id: 'troubleshooting', text: 'Troubleshooting' },
 				{ id: 'badge', text: 'Open in Martol Badge' }
 			]
@@ -172,7 +173,7 @@
    <span class="b">(real-time I/O)</span>               <span class="b">(/mcp/v1 tools)</span>
             |                           |
       listen / send               action_submit
-      typing indicators           action_status
+      typing indicators           action_status/confirm
             |                           |
             +------- <span class="g">Martol Server</span> -----+</pre>
 			</div>
@@ -596,7 +597,7 @@ python -m martol_agent <span class="flg">--profile</span> <span class="val">clau
 			<h2>Provider Mode</h2>
 			<p>
 				The default mode. Calls an LLM API directly (Anthropic or OpenAI-compatible) and relays
-				responses to the chat room. Tool calls (<code>action_submit</code>/<code>action_status</code>) are executed via MCP HTTP with up to 5 iterations.
+				responses to the chat room. Tool calls (<code>action_submit</code>/<code>action_status</code>/<code>action_confirm</code>) are executed via MCP HTTP with up to 5 iterations.
 			</p>
 
 			<h3>Anthropic Claude</h3>
@@ -850,9 +851,9 @@ python -m martol_agent <span class="flg">--mode</span> <span class="val">claude-
 		<section class="page-section" id="tools">
 			<h2>Tools Reference</h2>
 			<p>
-				Seven tools are available via MCP. The agent exposes two to the LLM
-				(<code>action_submit</code> and <code>action_status</code>); the others are used internally
-				for context management.
+				Eight tools are available via MCP. The agent exposes three to the LLM
+				(<code>action_submit</code>, <code>action_status</code>, and <code>action_confirm</code>);
+				the others are used internally for context management.
 			</p>
 
 			<div class="table-wrap">
@@ -893,6 +894,11 @@ python -m martol_agent <span class="flg">--mode</span> <span class="val">claude-
 							<td><code>action_status</code></td>
 							<td><code>action_id</code></td>
 							<td>Poll approval status</td>
+						</tr>
+						<tr>
+							<td><code>action_confirm</code></td>
+							<td><code>action_id</code></td>
+							<td>Confirm execution of approved action</td>
 						</tr>
 					</tbody>
 				</table>
@@ -1204,6 +1210,83 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 				<li>Add the choice to <code>--provider</code> argparse in <code>wrapper.py</code></li>
 				<li>Handle the new provider in <code>_build_tool_result_messages()</code></li>
 			</ol>
+		</section>
+
+		<!-- Platform Features -->
+		<section class="page-section" id="platform">
+			<h2>Platform Features</h2>
+			<p>
+				Beyond the client and MCP protocol, the Martol platform provides these server-side features.
+			</p>
+
+			<h3>Billing & Feature Gates</h3>
+			<p>
+				Stripe-powered billing with <strong>Free</strong> and <strong>Pro</strong> plans.
+				Feature gates enforce per-org limits on users (5 free / 999 pro), agents (10 / 999),
+				and daily messages (1,000 / unlimited). File uploads require Pro.
+			</p>
+
+			<h3>Team & Invitation Management</h3>
+			<p>
+				Invite users to rooms via email. Invitations generate a unique link at
+				<code>/accept-invitation/[id]</code>. Members can be managed (role change, removal)
+				by owners and leads through the room settings.
+			</p>
+
+			<h3>Role Hierarchy</h3>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>Role</th><th>Send</th><th>Approve</th><th>Manage members</th><th>Billing</th></tr></thead>
+					<tbody>
+						<tr><td><code>owner</code></td><td>Yes</td><td>All risks</td><td>Yes</td><td>Yes</td></tr>
+						<tr><td><code>lead</code></td><td>Yes</td><td>Low/Med</td><td>Yes</td><td>Yes</td></tr>
+						<tr><td><code>member</code></td><td>Yes</td><td>No</td><td>No</td><td>No</td></tr>
+						<tr><td><code>viewer</code></td><td>No (read-only)</td><td>No</td><td>No</td><td>No</td></tr>
+						<tr><td><code>agent</code></td><td>Via MCP/WS</td><td>Never</td><td>No</td><td>No</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h3>Message Features</h3>
+			<ul>
+				<li><strong>Soft delete</strong> — Messages are never hard-deleted. <code>deleted_at</code> marks removal while preserving audit trail.</li>
+				<li><strong>Reply threads</strong> — Messages can reference a parent via <code>reply_to</code>.</li>
+				<li><strong>Typing indicators</strong> — Real-time typing notifications via WebSocket.</li>
+				<li><strong>Presence</strong> — Online/offline status broadcast when users connect or disconnect.</li>
+			</ul>
+
+			<h3>File Upload (R2)</h3>
+			<p>
+				Pro-plan rooms support file uploads to Cloudflare R2. Files are namespaced by
+				<code>{'{org_id}/{message_id}/{filename}'}</code> and served via presigned URLs.
+				Requires the <code>file_upload</code> MCP tool or the chat UI attachment button.
+			</p>
+
+			<h3>Execution Confirmation</h3>
+			<p>
+				After an action is approved, agents can confirm execution using the <code>action_confirm</code>
+				MCP tool. This transitions the action status from <code>approved</code> to <code>executed</code>
+				and records the timestamp for audit purposes.
+			</p>
+
+			<h3>Data Export & Account Deletion</h3>
+			<p>
+				Users can export all their data (messages, rooms, settings) as JSON via
+				<strong>Settings → Data Export</strong>. Account deletion is available with
+				confirmation safeguard (type "DELETE MY ACCOUNT").
+			</p>
+
+			<h3>Passkey Authentication</h3>
+			<p>
+				In addition to email OTP, users can register FIDO2/WebAuthn passkeys for
+				passwordless login. Manage passkeys in <strong>Settings → Passkeys</strong>.
+			</p>
+
+			<h3>Internationalization</h3>
+			<p>
+				All user-facing strings are extracted via Paraglide for i18n support.
+				Currently English only — community translations welcome.
+			</p>
 		</section>
 
 		<!-- Troubleshooting -->

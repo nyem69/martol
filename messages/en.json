@@ -25,6 +25,7 @@
   "chat_reconnecting": "Reconnecting (attempt {attempt})...",
   "chat_send": "Send",
   "chat_placeholder": "Type a message...",
+  "chat_viewer_readonly": "You have view-only access to this room",
   "chat_typing_one": "{name} is typing...",
   "chat_typing_two": "{name1} and {name2} are typing...",
   "chat_typing_many": "{count} people are typing...",

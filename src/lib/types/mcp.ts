@@ -78,6 +78,13 @@ export const actionStatusSchema = z.object({
 	}),
 });
 
+export const actionConfirmSchema = z.object({
+	tool: z.literal('action_confirm'),
+	params: z.object({
+		action_id: z.number().int().positive(),
+	}),
+});
+
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatSendSchema,
 	chatReadSchema,
@@ -86,6 +93,7 @@ export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatWhoSchema,
 	actionSubmitSchema,
 	actionStatusSchema,
+	actionConfirmSchema,
 ]);
 
 export type McpRequest = z.infer<typeof mcpRequestSchema>;
