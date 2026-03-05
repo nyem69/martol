@@ -34,8 +34,8 @@ pnpm check            # TypeScript check
 # Database
 pnpm db:generate      # Generate Drizzle migrations
 pnpm db:migrate       # Run migrations
-pnpm db:push          # Push schema directly (dev)
 pnpm db:studio        # Drizzle Studio GUI
+# IMPORTANT: Always use db:generate + db:migrate for schema changes. Never use db:push.
 
 # Cloudflare
 pnpm cf:dev           # Local Cloudflare Workers dev

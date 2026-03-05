@@ -11,10 +11,11 @@ import {
 	organizationClient,
 	twoFactorClient
 } from 'better-auth/client/plugins';
+import { passkeyClient } from '@better-auth/passkey/client';
 
 export const authClient = createAuthClient({
 	baseURL: typeof window !== 'undefined' ? window.location.origin : '',
-	plugins: [emailOTPClient(), organizationClient(), twoFactorClient()]
+	plugins: [emailOTPClient(), organizationClient(), twoFactorClient(), passkeyClient()]
 });
 
-export const { signIn, signOut, useSession, emailOtp, twoFactor, organization } = authClient;
+export const { signIn, signOut, useSession, emailOtp, twoFactor, organization, passkey } = authClient;

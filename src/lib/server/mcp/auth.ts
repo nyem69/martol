@@ -52,7 +52,7 @@ export async function authenticateAgent(
 		};
 	}
 
-	const agentUserId = keyData.key?.userId;
+	const agentUserId = keyData.key?.referenceId;
 	if (!agentUserId) {
 		return {
 			ok: false,

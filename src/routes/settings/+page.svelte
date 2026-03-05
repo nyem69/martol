@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare } from '@lucide/svelte';
-	import { signOut } from '$lib/auth-client';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint } from '@lucide/svelte';
+	import { signOut, passkey } from '$lib/auth-client';
 
 	let { data } = $props();
 
@@ -241,6 +241,83 @@
 			errorMsg = m.error_generic();
 		}
 		deleting = false;
+	}
+
+	// ── Passkeys state ──
+	interface PasskeyEntry {
+		id: string;
+		name: string | null;
+		createdAt: string | null;
+	}
+	let passkeys = $state<PasskeyEntry[]>([]);
+	let passkeysLoading = $state(true);
+	let passkeyName = $state('');
+	let registering = $state(false);
+	let passkeyMsg = $state('');
+	let passkeyError = $state('');
+	let deletingPasskeyId = $state<string | null>(null);
+
+	async function loadPasskeys() {
+		passkeysLoading = true;
+		try {
+			const res = await fetch('/api/auth/passkey/list-user-passkeys');
+			if (res.ok) {
+				const data: any[] = await res.json();
+				passkeys = data.map((pk: any) => ({
+					id: pk.id,
+					name: pk.name,
+					createdAt: pk.createdAt ? new Date(pk.createdAt).toLocaleDateString() : null
+				}));
+			}
+		} catch { /* ignore */ }
+		passkeysLoading = false;
+	}
+
+	$effect(() => { loadPasskeys(); });
+
+	async function handleRegisterPasskey() {
+		if (registering) return;
+		registering = true;
+		passkeyMsg = '';
+		passkeyError = '';
+		try {
+			const res = await passkey.addPasskey({ name: passkeyName.trim() || undefined });
+			if (res.error) {
+				passkeyError = res.error.message || m.error_generic();
+			} else {
+				passkeyName = '';
+				passkeyMsg = m.passkey_added();
+				setTimeout(() => (passkeyMsg = ''), 4000);
+				await loadPasskeys();
+			}
+		} catch {
+			passkeyError = m.error_generic();
+		}
+		registering = false;
+	}
+
+	async function handleDeletePasskey(id: string) {
+		deletingPasskeyId = id;
+		passkeyMsg = '';
+		passkeyError = '';
+		try {
+			const res = await fetch('/api/auth/passkey/delete-passkey', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id })
+			});
+			if (!res.ok) {
+				const data: any = await res.json().catch(() => ({}));
+				passkeyError = data?.message || m.error_generic();
+			} else {
+				passkeys = passkeys.filter((pk) => pk.id !== id);
+				passkeyMsg = m.passkey_removed();
+				setTimeout(() => (passkeyMsg = ''), 4000);
+			}
+		} catch {
+			passkeyError = m.error_generic();
+		}
+		deletingPasskeyId = null;
 	}
 
 	// Format member since date
@@ -497,6 +574,116 @@
 					{/each}
 				</div>
 			{/if}
+		</section>
+
+		<!-- ═══ PASSKEYS SECTION ═══ -->
+		<section
+			class="mb-6 rounded-lg p-5"
+			style="background: var(--bg-surface); border: 1px solid var(--border);"
+		>
+			<div class="mb-4 flex items-center gap-2">
+				<Fingerprint size={16} style="color: var(--accent);" />
+				<h2
+					class="text-sm font-bold uppercase tracking-wider"
+					style="color: var(--text); font-family: var(--font-mono);"
+				>
+					{m.passkey_title()}
+				</h2>
+			</div>
+
+			{#if passkeysLoading}
+				<div class="flex items-center gap-2 text-xs" style="color: var(--text-muted);">
+					<Loader size={14} class="animate-spin" />
+					{m.settings_sessions_loading()}
+				</div>
+			{:else if passkeys.length === 0}
+				<p class="mb-3 text-xs" style="color: var(--text-muted);">
+					{m.passkey_empty()}
+				</p>
+			{:else}
+				<div class="mb-3 space-y-2">
+					{#each passkeys as pk (pk.id)}
+						<div
+							class="flex items-center justify-between rounded-md px-3 py-2"
+							style="background: var(--bg); border: 1px solid var(--border);"
+						>
+							<div>
+								<div class="text-sm" style="color: var(--text); font-family: var(--font-mono);">
+									{pk.name || 'Passkey'}
+								</div>
+								{#if pk.createdAt}
+									<div class="mt-0.5 text-[11px]" style="color: var(--text-muted);">
+										{pk.createdAt}
+									</div>
+								{/if}
+							</div>
+							<button
+								onclick={() => handleDeletePasskey(pk.id)}
+								disabled={deletingPasskeyId === pk.id}
+								data-testid="delete-passkey-{pk.id}"
+								class="rounded px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+								style="background: color-mix(in oklch, var(--danger) 12%, transparent); color: var(--danger); font-family: var(--font-mono);"
+								title={m.passkey_delete()}
+							>
+								{#if deletingPasskeyId === pk.id}
+									<Loader size={12} class="animate-spin" />
+								{:else}
+									{m.passkey_delete()}
+								{/if}
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			{#if passkeyError}
+				<div
+					class="mb-3 rounded-md px-3 py-2 text-xs"
+					style="background: color-mix(in oklch, var(--danger) 10%, transparent); color: var(--danger);"
+					role="alert"
+				>
+					{passkeyError}
+				</div>
+			{/if}
+
+			{#if passkeyMsg}
+				<div
+					class="mb-3 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
+					style="background: color-mix(in oklch, var(--success) 10%, transparent); color: var(--success);"
+					role="status"
+				>
+					<Check size={14} />
+					{passkeyMsg}
+				</div>
+			{/if}
+
+			<!-- Register new passkey -->
+			<div class="flex items-center gap-2">
+				<input
+					type="text"
+					bind:value={passkeyName}
+					placeholder={m.passkey_name_placeholder()}
+					disabled={registering}
+					data-testid="passkey-name-input"
+					class="flex-1 rounded-md px-3 py-2.5 text-sm outline-none"
+					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+				/>
+				<button
+					onclick={handleRegisterPasskey}
+					disabled={registering}
+					data-testid="register-passkey-btn"
+					class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+					style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
+				>
+					{#if registering}
+						<Loader size={14} class="animate-spin" />
+						{m.passkey_registering()}
+					{:else}
+						<Fingerprint size={14} />
+						{m.passkey_register()}
+					{/if}
+				</button>
+			</div>
 		</section>
 
 		<!-- ═══ DATA EXPORT SECTION ═══ -->

@@ -186,7 +186,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		})
 		.from(member)
 		.innerJoin(user, eq(user.id, member.userId))
-		.leftJoin(apikey, eq(apikey.userId, member.userId))
+		.leftJoin(apikey, eq(apikey.referenceId, member.userId))
 		.where(and(eq(member.organizationId, orgId), eq(member.role, 'agent')))
 		.orderBy(member.createdAt);
 

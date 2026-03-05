@@ -66,7 +66,7 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 	const keys = await locals.db
 		.select({ id: apikey.id })
 		.from(apikey)
-		.where(eq(apikey.userId, agentUserId));
+		.where(eq(apikey.referenceId, agentUserId));
 
 	const kv = platform?.env?.CACHE;
 	for (const key of keys) {
@@ -81,7 +81,7 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 
 	// Transactional cleanup: delete all related records atomically
 	await locals.db.transaction(async (tx: typeof locals.db) => {
-		await tx.delete(apikey).where(eq(apikey.userId, agentUserId));
+		await tx.delete(apikey).where(eq(apikey.referenceId, agentUserId));
 		await tx.delete(member).where(
 			and(eq(member.userId, agentUserId), eq(member.organizationId, orgId))
 		);

@@ -139,6 +139,38 @@ export const load: PageServerLoad = async (event) => {
 		.innerJoin(organization, eq(organization.id, member.organizationId))
 		.where(eq(member.userId, locals.user.id));
 
+	// Load unread counts for all rooms
+	const unreadCounts = new Map<string, number>();
+	if (userRooms.length > 0) {
+		const roomIds = userRooms.map((r: typeof userRooms[number]) => r.id);
+		const counts = await db
+			.select({
+				orgId: readCursors.orgId,
+				lastReadId: readCursors.lastReadMessageId
+			})
+			.from(readCursors)
+			.where(
+				and(eq(readCursors.userId, locals.user.id), inArray(readCursors.orgId, roomIds))
+			);
+
+		const cursorMap = new Map(counts.map((c: typeof counts[number]) => [c.orgId, c.lastReadId]));
+
+		for (const room of userRooms) {
+			const lastRead = cursorMap.get(room.id) ?? 0;
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(messagesTable)
+				.where(
+					and(
+						eq(messagesTable.orgId, room.id),
+						isNull(messagesTable.deletedAt),
+						sql`${messagesTable.id} > ${lastRead}`
+					)
+				);
+			if (count > 0) unreadCounts.set(room.id, count);
+		}
+	}
+
 	// Load recent messages from PostgreSQL as fallback history
 	const recentMessages = await db
 		.select({
@@ -261,7 +293,10 @@ export const load: PageServerLoad = async (event) => {
 		userName: locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`,
 		userRole,
 		roomName: org?.name || 'Chat',
-		userRooms,
+		userRooms: userRooms.map((r: typeof userRooms[number]) => ({
+			...r,
+			unreadCount: unreadCounts.get(r.id) ?? 0
+		})),
 		roomInvitations: filteredInvitations,
 		initialMessages,
 		hasAgents,

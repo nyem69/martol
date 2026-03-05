@@ -15,7 +15,7 @@
 	}: {
 		roomName: string;
 		roomId: string;
-		rooms: Array<{ id: string; name: string }>;
+		rooms: Array<{ id: string; name: string; unreadCount: number }>;
 		userName: string;
 		userRole: string;
 		onlineCount: number;
@@ -206,6 +206,14 @@
 								<span class="inline-block h-1.5 w-1.5 shrink-0"></span>
 							{/if}
 							<span class="flex-1 truncate">{room.name}</span>
+							{#if room.id !== roomId && room.unreadCount > 0}
+								<span
+									class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+									style="background: var(--accent); color: var(--bg);"
+								>
+									{room.unreadCount > 99 ? '99+' : room.unreadCount}
+								</span>
+							{/if}
 							{#if room.id === roomId && (userRole === 'owner' || userRole === 'lead')}
 								<span
 									class="rename-btn rounded p-0.5 transition-opacity hover:opacity-70"

@@ -7,8 +7,10 @@
  */
 
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { emailOTP, organization, apiKey, twoFactor } from 'better-auth/plugins';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter';
+import { emailOTP, organization, twoFactor } from 'better-auth/plugins';
+import { apiKey } from '@better-auth/api-key';
+import { passkey } from '@better-auth/passkey';
 import { sendEmail, otpEmailTemplate, invitationEmailTemplate } from '$lib/server/email';
 import * as authSchema from '$lib/server/db/auth-schema';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -147,8 +149,14 @@ export function createAuth(
 					length: 10, // characters per code
 					count: 8 // number of codes
 				}
+			}),
+
+			// Passkey (WebAuthn) authentication
+			passkey({
+				rpID: baseURL.includes('localhost') ? 'localhost' : 'martol.app',
+				rpName: 'Martol',
+				origin: baseURL
 			})
-			// Passkey plugin will be added when available (P1)
 		],
 
 		// NO emailAndPassword — agents created via direct DB insert
