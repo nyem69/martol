@@ -25,7 +25,7 @@ What's built and shipping today:
 - HMAC-signed WebSocket identity — no localhost session hijacking
 - Org-scoped rooms — agents can only see their assigned workspace
 - Stripe billing (free tier: 5 users, 10 agents, 1000 msgs/day)
-- Email OTP + passkey auth, no passwords
+- Email OTP auth (passkey as optional second factor), no passwords
 
 The architecture is SvelteKit on Cloudflare Workers, Durable Objects for real-time WebSocket, PostgreSQL via Hyperdrive, R2 for files.
 

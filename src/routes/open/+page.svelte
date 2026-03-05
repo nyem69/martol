@@ -1,28 +1,52 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { goto } from '$app/navigation';
-	import { Check, Copy, AlertTriangle } from '@lucide/svelte';
+	import { Check, Copy, AlertTriangle, Loader } from '@lucide/svelte';
 
 	let { data } = $props();
 	let copied = $state(false);
+	let copiedCli = $state(false);
+	let copiedMcp = $state(false);
 
-	async function copyKey() {
-		if ('agentKey' in data && data.agentKey) {
-			try {
-				await navigator.clipboard.writeText(data.agentKey);
-				copied = true;
-				setTimeout(() => (copied = false), 2000);
-			} catch {
-				// Fallback: select the key text for manual copy
-				const el = document.querySelector('[data-testid="agent-key"]');
-				if (el) {
-					const range = document.createRange();
-					range.selectNode(el);
-					window.getSelection()?.removeAllRanges();
-					window.getSelection()?.addRange(range);
-				}
+	async function copyText(text: string, setter: (v: boolean) => void) {
+		try {
+			await navigator.clipboard.writeText(text);
+			setter(true);
+			setTimeout(() => setter(false), 2000);
+		} catch {
+			// Fallback: select text for manual copy
+			const el = document.activeElement as HTMLElement | null;
+			const pre = el?.closest('.snippet-wrap')?.querySelector('pre, code');
+			if (pre) {
+				const range = document.createRange();
+				range.selectNode(pre);
+				window.getSelection()?.removeAllRanges();
+				window.getSelection()?.addRange(range);
 			}
 		}
+	}
+
+	function copyKey() {
+		if ('agentKey' in data && data.agentKey) {
+			copyText(data.agentKey, (v) => (copied = v));
+		}
+	}
+
+	function cliSnippet() {
+		if (!('agentKey' in data)) return '';
+		return `martol-client --key ${data.agentKey} --mcp-url https://martol.plitix.com/mcp/v1`;
+	}
+
+	function mcpSnippet() {
+		if (!('agentKey' in data)) return '';
+		return JSON.stringify({
+			mcpServers: {
+				martol: {
+					url: 'https://martol.plitix.com/mcp/v1',
+					headers: { 'x-api-key': data.agentKey }
+				}
+			}
+		}, null, 2);
 	}
 </script>
 
@@ -97,7 +121,7 @@
 						{m.open_key_warning()}
 					</p>
 				</div>
-				<div class="flex items-center gap-2">
+				<div class="snippet-wrap flex items-center gap-2">
 					<code
 						class="flex-1 overflow-x-auto rounded px-3 py-2 text-xs"
 						style="background: var(--bg-surface); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
@@ -110,11 +134,12 @@
 						onclick={copyKey}
 						class="flex items-center gap-1 rounded px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
 						style="background: var(--accent); color: var(--bg); font-family: var(--font-mono);"
+						aria-label={copied ? m.open_copied() : m.open_copy_key()}
 						data-testid="copy-key-btn"
 					>
 						{#if copied}
 							<Check size={12} />
-							{m.open_copied()}
+							<span aria-live="polite">{m.open_copied()}</span>
 						{:else}
 							<Copy size={12} />
 							{m.open_copy_key()}
@@ -123,46 +148,74 @@
 				</div>
 			</div>
 
-			<!-- Connection snippets -->
+			<!-- CLI snippet -->
 			<div
-				class="mb-4 rounded-lg p-4"
+				class="snippet-wrap mb-4 rounded-lg p-4"
 				style="background: var(--bg); border: 1px solid var(--border);"
 			>
-				<p
-					class="mb-2 text-[10px] font-bold uppercase tracking-wider"
-					style="color: var(--text-muted); font-family: var(--font-mono);"
-				>
-					{m.open_cli_title()}
-				</p>
+				<div class="mb-2 flex items-center justify-between">
+					<p
+						class="text-[10px] font-bold uppercase tracking-wider"
+						style="color: var(--text-muted); font-family: var(--font-mono);"
+					>
+						{m.open_cli_title()}
+					</p>
+					<button
+						type="button"
+						onclick={() => copyText(cliSnippet(), (v) => (copiedCli = v))}
+						class="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold transition-opacity hover:opacity-80"
+						style="color: var(--text-muted); border: 1px solid var(--border);"
+						aria-label={copiedCli ? m.open_copied() : 'Copy CLI command'}
+						data-testid="copy-cli-btn"
+					>
+						{#if copiedCli}
+							<Check size={10} />
+							<span aria-live="polite">{m.open_copied()}</span>
+						{:else}
+							<Copy size={10} />
+							{m.open_copy_key()}
+						{/if}
+					</button>
+				</div>
 				<pre
 					class="overflow-x-auto rounded p-3 text-xs leading-relaxed"
 					style="background: var(--bg-surface); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
->martol-client --key {data.agentKey} --mcp-url https://martol.plitix.com/mcp/v1</pre>
+>{cliSnippet()}</pre>
 			</div>
 
+			<!-- MCP config snippet -->
 			<div
-				class="mb-6 rounded-lg p-4"
+				class="snippet-wrap mb-6 rounded-lg p-4"
 				style="background: var(--bg); border: 1px solid var(--border);"
 			>
-				<p
-					class="mb-2 text-[10px] font-bold uppercase tracking-wider"
-					style="color: var(--text-muted); font-family: var(--font-mono);"
-				>
-					{m.open_mcp_title()}
-				</p>
+				<div class="mb-2 flex items-center justify-between">
+					<p
+						class="text-[10px] font-bold uppercase tracking-wider"
+						style="color: var(--text-muted); font-family: var(--font-mono);"
+					>
+						{m.open_mcp_title()}
+					</p>
+					<button
+						type="button"
+						onclick={() => copyText(mcpSnippet(), (v) => (copiedMcp = v))}
+						class="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold transition-opacity hover:opacity-80"
+						style="color: var(--text-muted); border: 1px solid var(--border);"
+						aria-label={copiedMcp ? m.open_copied() : 'Copy MCP config'}
+						data-testid="copy-mcp-btn"
+					>
+						{#if copiedMcp}
+							<Check size={10} />
+							<span aria-live="polite">{m.open_copied()}</span>
+						{:else}
+							<Copy size={10} />
+							{m.open_copy_key()}
+						{/if}
+					</button>
+				</div>
 				<pre
 					class="overflow-x-auto rounded p-3 text-xs leading-relaxed"
 					style="background: var(--bg-surface); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
->{JSON.stringify({
-  "mcpServers": {
-    "martol": {
-      "url": "https://martol.plitix.com/mcp/v1",
-      "headers": {
-        "x-api-key": data.agentKey
-      }
-    }
-  }
-}, null, 2)}</pre>
+>{mcpSnippet()}</pre>
 			</div>
 
 			<!-- Go to chat -->
@@ -175,6 +228,14 @@
 			>
 				{m.open_go_to_chat()}
 			</button>
+		{:else}
+			<!-- Loading / unexpected state -->
+			<div class="flex items-center justify-center gap-2 py-8">
+				<Loader size={16} class="animate-spin" style="color: var(--text-muted);" />
+				<p class="text-sm" style="color: var(--text-muted); font-family: var(--font-mono);">
+					{m.open_creating()}
+				</p>
+			</div>
 		{/if}
 	</div>
 </div>
