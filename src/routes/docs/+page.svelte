@@ -104,11 +104,11 @@
 				<Menu size={18} />
 			{/if}
 		</button>
-		<div class="header-brand">
+		<a href="/" class="header-brand">
 			<span class="logo-mark">m</span>
 			<span class="header-title">martol-client</span>
 			<span class="version-badge">v1.0</span>
-		</div>
+		</a>
 		<a
 			class="gh-link"
 			href="https://github.com/nyem69/martol-client"
@@ -1354,6 +1354,7 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 		display: flex;
 		align-items: center;
 		gap: 10px;
+		text-decoration: none;
 	}
 
 	.logo-mark {
