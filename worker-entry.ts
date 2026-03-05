@@ -141,6 +141,21 @@ export default {
 		// When defined, add a cron job to soft-delete messages older than the retention period
 		// and clean up associated R2 objects.
 
+		// Purge IP addresses and user agents older than 90 days from audit tables (ME-19)
+		try {
+			const { accountAudit, termsAcceptances } = await import('./src/lib/server/db/schema');
+			const ipCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+			await db.update(accountAudit)
+				.set({ ipAddress: null, userAgent: null })
+				.where(lt(accountAudit.createdAt, ipCutoff));
+			await db.update(termsAcceptances)
+				.set({ ipAddress: null, userAgent: null })
+				.where(lt(termsAcceptances.acceptedAt, ipCutoff));
+			console.log('[Cron] Purged IP/UA data older than 90 days');
+		} catch (err) {
+			console.error('[Cron] IP/UA purge failed:', err);
+		}
+
 		try { await client.end(); } catch { /* already closed */ }
 	}
 };
