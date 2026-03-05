@@ -407,17 +407,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (pathname === '/mcp/v1' && event.request.method === 'POST') {
 		const apiKey = event.request.headers.get('x-api-key');
 		const kv: KVNamespace | undefined = platform?.env?.CACHE;
-		if (apiKey && kv) {
-			const mcpLimit = await checkRateLimit(kv, {
-				key: `mcp:${apiKey.slice(-8)}`,
-				maxRequests: 60,
-				windowSeconds: 60
-			});
-			if (!mcpLimit.allowed) {
-				return new Response(JSON.stringify({ ok: false, error: 'Rate limited' }), {
-					status: 429,
-					headers: { 'Content-Type': 'application/json' }
+		if (apiKey) {
+			if (!kv && hasHyperdrive) {
+				console.warn('[MCP] CACHE KV binding missing — rate limiting disabled');
+			}
+			if (kv) {
+				const mcpLimit = await checkRateLimit(kv, {
+					key: `mcp:${apiKey.slice(-8)}`,
+					maxRequests: 60,
+					windowSeconds: 60
 				});
+				if (!mcpLimit.allowed) {
+					return new Response(JSON.stringify({ ok: false, error: 'Rate limited' }), {
+						status: 429,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
 			}
 		}
 	}
