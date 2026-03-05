@@ -248,7 +248,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		}
 		if (members.length > 0) {
-			this.safeSend(server, { type: 'roster', members });
+			await this.safeSend(server, { type: 'roster', members });
 		}
 
 		// [M5] Wrap delta sync in try/catch to prevent zombie sockets on failure
@@ -276,7 +276,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		try {
 			msg = JSON.parse(rawMessage);
 		} catch {
-			this.sendError(ws, 'invalid_message', 'Invalid JSON');
+			await this.sendError(ws, 'invalid_message', 'Invalid JSON');
 			return;
 		}
 
@@ -294,7 +294,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.handleCommand(ws, msg.name, msg.args);
 				break;
 			default:
-				this.sendError(ws, 'invalid_message', 'Unknown message type');
+				await this.sendError(ws, 'invalid_message', 'Unknown message type');
 		}
 	}
 
@@ -376,17 +376,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const orgId = this.extractTag(tags, 'org:');
 
 		if (!userId || !role) {
-			this.sendError(ws, 'unauthorized', 'Missing user identity');
+			await this.sendError(ws, 'unauthorized', 'Missing user identity');
 			return;
 		}
 
 		if (role === 'viewer') {
-			this.sendError(ws, 'unauthorized', 'Viewers cannot send messages');
+			await this.sendError(ws, 'unauthorized', 'Viewers cannot send messages');
 			return;
 		}
 
 		if (this.degraded) {
-			this.sendError(ws, 'degraded', 'Room is in degraded mode — messages paused');
+			await this.sendError(ws, 'degraded', 'Room is in degraded mode — messages paused');
 			return;
 		}
 
@@ -397,7 +397,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			msg.localId.length > MAX_LOCAL_ID_LENGTH ||
 			!LOCAL_ID_RE.test(msg.localId)
 		) {
-			this.sendError(
+			await this.sendError(
 				ws,
 				'invalid_message',
 				'Invalid localId (max 64 chars, alphanumeric/-/_)'
@@ -408,19 +408,19 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// Validate replyTo (untyped from JSON.parse — could be any type)
 		if (msg.replyTo !== undefined && msg.replyTo !== null) {
 			if (typeof msg.replyTo !== 'number' || !Number.isInteger(msg.replyTo) || msg.replyTo <= 0) {
-				this.sendError(ws, 'invalid_message', 'Invalid replyTo (must be a positive integer)');
+				await this.sendError(ws, 'invalid_message', 'Invalid replyTo (must be a positive integer)');
 				return;
 			}
 		}
 
 		if (!msg.body || typeof msg.body !== 'string') {
-			this.sendError(ws, 'invalid_message', 'Message body required');
+			await this.sendError(ws, 'invalid_message', 'Message body required');
 			return;
 		}
 
 		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
-			this.sendError(
+			await this.sendError(
 				ws,
 				'invalid_message',
 				`Message too large (max ${MAX_BODY_SIZE / 1024}KB)`
@@ -430,7 +430,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 		// [H1] Per-user rate limiting
 		if (this.isRateLimited(userId)) {
-			this.sendError(ws, 'rate_limited', 'Too many messages — slow down');
+			await this.sendError(ws, 'rate_limited', 'Too many messages — slow down');
 			return;
 		}
 
@@ -438,7 +438,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			this.walMessageCount >= MAX_WAL_MESSAGES ||
 			this.walByteSize + bodyBytes > MAX_WAL_BYTES
 		) {
-			this.sendError(ws, 'room_full', 'Room buffer full — try again shortly');
+			await this.sendError(ws, 'room_full', 'Room buffer full — try again shortly');
 			return;
 		}
 
@@ -780,7 +780,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		}
 
-		this.safeSend(ws, { type: 'history', messages: history });
+		await this.safeSend(ws, { type: 'history', messages: history });
 	}
 
 	// ── Typing ────────────────────────────────────────────────────────
@@ -865,11 +865,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	private async handleCommand(ws: WebSocket, name: string, args: string): Promise<void> {
 		// Validate command name and args
 		if (typeof name !== 'string' || name.length === 0 || name.length > 32 || !/^[a-z]+$/.test(name)) {
-			this.sendError(ws, 'invalid_message', 'Invalid command name');
+			await this.sendError(ws, 'invalid_message', 'Invalid command name');
 			return;
 		}
 		if (typeof args !== 'string' || args.length > 512) {
-			this.sendError(ws, 'invalid_message', 'Command args too long (max 512 chars)');
+			await this.sendError(ws, 'invalid_message', 'Command args too long (max 512 chars)');
 			return;
 		}
 
@@ -880,14 +880,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const orgId = this.extractTag(tags, 'org:');
 
 		if (!userId || !role) {
-			this.sendError(ws, 'unauthorized', 'Missing user identity');
+			await this.sendError(ws, 'unauthorized', 'Missing user identity');
 			return;
 		}
 
 		switch (name) {
 			case 'clear':
 				if (role !== 'owner') {
-					this.sendError(ws, 'unauthorized', 'Only owner can clear messages');
+					await this.sendError(ws, 'unauthorized', 'Only owner can clear messages');
 					return;
 				}
 				await this.handleClearRoom(orgId, userName);
@@ -896,12 +896,12 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			case 'approve':
 			case 'reject': {
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', `Only owner or lead can ${name} actions`);
+					await this.sendError(ws, 'unauthorized', `Only owner or lead can ${name} actions`);
 					return;
 				}
 				const actionId = parseInt(args.trim(), 10);
 				if (isNaN(actionId) || actionId <= 0) {
-					this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
+					await this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
 					return;
 				}
 				await this.handleActionApproval(ws, orgId, userId, role, actionId, name);
@@ -910,7 +910,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 			case 'actions': {
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', 'Only owner or lead can list actions');
+					await this.sendError(ws, 'unauthorized', 'Only owner or lead can list actions');
 					return;
 				}
 				await this.handleListActions(ws, orgId);
@@ -919,7 +919,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 			case 'continue':
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', 'Only owner or lead can resume');
+					await this.sendError(ws, 'unauthorized', 'Only owner or lead can resume');
 					return;
 				}
 				// Loop guard resume — broadcast a system message
@@ -940,12 +940,12 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			case 'whois': {
 				// Restrict to owner/lead — members don't need to resolve user details
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', 'Only owner or lead can use /whois');
+					await this.sendError(ws, 'unauthorized', 'Only owner or lead can use /whois');
 					return;
 				}
 				const target = args.trim();
 				if (!target) {
-					this.sendError(ws, 'invalid_message', 'Usage: /whois <name>');
+					await this.sendError(ws, 'invalid_message', 'Usage: /whois <name>');
 					return;
 				}
 				// Find online user matching the name
@@ -956,7 +956,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					const sName = this.extractTag(sTags, 'name:');
 					if (sName.toLowerCase() === target.toLowerCase()) {
 						const sRole = this.extractTag(sTags, 'role:');
-						this.safeSend(ws, {
+						await this.safeSend(ws, {
 							type: 'message',
 							message: {
 								localId: `sys-${Date.now()}`,
@@ -973,7 +973,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					}
 				}
 				if (!found) {
-					this.safeSend(ws, {
+					await this.safeSend(ws, {
 						type: 'message',
 						message: {
 							localId: `sys-${Date.now()}`,
@@ -990,7 +990,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			}
 
 			default:
-				this.sendError(ws, 'invalid_message', `Unknown command: /${name}`);
+				await this.sendError(ws, 'invalid_message', `Unknown command: /${name}`);
 		}
 	}
 
@@ -1016,20 +1016,20 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					.limit(1);
 
 				if (!existing) {
-					this.sendError(ws, 'invalid_message', `Action #${actionId} not found`);
+					await this.sendError(ws, 'invalid_message', `Action #${actionId} not found`);
 					return;
 				}
 				if (existing.status !== 'pending') {
-					this.sendError(ws, 'invalid_message', `Action #${actionId} already ${existing.status}`);
+					await this.sendError(ws, 'invalid_message', `Action #${actionId} already ${existing.status}`);
 					return;
 				}
 				// [S1] Block agent self-approval/rejection
 				if (existing.agentUserId === userId) {
-					this.sendError(ws, 'unauthorized', 'Cannot approve/reject your own action');
+					await this.sendError(ws, 'unauthorized', 'Cannot approve/reject your own action');
 					return;
 				}
 				if (action === 'approve' && role === 'lead' && existing.riskLevel === 'high') {
-					this.sendError(ws, 'unauthorized', 'Only owner can approve high-risk actions');
+					await this.sendError(ws, 'unauthorized', 'Only owner can approve high-risk actions');
 					return;
 				}
 
@@ -1051,7 +1051,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					.returning({ id: pendingActions.id });
 
 				if (!updated) {
-					this.sendError(ws, 'invalid_message', `Action #${actionId} is no longer pending`);
+					await this.sendError(ws, 'invalid_message', `Action #${actionId} is no longer pending`);
 					return;
 				}
 
@@ -1072,7 +1072,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		} catch (err) {
 			console.error('[ChatRoom] Action approval failed:', err);
-			this.sendError(ws, 'internal', 'Failed to process action');
+			await this.sendError(ws, 'internal', 'Failed to process action');
 		}
 	}
 
@@ -1094,7 +1094,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					.limit(20);
 
 				if (actions.length === 0) {
-					this.safeSend(ws, {
+					await this.safeSend(ws, {
 						type: 'message',
 						message: {
 							localId: `sys-${Date.now()}`,
@@ -1112,7 +1112,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const lines = actions.map(
 					(a: typeof actions[number]) => `#${a.id} [${a.riskLevel}] ${a.actionType}: ${a.description}`
 				);
-				this.safeSend(ws, {
+				await this.safeSend(ws, {
 					type: 'message',
 					message: {
 						localId: `sys-${Date.now()}`,
@@ -1127,7 +1127,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		} catch (err) {
 			console.error('[ChatRoom] List actions failed:', err);
-			this.sendError(ws, 'internal', 'Failed to list actions');
+			await this.sendError(ws, 'internal', 'Failed to list actions');
 		}
 	}
 
@@ -1213,18 +1213,20 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// ── Helpers ───────────────────────────────────────────────────────
 
+	/** HMAC-sign a JSON string if signing key is available */
+	private async signJson(json: string): Promise<string> {
+		if (!this.broadcastSigningKey) return json;
+		const sig = await crypto.subtle.sign(
+			'HMAC',
+			this.broadcastSigningKey,
+			new TextEncoder().encode(json)
+		);
+		const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
+		return json.slice(0, -1) + ',"_hmac":"' + hmac + '"}';
+	}
+
 	private async broadcast(msg: ServerMessage, exclude?: WebSocket): Promise<void> {
-		let json = JSON.stringify(msg);
-		if (this.broadcastSigningKey) {
-			const sig = await crypto.subtle.sign(
-				'HMAC',
-				this.broadcastSigningKey,
-				new TextEncoder().encode(json)
-			);
-			const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
-			// Append _hmac via string concat to preserve exact signed bytes
-			json = json.slice(0, -1) + ',"_hmac":"' + hmac + '"}';
-		}
+		const json = await this.signJson(JSON.stringify(msg));
 		const sockets = this.ctx.getWebSockets();
 		for (const ws of sockets) {
 			if (ws === exclude) continue;
@@ -1236,16 +1238,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		}
 	}
 
-	private safeSend(ws: WebSocket, msg: ServerMessage): void {
+	private async safeSend(ws: WebSocket, msg: ServerMessage): Promise<void> {
 		try {
-			ws.send(JSON.stringify(msg));
+			const json = await this.signJson(JSON.stringify(msg));
+			ws.send(json);
 		} catch {
 			// Dead socket
 		}
 	}
 
-	private sendError(ws: WebSocket, code: ErrorCode, message: string): void {
-		this.safeSend(ws, { type: 'error', code, message });
+	private async sendError(ws: WebSocket, code: ErrorCode, message: string): Promise<void> {
+		await this.safeSend(ws, { type: 'error', code, message });
 	}
 
 	// [H8] Decode URI-encoded tag values
