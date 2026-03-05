@@ -24,7 +24,9 @@ export function createDirectDb() {
 			password: process.env.PG_PASSWORD,
 			database: process.env.PG_DATABASE,
 			ssl: { rejectUnauthorized: false }, // Dev-only: Aiven requires SSL; production uses Hyperdrive
-			max: 5
+			max: 5,
+			connectionTimeoutMillis: 10000,
+			idleTimeoutMillis: 30000
 		});
 	}
 
