@@ -228,7 +228,7 @@ async function handleWebSocketUpgrade(
 		const role = memberRecord.role;
 
 		// HMAC-sign identity payload to prevent header spoofing
-		const signingKey = (env.HMAC_SIGNING_SECRET || env.BETTER_AUTH_SECRET) as string;
+		const signingKey = env.HMAC_SIGNING_SECRET as string;
 		if (!signingKey) {
 			return new Response('Signing key unavailable', { status: 503 });
 		}

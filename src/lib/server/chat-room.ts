@@ -109,7 +109,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			this.degraded = this.flushFailures >= MAX_FLUSH_FAILURES;
 
 			// Import broadcast signing key for R6 message integrity
-			const hmacSecret = this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET;
+			const hmacSecret = this.env.HMAC_SIGNING_SECRET;
 			if (hmacSecret) {
 				this.broadcastSigningKey = await crypto.subtle.importKey(
 					'raw',
@@ -118,6 +118,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					false,
 					['sign']
 				);
+			} else {
+				console.warn('[ChatRoom] HMAC_SIGNING_SECRET not set — broadcast messages will not be signed');
 			}
 
 			// If there are unflushed messages, schedule a flush
@@ -155,7 +157,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response('Missing signed identity', { status: 401 });
 		}
 
-		const signingKey = this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET;
+		const signingKey = this.env.HMAC_SIGNING_SECRET;
 		if (!signingKey) {
 			return new Response('Signing key unavailable', { status: 503 });
 		}
@@ -505,7 +507,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	private async handleRestIngest(request: Request): Promise<Response> {
 		// Verify internal caller
 		const internalSecret = request.headers.get('X-Internal-Secret');
-		if (!internalSecret || internalSecret !== (this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET)) {
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
 			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
 		}
 
