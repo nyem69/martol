@@ -20,7 +20,7 @@ interface PlanLimits {
 const FREE_LIMITS: PlanLimits = {
 	maxUsers: 3,
 	maxAgents: 2,
-	maxMsgsPerDay: 50,
+	maxMsgsPerDay: 1000,
 	uploadsEnabled: false
 };
 
