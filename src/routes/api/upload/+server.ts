@@ -105,6 +105,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		error(415, 'File content does not match declared type');
 	}
 
+	// Image scanning via Workers AI (guarded by env var)
+	const ai = platform?.env?.AI;
+	const scanEnabled = platform?.env?.ENABLE_IMAGE_SCANNING === 'true';
+	if (ai && scanEnabled && file.type.startsWith('image/')) {
+		const { scanImage } = await import('$lib/server/image-scan');
+		const scanResult = await scanImage(ai, buffer, file.type);
+		if (!scanResult.safe) {
+			error(422, `Image blocked: ${scanResult.reason || 'unsafe content detected'}`);
+		}
+	}
+
 	// Sanitize filename
 	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128);
 	const timestamp = Date.now();

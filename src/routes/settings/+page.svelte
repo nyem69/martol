@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint } from '@lucide/svelte';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, Mail } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
 
 	let { data } = $props();
@@ -67,6 +67,65 @@
 			errorMsg = m.error_generic();
 		} finally {
 			saving = false;
+		}
+	}
+
+	// ── Email change state ──
+	let showEmailChange = $state(false);
+	let newEmail = $state('');
+	let emailChanging = $state(false);
+	let emailMsg = $state('');
+	let emailError = $state('');
+
+	// Check URL params for email change redirect result
+	$effect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const emailChange = params.get('email_change');
+		if (emailChange === 'confirmed') {
+			emailMsg = m.settings_email_change_confirmed();
+			setTimeout(() => (emailMsg = ''), 5000);
+		} else if (emailChange === 'reverted') {
+			emailMsg = m.settings_email_change_reverted();
+			setTimeout(() => (emailMsg = ''), 5000);
+		} else if (emailChange === 'expired') {
+			emailError = 'Link expired. Please request a new email change.';
+			setTimeout(() => (emailError = ''), 5000);
+		}
+		if (emailChange) {
+			const url = new URL(window.location.href);
+			url.searchParams.delete('email_change');
+			window.history.replaceState({}, '', url.toString());
+		}
+	});
+
+	async function handleEmailChange() {
+		if (!newEmail.trim() || emailChanging) return;
+		emailChanging = true;
+		emailMsg = '';
+		emailError = '';
+
+		try {
+			const res = await fetch('/api/account/email', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: newEmail.trim() })
+			});
+
+			const result: { ok?: boolean; error?: string } = await res.json();
+
+			if (!res.ok || !result.ok) {
+				emailError = result.error || m.settings_email_change_error();
+				return;
+			}
+
+			emailMsg = m.settings_email_change_sent();
+			newEmail = '';
+			showEmailChange = false;
+			setTimeout(() => (emailMsg = ''), 8000);
+		} catch {
+			emailError = m.settings_email_change_error();
+		} finally {
+			emailChanging = false;
 		}
 	}
 
@@ -412,7 +471,7 @@
 					maxlength="32"
 					disabled={isOnCooldown || saving}
 					data-testid="new-username-input"
-					class="w-full rounded-md px-3 py-2.5 text-sm outline-none"
+					class="w-full rounded-md px-3 py-2.5 text-sm"
 					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 				/>
 				<p class="mt-1 text-[11px]" style="color: var(--text-muted);">
@@ -474,7 +533,7 @@
 				</h2>
 			</div>
 
-			<!-- Email (read-only, masked) -->
+			<!-- Email with change option -->
 			<div class="mb-3">
 				<span
 					class="mb-1 block text-xs"
@@ -482,12 +541,77 @@
 				>
 					{m.settings_email()}
 				</span>
-				<div
-					class="rounded-md px-3 py-2 text-sm"
-					style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
-				>
-					{profile.email}
+				<div class="flex items-center gap-2">
+					<div
+						class="flex-1 rounded-md px-3 py-2 text-sm"
+						style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
+					>
+						{profile.email}
+					</div>
+					<button
+						onclick={() => (showEmailChange = !showEmailChange)}
+						data-testid="toggle-email-change"
+						class="shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
+						style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
+					>
+						<Mail size={14} />
+					</button>
 				</div>
+
+				{#if emailMsg}
+					<div
+						class="mt-2 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
+						style="background: color-mix(in oklch, var(--success) 10%, transparent); color: var(--success);"
+						role="status"
+					>
+						<Check size={14} />
+						{emailMsg}
+					</div>
+				{/if}
+
+				{#if emailError}
+					<div
+						class="mt-2 rounded-md px-3 py-2 text-xs"
+						style="background: color-mix(in oklch, var(--danger) 10%, transparent); color: var(--danger);"
+						role="alert"
+					>
+						{emailError}
+					</div>
+				{/if}
+
+				{#if showEmailChange}
+					<div class="mt-3 space-y-2">
+						<label
+							for="new-email"
+							class="block text-xs"
+							style="color: var(--text-muted);"
+						>
+							{m.settings_email_new()}
+						</label>
+						<input
+							id="new-email"
+							type="email"
+							bind:value={newEmail}
+							placeholder="new@example.com"
+							disabled={emailChanging}
+							data-testid="new-email-input"
+							class="w-full rounded-md px-3 py-2.5 text-sm"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+						/>
+						<button
+							onclick={handleEmailChange}
+							disabled={!newEmail.trim() || emailChanging}
+							data-testid="submit-email-change"
+							class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+							style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
+						>
+							{#if emailChanging}
+								<Loader size={14} class="animate-spin" />
+							{/if}
+							{m.settings_email_change_submit()}
+						</button>
+					</div>
+				{/if}
 			</div>
 
 			<!-- Member since -->
@@ -665,7 +789,7 @@
 					placeholder={m.passkey_name_placeholder()}
 					disabled={registering}
 					data-testid="passkey-name-input"
-					class="flex-1 rounded-md px-3 py-2.5 text-sm outline-none"
+					class="flex-1 rounded-md px-3 py-2.5 text-sm"
 					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 				/>
 				<button
@@ -931,7 +1055,7 @@
 						bind:value={deleteInput}
 						placeholder="DELETE MY ACCOUNT"
 						data-testid="delete-confirm-input"
-						class="w-full rounded-md px-3 py-2.5 text-sm outline-none"
+						class="w-full rounded-md px-3 py-2.5 text-sm"
 						style="background: var(--bg); border: 1px solid color-mix(in oklch, var(--danger) 40%, var(--border)); color: var(--text); font-family: var(--font-mono);"
 					/>
 					<div class="flex gap-2">

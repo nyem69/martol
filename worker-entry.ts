@@ -13,6 +13,7 @@
  * Use dynamic import() inside handlers instead.
  */
 
+import { withSentry } from '@sentry/cloudflare';
 import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
 
 // Durable Object classes
@@ -32,7 +33,7 @@ const WS_ALLOWED_ORIGINS = new Set([
 const WS_ROUTE_RE = /^\/api\/rooms\/([^/]+)\/ws$/;
 
 // Combined worker: SvelteKit fetch + WebSocket upgrade + scheduled handler
-export default {
+const worker = {
 	async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {
 		// Intercept WebSocket upgrades — SvelteKit can't pass through WS responses.
 		// NOTE: WebSocket upgrades are intercepted here before SvelteKit.
@@ -159,6 +160,14 @@ export default {
 		try { await client.end(); } catch { /* already closed */ }
 	}
 };
+
+export default withSentry(
+	(env: Record<string, unknown>) => ({
+		dsn: env.SENTRY_DSN as string,
+		tracesSampleRate: 0.1
+	}),
+	worker
+);
 
 /**
  * Handle WebSocket upgrade directly at the Worker level.

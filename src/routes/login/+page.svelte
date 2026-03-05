@@ -363,7 +363,7 @@
 							id="dob-month"
 							bind:value={dobMonth}
 							data-testid="dob-month"
-							class="w-full rounded-md px-2 py-2.5 text-sm outline-none"
+							class="w-full rounded-md px-2 py-2.5 text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<option value="">—</option>
@@ -384,7 +384,7 @@
 							bind:value={dobDay}
 							placeholder="DD"
 							data-testid="dob-day"
-							class="w-full rounded-md px-2 py-2.5 text-center text-sm outline-none"
+							class="w-full rounded-md px-2 py-2.5 text-center text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						/>
 					</div>
@@ -400,7 +400,7 @@
 							bind:value={dobYear}
 							placeholder="YYYY"
 							data-testid="dob-year"
-							class="w-full rounded-md px-2 py-2.5 text-center text-sm outline-none"
+							class="w-full rounded-md px-2 py-2.5 text-center text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						/>
 					</div>
@@ -440,7 +440,7 @@
 						readonly={emailLocked}
 						disabled={loading}
 						data-testid="email-input"
-						class="w-full rounded-md px-3 py-2.5 text-sm outline-none"
+						class="w-full rounded-md px-3 py-2.5 text-sm"
 						style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);{emailLocked ? ' opacity: 0.7; cursor: not-allowed;' : ''}"
 					/>
 
@@ -536,7 +536,7 @@
 						required
 						disabled={loading}
 						data-testid="code-input"
-						class="w-full rounded-md px-3 py-3 text-center text-2xl tracking-[0.5em] outline-none"
+						class="w-full rounded-md px-3 py-3 text-center text-2xl tracking-[0.5em]"
 						style="background: var(--bg); border: 1px solid var(--border); color: var(--accent); font-family: var(--font-mono);"
 					/>
 					<button

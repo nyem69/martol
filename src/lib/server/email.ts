@@ -110,6 +110,106 @@ export function invitationEmailTemplate(
 }
 
 /**
+ * Email change confirmation template
+ * Sent to the NEW email address to confirm the change.
+ */
+export function emailChangeConfirmTemplate(
+	confirmUrl: string
+): { subject: string; html: string } {
+	return {
+		subject: 'Confirm your new email address — Martol',
+		html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #e0e0e0; max-width: 600px; margin: 0 auto; padding: 20px; background: #0f0f14;">
+  <div style="background: linear-gradient(135deg, #2a2a32 0%, #1a1a1f 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #c49a3c;">
+    <h1 style="color: #c49a3c; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 2px;">MARTOL</h1>
+  </div>
+
+  <div style="background: #1a1a1f; padding: 30px; border: 1px solid #2a2a32; border-top: none; border-radius: 0 0 12px 12px;">
+    <h2 style="margin-top: 0; color: #e8e8e8; font-size: 18px;">Confirm your new email</h2>
+
+    <p style="color: #a0a0a8;">Click the button below to confirm this email address as your new Martol login.</p>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${confirmUrl}" style="background: #c49a3c; color: #0f0f14; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;">
+        Confirm Email Change
+      </a>
+    </div>
+
+    <p style="font-size: 14px; color: #6a6a72; text-align: center;">
+      This link expires in 72 hours. If you didn't request this change, ignore this email.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #2a2a32; margin: 20px 0;">
+
+    <p style="font-size: 12px; color: #4a4a52; margin: 0;">
+      If the button doesn't work, copy and paste this link:<br>
+      <a href="${confirmUrl}" style="color: #c49a3c; word-break: break-all;">${confirmUrl}</a>
+    </p>
+  </div>
+</body>
+</html>
+    `
+	};
+}
+
+/**
+ * Email change revert template
+ * Sent to the OLD email address with an undo link (72h window).
+ */
+export function emailChangeRevertTemplate(
+	revertUrl: string
+): { subject: string; html: string } {
+	return {
+		subject: 'Your Martol email is being changed — undo within 72 hours',
+		html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #e0e0e0; max-width: 600px; margin: 0 auto; padding: 20px; background: #0f0f14;">
+  <div style="background: linear-gradient(135deg, #2a2a32 0%, #1a1a1f 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #c49a3c;">
+    <h1 style="color: #c49a3c; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 2px;">MARTOL</h1>
+  </div>
+
+  <div style="background: #1a1a1f; padding: 30px; border: 1px solid #2a2a32; border-top: none; border-radius: 0 0 12px 12px;">
+    <h2 style="margin-top: 0; color: #e8e8e8; font-size: 18px;">Email change requested</h2>
+
+    <p style="color: #a0a0a8;">Someone requested to change the email address on your Martol account. If this was you, no action is needed.</p>
+
+    <p style="color: #a0a0a8;">If you did <strong style="color: #e8e8e8;">not</strong> request this change, click the button below to cancel it:</p>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${revertUrl}" style="background: #dc2626; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;">
+        Undo Email Change
+      </a>
+    </div>
+
+    <p style="font-size: 14px; color: #6a6a72; text-align: center;">
+      This undo link expires in 72 hours.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #2a2a32; margin: 20px 0;">
+
+    <p style="font-size: 12px; color: #4a4a52; margin: 0;">
+      If the button doesn't work, copy and paste this link:<br>
+      <a href="${revertUrl}" style="color: #c49a3c; word-break: break-all;">${revertUrl}</a>
+    </p>
+  </div>
+</body>
+</html>
+    `
+	};
+}
+
+/**
  * OTP sign-in email template
  * Includes both a clickable magic link AND a 6-digit code.
  * Dark theme matching martol's industrial forge aesthetic.

@@ -13,6 +13,7 @@
   },
   "exclude": [
     "src/lib/paraglide/**",
-    "src/paraglide/**"
+    "src/paraglide/**",
+    "tests/load/**"
   ]
 }

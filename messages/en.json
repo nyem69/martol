@@ -324,5 +324,13 @@
   "open_copied": "Copied!",
   "open_cli_title": "CLI",
   "open_mcp_title": "Claude Desktop MCP config",
-  "open_invalid_repo": "Invalid repository format. Use owner/name."
+  "open_invalid_repo": "Invalid repository format. Use owner/name.",
+  "skip_to_content": "Skip to content",
+  "settings_email_change": "Change email",
+  "settings_email_new": "New email address",
+  "settings_email_change_submit": "Send confirmation",
+  "settings_email_change_sent": "Confirmation sent to your new email. Check your old email for an undo link.",
+  "settings_email_change_error": "Failed to change email. Please try again.",
+  "settings_email_change_confirmed": "Email changed successfully.",
+  "settings_email_change_reverted": "Email change reverted."
 }

@@ -352,10 +352,11 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="relative px-4 pt-2"
 	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
+	role="region"
+	aria-label={uploadEnabled ? m.chat_attach_file() : undefined}
 	ondragover={onDragOver}
 	ondragleave={onDragLeave}
 	ondrop={onDrop}
@@ -465,7 +466,7 @@
 				disabled={disabled || isViewer}
 				data-testid="chat-input"
 				aria-label={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
-				class="flex-1 resize-none border-0 bg-transparent leading-relaxed outline-none"
+				class="flex-1 resize-none border-0 bg-transparent leading-relaxed"
 				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;{isViewer ? ' opacity: 0.5;' : ''}"
 			></textarea>
 			<button
