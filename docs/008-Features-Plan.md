@@ -271,6 +271,27 @@ These are valuable but ship after launch based on user feedback:
 | Self-hosted / Docker option | Enterprise feature; SaaS first |
 | Webhooks (Slack, GitHub) | Integration feature; launch without |
 | Additional locales | English-only at launch |
+| Abandoned room cleanup | See below — storage is negligible, query perf is the real cost |
+| Room switcher pagination | Needed when users hit 20+ rooms; batch unread counts first |
+
+### Abandoned Rooms (Post-Launch)
+
+`/open` creates a fresh room + agent + API key on every click. No per-repo uniqueness — users can create multiple rooms for the same repo (different keys, isolated history). This is intentional.
+
+**Cost per abandoned room:** 6 DB rows (~700 bytes - 4 KB with indexes). No Stripe/KV/R2/Durable Object cost — all lazy.
+
+**The real cost is query performance.** The room switcher in `chat/+page.server.ts` loads all rooms and runs a separate `COUNT(*)` query per room for unread badges (N+1). A user with 50 rooms = 50 message count queries on every `/chat` page load.
+
+**When to fix (trigger: users hitting 20+ rooms in analytics):**
+
+1. **Batch unread counts** — single `GROUP BY` query instead of N+1:
+   ```sql
+   SELECT org_id, count(*) FROM messages
+   WHERE org_id IN (...) AND id > last_read_id
+   GROUP BY org_id
+   ```
+2. **Paginate room switcher** — show 10 most-recent rooms, "show all" toggle
+3. **Archive stale rooms** — soft-delete orgs with 0 messages older than 90 days via hourly cron (already has a cron entry in `wrangler.toml`)
 
 ---
 
