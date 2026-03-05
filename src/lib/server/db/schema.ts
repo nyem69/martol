@@ -417,6 +417,9 @@ export const userSanctions = pgTable(
 	},
 	(table) => [
 		index('idx_user_sanctions_user').on(table.userId),
-		index('idx_user_sanctions_active').on(table.userId, table.sanctionType)
+		index('idx_user_sanctions_active').on(table.userId, table.sanctionType),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.reportId], foreignColumns: [contentReports.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.issuedBy], foreignColumns: [user.id] }).onDelete('restrict')
 	]
 );
