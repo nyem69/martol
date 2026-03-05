@@ -13,10 +13,12 @@ import {
 	timestamp,
 	bigint,
 	integer,
+	boolean,
 	jsonb,
 	uniqueIndex,
 	index,
-	primaryKey
+	primaryKey,
+	check
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -181,7 +183,10 @@ export const pendingActions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		index('idx_pending_actions_org_status').on(table.orgId, table.status, table.createdAt)
+		index('idx_pending_actions_org_status').on(table.orgId, table.status, table.createdAt),
+		check('chk_pa_status', sql`${table.status} IN ('pending', 'approved', 'rejected', 'expired', 'executed')`),
+		check('chk_pa_risk', sql`${table.riskLevel} IN ('low', 'medium', 'high')`),
+		check('chk_pa_action_type', sql`${table.actionType} IN ('question_answer', 'code_review', 'code_write', 'code_modify', 'code_delete', 'deploy', 'config_change')`)
 	]
 );
 
@@ -319,7 +324,8 @@ export const contentReports = pgTable(
 	},
 	(table) => [
 		index('idx_content_reports_org').on(table.orgId, table.status),
-		index('idx_content_reports_message').on(table.messageId)
+		index('idx_content_reports_message').on(table.messageId),
+		check('chk_cr_status', sql`${table.status} IN ('pending', 'reviewed', 'dismissed', 'actioned')`)
 	]
 );
 
@@ -340,9 +346,9 @@ export const subscriptions = pgTable(
 			.default('active')
 			.$type<'active' | 'past_due' | 'canceled' | 'incomplete'>(),
 		quantity: integer('quantity').notNull().default(1),
-		foundingMember: integer('founding_member').notNull().default(0),
+		foundingMember: boolean('founding_member').notNull().default(false),
 		currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
-		cancelAtPeriodEnd: integer('cancel_at_period_end').notNull().default(0),
+		cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},

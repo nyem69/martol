@@ -63,7 +63,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				.select({ id: subscriptions.id })
 				.from(subscriptions)
 				.where(eq(subscriptions.plan, 'pro'));
-			const isFoundingMember = proCount.length < 100 ? 1 : 0;
+			const isFoundingMember = proCount.length < 100;
 
 			const periodEnd = getPeriodEnd(sub);
 
@@ -85,7 +85,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 						quantity: sub.items.data[0]?.quantity ?? 1,
 						foundingMember: isFoundingMember,
 						currentPeriodEnd: periodEnd,
-						cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0,
+						cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
 						updatedAt: new Date()
 					})
 					.where(eq(subscriptions.orgId, orgId));
@@ -100,7 +100,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 					quantity: sub.items.data[0]?.quantity ?? 1,
 					foundingMember: isFoundingMember,
 					currentPeriodEnd: periodEnd,
-					cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0
+					cancelAtPeriodEnd: sub.cancel_at_period_end ?? false
 				});
 			}
 			break;
@@ -117,7 +117,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 					status: mapStripeStatus(sub.status),
 					quantity: sub.items.data[0]?.quantity ?? 1,
 					currentPeriodEnd: getPeriodEnd(sub),
-					cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0,
+					cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
 					updatedAt: new Date()
 				})
 				.where(eq(subscriptions.orgId, orgId));
@@ -133,7 +133,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				.update(subscriptions)
 				.set({
 					status: 'canceled',
-					cancelAtPeriodEnd: 0,
+					cancelAtPeriodEnd: false,
 					updatedAt: new Date()
 				})
 				.where(eq(subscriptions.orgId, orgId));

@@ -94,9 +94,9 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 			agents,
 			msgsToday: msgCount?.count ?? 0
 		},
-		foundingMember: sub?.foundingMember === 1,
+		foundingMember: sub?.foundingMember === true,
 		currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
-		cancelAtPeriodEnd: sub?.cancelAtPeriodEnd === 1,
+		cancelAtPeriodEnd: sub?.cancelAtPeriodEnd === true,
 		quantity: sub?.quantity ?? 0
 	};
 }
