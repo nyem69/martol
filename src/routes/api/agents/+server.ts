@@ -12,6 +12,7 @@ import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { member, user, account, apikey } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 /** Resolve orgId + verify owner/lead role */
 async function resolveOrgAndRole(locals: App.Locals) {
@@ -51,6 +52,12 @@ async function resolveOrgAndRole(locals: App.Locals) {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const orgId = await resolveOrgAndRole(locals);
+
+	// Feature gate: check agent limit
+	const orgLimits = await checkOrgLimits(locals.db, orgId);
+	if (orgLimits.usage.agents >= orgLimits.limits.maxAgents) {
+		error(403, `Free plan allows ${orgLimits.limits.maxAgents} agents. Upgrade to add more.`);
+	}
 
 	const body = await request.json().catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>;
 	const name = typeof body.name === 'string' ? body.name.trim() : '';

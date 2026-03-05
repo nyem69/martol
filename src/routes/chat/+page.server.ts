@@ -4,6 +4,7 @@ import { user, member, organization, invitation, session as sessionTable } from 
 import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 export const load: PageServerLoad = async (event) => {
 	const { locals, platform } = event;
@@ -251,6 +252,9 @@ export const load: PageServerLoad = async (event) => {
 		hmacSecret = platform.env.HMAC_SIGNING_SECRET ?? null;
 	}
 
+	// Feature gates: plan-based limits for uploads and message sending
+	const orgLimits = roomId ? await checkOrgLimits(db, roomId) : null;
+
 	return {
 		roomId,
 		userId: locals.user.id,
@@ -262,6 +266,8 @@ export const load: PageServerLoad = async (event) => {
 		initialMessages,
 		hasAgents,
 		hmacSecret,
-		enableUploads: (platform?.env?.ENABLE_UPLOADS ?? process.env.ENABLE_UPLOADS) === 'true'
+		enableUploads: orgLimits?.limits.uploadsEnabled ?? false,
+		canSend: orgLimits ? orgLimits.usage.msgsToday < orgLimits.limits.maxMsgsPerDay : true,
+		plan: orgLimits?.plan ?? 'free'
 	};
 };

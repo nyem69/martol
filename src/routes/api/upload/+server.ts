@@ -12,6 +12,7 @@ import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
 import { attachments } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = new Set([
@@ -61,11 +62,6 @@ function validateMagicBytes(buffer: ArrayBuffer, claimedType: string): boolean {
 }
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
-	// Feature flag: uploads disabled unless ENABLE_UPLOADS=true
-	if (platform?.env?.ENABLE_UPLOADS !== 'true') {
-		error(403, 'Image uploads are currently disabled');
-	}
-
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
 	if (!locals.db) error(503, 'Database unavailable');
 
@@ -85,6 +81,12 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	if (!memberRecord) error(403, 'Not a member of this organization');
 	if (memberRecord.role === 'viewer') error(403, 'Viewers cannot upload files');
+
+	// Feature gate: check plan allows uploads
+	const orgLimits = await checkOrgLimits(locals.db, activeOrgId);
+	if (!orgLimits.limits.uploadsEnabled) {
+		error(403, 'File uploads require a Pro plan.');
+	}
 
 	// Early reject oversized requests before buffering the full body
 	const contentLength = parseInt(request.headers.get('content-length') || '0', 10);

@@ -18,6 +18,7 @@ import { checkRateLimit } from '$lib/server/rate-limit';
 import { isDisposableEmail } from '$lib/server/disposable-emails';
 import { termsVersions, termsAcceptances } from '$lib/server/db/schema';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -371,6 +372,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 				return new Response(
 					JSON.stringify({ error: { message: 'Too many invitations. Try again later.' } }),
 					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+
+		// ── Feature gate: check member limit before inviting ──
+		if (event.locals.db && event.locals.session?.activeOrganizationId) {
+			const orgLimits = await checkOrgLimits(
+				event.locals.db,
+				event.locals.session.activeOrganizationId
+			);
+			if (orgLimits.usage.users >= orgLimits.limits.maxUsers) {
+				return new Response(
+					JSON.stringify({
+						error: {
+							message: `Free plan allows ${orgLimits.limits.maxUsers} users. Upgrade to add more.`
+						}
+					}),
+					{ status: 403, headers: { 'Content-Type': 'application/json' } }
 				);
 			}
 		}
