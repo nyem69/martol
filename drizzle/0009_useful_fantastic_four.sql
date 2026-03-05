@@ -1,4 +1,4 @@
-ALTER TABLE "attachments" DROP CONSTRAINT "attachments_message_id_messages_id_fk";
+ALTER TABLE "attachments" DROP CONSTRAINT IF EXISTS "attachments_message_id_messages_id_fk";
 --> statement-breakpoint
 ALTER TABLE "member" ADD COLUMN "ai_opt_out" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "account_audit" ADD CONSTRAINT "account_audit_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
