@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
 import { user, member, organization, account, apikey, session as sessionTable } from '$lib/server/db/auth-schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 const REPO_PATTERN = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
@@ -22,32 +22,13 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
 
-	// [C4] Use -- separator to prevent slug collisions (foo/bar-baz vs foo-bar/baz)
+	// Slug uses random suffix — no per-repo uniqueness constraint.
+	// Users can create multiple rooms for the same repo (different keys, clean history).
+	// This also eliminates cross-user slug collisions on the UNIQUE index.
 	const [owner, name] = repo.split('/');
-	const slug = `${owner.toLowerCase().replace(/[^a-z0-9]+/g, '-')}--${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+	const suffix = generateId().slice(0, 6);
+	const slug = `${owner.toLowerCase().replace(/[^a-z0-9]+/g, '-')}--${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}--${suffix}`;
 
-	// Check if user already has a room for this repo (by slug)
-	const [existingOrg] = await db
-		.select({ id: organization.id, name: organization.name })
-		.from(organization)
-		.innerJoin(member, eq(member.organizationId, organization.id))
-		.where(and(eq(organization.slug, slug), eq(member.userId, locals.user.id)))
-		.limit(1);
-
-	if (existingOrg) {
-		// Room already exists — set active and redirect to chat
-		await db
-			.update(sessionTable)
-			.set({ activeOrganizationId: existingOrg.id })
-			.where(eq(sessionTable.id, locals.session.id));
-		redirect(302, '/chat');
-	}
-
-	// [C2] Removed: feature gate was checking wrong org (user's first org, not new org).
-	// The new org starts with 1 agent; per-org limits are enforced by checkOrgLimits
-	// when the org is used (chat, agent creation via /api/agents).
-
-	// Create room (organization) named after repo — with advisory lock
 	const orgId = generateId();
 	const memberId = generateId();
 	const agentUserId = crypto.randomUUID();
@@ -56,28 +37,8 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 	const now = new Date();
 	const agentName = `${repo} agent`;
 
-	// [C1] Use sentinel to avoid redirect() inside transaction (throws SvelteKit exception,
-	// leaves Hyperdrive connection broken). Also use two-arg advisory lock to avoid collisions.
-	let existingRoomId: string | null = null;
-
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	await db.transaction(async (tx: any) => {
-		// [I4] Two-arg form gives 64-bit lock space, no concatenation collisions
-		await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${locals.user.id})::int, hashtext(${repo})::int)`);
-
-		// Re-check after lock
-		const [recheck] = await tx
-			.select({ id: organization.id })
-			.from(organization)
-			.innerJoin(member, eq(member.organizationId, organization.id))
-			.where(and(eq(organization.slug, slug), eq(member.userId, locals.user.id)))
-			.limit(1);
-
-		if (recheck) {
-			existingRoomId = recheck.id;
-			return; // exit transaction cleanly — redirect after commit
-		}
-
 		// 1. Create organization (room)
 		await tx.insert(organization).values({
 			id: orgId,
@@ -125,15 +86,6 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 		});
 	});
 
-	// [C1] Handle redirect outside transaction
-	if (existingRoomId) {
-		await db
-			.update(sessionTable)
-			.set({ activeOrganizationId: existingRoomId })
-			.where(eq(sessionTable.id, locals.session.id));
-		redirect(302, '/chat');
-	}
-
 	// Create API key via Better Auth (outside transaction)
 	let fullKey = '';
 	try {
@@ -147,7 +99,7 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 		fullKey = (keyResult as any)?.key ?? '';
 	} catch (e) {
 		console.error('[Open] API key creation failed:', e);
-		// [C5] Clean up on failure — delete apikey first (FK: apikey.referenceId → user.id)
+		// Clean up on failure — delete apikey first (FK: apikey.referenceId → user.id)
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			await db.transaction(async (tx: any) => {
@@ -163,13 +115,13 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 		error(500, 'Failed to create API key');
 	}
 
-	// [C6] Set active org AFTER successful API key creation (not before)
+	// Set active org AFTER successful API key creation
 	await db
 		.update(sessionTable)
 		.set({ activeOrganizationId: orgId })
 		.where(eq(sessionTable.id, locals.session.id));
 
-	// [C7] Prevent caching of page containing plaintext API key
+	// Prevent caching of page containing plaintext API key
 	setHeaders({ 'cache-control': 'no-store, private' });
 
 	return {

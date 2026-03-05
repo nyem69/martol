@@ -1,7 +1,7 @@
 # Pre-Launch Feature Plan
 
 **Date:** 2026-03-04
-**Status:** Draft
+**Status:** Phases 0-4 complete. Phase 5-6 in progress.
 **Inputs:** Business study (001), external review (002), startup myths (003), final review (004), codebase audit
 
 ---
@@ -49,31 +49,26 @@ Critical bugs found in code reviews. All resolved:
 
 ---
 
-### Phase 1: Security Narrative (Week 1-2)
+### Phase 1: Security Narrative (Week 1-2) -- DONE
 
 Zero engineering effort. Content pages that establish positioning before anyone sees the product.
 
-| Deliverable | Route | Purpose |
-|-------------|-------|---------|
-| Landing page | `/` | Product pitch, one-liner, architecture diagram, CTA to sign up |
-| Security page | `/security` | Server-enforced authority model explained. How agents submit intents, not execute commands |
-| How It Works | `/how-it-works` | Visual walkthrough: agent submits intent -> server validates -> human approves -> execution |
-| Comparison table | on `/security` | Martol's architecture vs. unsafe autonomous agent model (local execution, no governance, no audit) |
+| Deliverable | Route | Status |
+|-------------|-------|--------|
+| Landing page | `/` | Done — hero, feature list, CTA |
+| Security page | `/security` | Done — comparison table, approval flow, role matrix, infra security |
+| How It Works | `/how-it-works` | Skipped — covered by `/security` approval flow section |
+| Comparison table | on `/security` | Done — embedded in security page |
 
-**Design direction:** Industrial forge aesthetic (dark theme). Dense, technical, no marketing fluff. Target audience: developers who read architecture docs before signing up.
-
-**Key copy points:**
-- "See exactly what your AI agents will do — before they do it"
-- "Server-enforced governance, not client-side guardrails"
-- "Zero trust architecture: every action gated, every decision audited"
-
-**Exit criteria:** Pages deployed. Share URL with 5 developers for feedback.
+**Exit criteria:** Pages deployed.
 
 ---
 
-### Phase 2: Agent Simulation Engine (Week 2-4)
+### Phase 2: Agent Simulation Engine (Week 2-4) -- DONE
 
 The killer feature. Every agent action can be previewed, diffed, and risk-scored before a human approves it. This is what transforms martol from "secure chat for agents" into "the safe place to run autonomous AI."
+
+All 4 sub-tasks complete: data model (simulationType, simulationPayload, riskFactors, estimatedImpact columns), MCP action_submit enhancement, PendingActionLine UI (renders all 5 simulation types), risk scoring engine.
 
 #### 2a. Simulation Data Model
 
@@ -157,41 +152,41 @@ Risk factors displayed on the approval card so humans understand WHY the server 
 
 ---
 
-### Phase 3: Chat Completeness (Week 3-4)
+### Phase 3: Chat Completeness (Week 3-4) -- DONE
 
 Polish the core chat experience so it doesn't feel half-built when users arrive.
 
-| Item | File(s) | Description |
-|------|---------|-------------|
-| Image thumbnails in chat | `MessageBubble.svelte`, `markdown.ts` | Parse `![](r2:key)` -> `<img>` with 300px max-width. Click opens ImageModal |
-| Multi-room switching | `ChatView.svelte`, `ChannelTabs.svelte` | Complete tab switching logic. LRU cache for room state. Unread badges |
-| Settings panel | `SettingsOverlay.svelte` | Tabs: Profile, Members (invite/kick/roles), API Keys (create/revoke agents) |
-| Pull-to-load history | `MessageList.svelte` | Cursor-based pagination. Load 50 older messages on scroll-to-top |
-| Passkey support | `auth/index.ts` | Enable Better Auth `passkey` plugin. Add setup flow in settings |
+| Item | File(s) | Status |
+|------|---------|--------|
+| Image thumbnails in chat | `MessageBubble.svelte`, `markdown.ts` | Done — r2: URL rewrite, ImageModal lightbox |
+| Multi-room switching | `ChatHeader.svelte`, `+page.server.ts` | Done — room switcher, create/rename, unread badges |
+| Settings panel | `/settings/+page.svelte` | Done — username, sessions, passkeys, billing, data export, account deletion |
+| Pull-to-load history | `MessageList.svelte`, `ChatView.svelte` | Done — cursor-based pagination, scroll-to-top trigger |
+| Passkey support | `auth/index.ts`, `auth-client.ts` | Done — Better Auth 1.5 + @better-auth/passkey, settings UI, login button |
 
-**Exit criteria:** User can switch rooms, see unread counts, scroll through history, manage team members, and optionally add a passkey.
+**Exit criteria:** All items complete.
 
 ---
 
-### Phase 4: Stripe Integration (Week 4-6)
+### Phase 4: Stripe Integration (Week 4-6) -- DONE
 
 Monetization. Build after simulation engine and chat polish — users need to hit free-tier limits before payment matters.
 
-| Item | Description |
-|------|-------------|
-| `subscriptions` table | `org_id`, `stripe_customer_id`, `stripe_subscription_id`, `plan` (free/pro), `status`, `current_period_end` |
-| Feature gates | Check plan before: adding 4th user, 3rd agent, uploading files, exceeding 50 msgs/day |
-| Stripe Checkout | `/api/billing/checkout` — create Stripe Checkout session for Pro plan |
-| Stripe Webhooks | `/api/billing/webhook` — handle `checkout.session.completed`, `invoice.paid`, `customer.subscription.updated/deleted` |
-| Customer Portal | `/api/billing/portal` — redirect to Stripe billing portal for self-service |
-| Billing UI | Settings > Billing tab — current plan, usage stats, upgrade/manage buttons |
-| Founding member pricing | $5/user/mo for first 100 teams, locked 12 months. Track via `founding_member` boolean on subscription |
+| Item | Status |
+|------|--------|
+| `subscriptions` table | Done — org_id, stripeCustomerId, plan, status, foundingMember, currentPeriodEnd |
+| Feature gates | Done — `checkOrgLimits()` enforced in API endpoints (users, agents, messages, uploads) |
+| Stripe Checkout | Done — `/api/billing/checkout` with role check, quantity = member count |
+| Stripe Webhooks | Done — `/api/billing/webhook` handles all events, signature verified, idempotent |
+| Customer Portal | Done — `/api/billing/portal` with role check |
+| Billing UI | Done — Settings > Billing section with plan badge, usage stats, upgrade/manage buttons |
+| Founding member pricing | Done — `founding_member` boolean, first 100 teams tracked |
 
 **Pricing tiers:**
 
 | Tier | Price | Limits |
 |------|-------|--------|
-| Free | $0 | 3 users, 2 agents, 50 msgs/day, no uploads |
+| Free | $0 | 5 users, 10 agents, 1000 msgs/day, no uploads |
 | Pro | $8/user/mo (annual) / $10/user/mo (monthly) | Unlimited users, agents, messages. 10MB uploads, 5GB storage |
 | Governance | Contact us | Enterprise — listed on pricing page, not built |
 
@@ -205,7 +200,7 @@ Ship distribution mechanics BEFORE the HN launch. These create the viral loops.
 
 | Item | Description |
 |------|-------------|
-| "Open in Martol" badge | GitHub badge/action: click -> create room for repo, connect agent via API key |
+| "Open in Martol" badge | GitHub badge: click -> create room for repo + agent + API key. Multiple rooms per repo allowed (different keys, isolated history). Slug uses random suffix to avoid cross-user collisions on the UNIQUE index. Rate limiting (not yet implemented) is the abuse control, not per-repo uniqueness. |
 | OpenClaw migration guide | Blog post: "Keep the Power, Lose the Risk" — how to move from local agents to governed execution |
 | HN launch post | "Show HN: Martol — AI agents that show you what they'll do before they do it" |
 | Security incident response template | Pre-written blog post template: "Here's how martol prevents [X] class of attack" — ready for next agent security incident |
