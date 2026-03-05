@@ -144,34 +144,45 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 		);
 	}
 
-	// ── Apply change ──
+	// ── Apply change (atomic transaction with unique constraint catch) ──
 
 	const releasedAt = new Date(now.getTime() + COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+	const ipAddress = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for');
+	const userAgent = request.headers.get('user-agent');
 
-	// Update user.username
-	await db
-		.update(user)
-		.set({ username: newUsername, updatedAt: now })
-		.where(eq(user.id, locals.user.id));
+	try {
+		await db.transaction(async (tx: typeof db) => {
+			await tx
+				.update(user)
+				.set({ username: newUsername, updatedAt: now })
+				.where(eq(user.id, locals.user.id));
 
-	// Insert username history
-	await db.insert(usernameHistory).values({
-		userId: locals.user.id,
-		oldUsername: currentUsername,
-		newUsername: newUsername,
-		changedAt: now,
-		releasedAt: releasedAt
-	});
+			await tx.insert(usernameHistory).values({
+				userId: locals.user.id,
+				oldUsername: currentUsername,
+				newUsername: newUsername,
+				changedAt: now,
+				releasedAt: releasedAt
+			});
 
-	// Audit log
-	await db.insert(accountAudit).values({
-		userId: locals.user.id,
-		action: 'username_change',
-		oldValue: currentUsername,
-		newValue: newUsername,
-		ipAddress: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for'),
-		userAgent: request.headers.get('user-agent')
-	});
+			await tx.insert(accountAudit).values({
+				userId: locals.user.id,
+				action: 'username_change',
+				oldValue: currentUsername,
+				newValue: newUsername,
+				ipAddress,
+				userAgent
+			});
+		});
+	} catch (err: any) {
+		if (err?.code === '23505') {
+			return json(
+				{ ok: false, error: 'Username is already taken.' },
+				{ status: 409 }
+			);
+		}
+		throw err;
+	}
 
 	return json({ ok: true, username: newUsername });
 };
