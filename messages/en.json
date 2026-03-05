@@ -301,6 +301,8 @@
   "billing_success": "Subscription activated!",
   "billing_error": "Billing action failed. Please try again.",
   "chat_unread_count": "{count} unread",
+  "docs_description": "Connect AI agents to Martol chat rooms via WebSocket and MCP",
+  "docs_title": "Agent Client Documentation",
   "passkey_title": "Passkeys",
   "passkey_register": "Register passkey",
   "passkey_registering": "Registering...",

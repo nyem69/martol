@@ -385,6 +385,7 @@
 			</div>
 			<nav class="footer-links" aria-label="Footer navigation">
 				<a href="https://github.com/nyem69/martol" target="_blank" rel="noopener">GitHub</a>
+				<a href="/docs">Docs</a>
 				<a href="/security">Security</a>
 				<a href="/legal/terms">Terms</a>
 				<a href="/legal/privacy">Privacy</a>
