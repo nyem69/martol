@@ -2,7 +2,7 @@
  * Feature Gates — centralized plan limit checks
  *
  * Returns plan, limits, and current usage for an org.
- * Free: 3 users, 2 agents, 50 msgs/day, no uploads
+ * Free: 5 users, 10 agents, 1000 msgs/day, no uploads
  * Pro: unlimited (high caps)
  */
 
@@ -18,8 +18,8 @@ interface PlanLimits {
 }
 
 const FREE_LIMITS: PlanLimits = {
-	maxUsers: 3,
-	maxAgents: 2,
+	maxUsers: 5,
+	maxAgents: 10,
 	maxMsgsPerDay: 1000,
 	uploadsEnabled: false
 };
