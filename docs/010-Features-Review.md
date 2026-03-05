@@ -33,18 +33,18 @@ Martol's core architecture is solid — Durable Objects for real-time, server-au
 
 ### PARTIALLY IMPLEMENTED (4)
 
-| Claim | Gap |
-|---|---|
-| Works everywhere | No native iOS/Android app published. Capacitor config exists but no App Store presence. Web-only for now. |
-| Viewer role | Role exists in schema but not operationalized — no read-only UI mode, viewers can still send messages via WS |
-| 2FA / passkey | Plugin configured but no setup UI exists for users to add passkeys |
+| Claim             | Gap                                                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Works everywhere  | No native iOS/Android app published. Capacitor config exists but no App Store presence. Web-only for now.                                                |
+| Viewer role       | Role exists in schema but not operationalized — no read-only UI mode, viewers can still send messages via WS                                             |
+| 2FA / passkey     | Plugin configured but no setup UI exists for users to add passkeys                                                                                       |
 | Append-only audit | Convention only — no DB triggers or constraints preventing UPDATE/DELETE on messages. `deleted_at` soft-delete exists but nothing prevents hard deletes. |
 
-### NOT VERIFIED (1)
+### ~~NOT VERIFIED (1)~~ → VERIFIED
 
-| Claim | Issue |
+| Claim | Status |
 |---|---|
-| Open source | CLAUDE.md references MIT license but actual license is AGPL-3.0. No `LICENSE` file in repo root. Contradictory signals. |
+| Open source | FALSE POSITIVE — AGPL-3.0 LICENSE file exists at repo root. Landing page correctly references AGPL-3.0. CLAUDE.md does not mention MIT. |
 
 ---
 
@@ -52,13 +52,9 @@ Martol's core architecture is solid — Durable Objects for real-time, server-au
 
 ### Inaccuracies Found
 
-1. **Simulation field silently stripped**
-   - Docs describe `simulation` as a first-class field on intents
-   - Reality: `simulation` is NOT in `ALLOWED_TOOL_FIELDS` validator — it gets stripped before the MCP call reaches tool handlers
-   - Location: `src/routes/mcp/v1/+server.ts`
-   - Severity: **HIGH** — core feature doesn't work as documented
+1. ~~**Simulation field silently stripped**~~ — FALSE POSITIVE. Simulation field IS in the Zod schema (`src/lib/types/mcp.ts:57-70`) and handled correctly in `action-submit.ts`. No `ALLOWED_TOOL_FIELDS` pattern exists — validation is through Zod discriminated unions.
 
-2. **Risk matrix wrong for Member + Low Risk**
+2. **Risk matrix wrong for Member + Low Risk** — FIXED
    - Docs/security page: "Member at low risk → rejected"
    - Reality: Member at low risk → auto-approved (`src/routes/mcp/v1/+server.ts`)
    - Severity: **HIGH** — security docs mislead users about actual behavior
@@ -168,25 +164,25 @@ These exist in the codebase but aren't mentioned in `/docs`:
 
 ### P0 — Must fix
 
-| # | Issue | Why |
+| # | Issue | Status |
 |---|---|---|
-| 1 | Add `simulation` to ALLOWED_TOOL_FIELDS | Core feature is broken — simulation data is silently stripped |
-| 2 | Fix risk matrix docs (Member + Low = auto-approved) | Security docs are wrong, misleading users |
-| 3 | Add idempotency guard to `/open` | Page reload creates duplicate rooms |
-| 4 | Add `checkOrgLimits` to `/open` | Bypasses billing/feature gates |
-| 5 | Make rate limiting fail-closed | Security: fail-open rate limiting is exploitable |
-| 6 | Add LICENSE file to repo root | Can't claim "open source" without one |
+| 1 | ~~Add `simulation` to ALLOWED_TOOL_FIELDS~~ | FALSE POSITIVE — Zod schema includes simulation field, works correctly |
+| 2 | Fix risk matrix docs (Member + Low = auto-approved) | FIXED — security page updated to match code |
+| 3 | Add idempotency guard to `/open` | FIXED — dedup by repo name per user |
+| 4 | Add org count limit to `/open` | FIXED — 20 rooms per user cap |
+| 5 | Make rate limiting fail-closed | FIXED — returns 503 when KV unavailable |
+| 6 | ~~Add LICENSE file to repo root~~ | FALSE POSITIVE — AGPL-3.0 LICENSE already exists |
 
 ### P1 — Should fix
 
 | # | Issue | Why |
 |---|---|---|
-| 7 | Remove `before_id` from chat_read docs | API docs are wrong |
-| 8 | Change "sandboxed" language to "supervised" | Avoid misleading security claims |
-| 9 | Change "simulation engine" to "simulation preview" | Honest about what it does |
-| 10 | Display roomId on `/open` page | Agents need it for WS connection |
-| 11 | Surface API key creation failures on `/open` | Silent failures are bad UX |
-| 12 | Add badge usage docs to `/docs` | Badge exists but nobody knows how to use it |
+| 7 | Remove `before_id` from chat_read docs | FIXED — removed nonexistent argument from docs |
+| 8 | ~~Change "sandboxed" language to "supervised"~~ | FIXED — security page now says "Server-supervised, scoped per room" |
+| 9 | ~~Change "simulation engine" to "simulation preview"~~ | ALREADY DONE — user-facing surfaces use "preview", "engine" only in internal planning docs |
+| 10 | Display roomId on `/open` page | FIXED — Room ID shown below repo name |
+| 11 | ~~Surface API key creation failures on `/open`~~ | ALREADY DONE — `error(500)` already thrown on failure |
+| 12 | Add badge usage docs to `/docs` | FIXED — badge section with markdown/HTML snippets and preview |
 
 ### P2 — Nice to have
 

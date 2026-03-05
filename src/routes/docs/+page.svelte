@@ -51,7 +51,8 @@
 				{ id: 'server-api', text: 'Server API Surface' },
 				{ id: 'message-types', text: 'Message Types' },
 				{ id: 'providers', text: 'LLM Providers' },
-				{ id: 'troubleshooting', text: 'Troubleshooting' }
+				{ id: 'troubleshooting', text: 'Troubleshooting' },
+				{ id: 'badge', text: 'Open in Martol Badge' }
 			]
 		}
 	];
@@ -870,7 +871,7 @@ python -m martol_agent <span class="flg">--mode</span> <span class="val">claude-
 						</tr>
 						<tr>
 							<td><code>chat_read</code></td>
-							<td><code>limit?</code>, <code>before_id?</code></td>
+							<td><code>limit?</code></td>
 							<td>Cursor-based message reading</td>
 						</tr>
 						<tr>
@@ -1304,6 +1305,33 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 						</tr>
 					</tbody>
 				</table>
+			</div>
+		</section>
+
+		<!-- Badge -->
+		<section class="page-section" id="badge">
+			<h2>Open in Martol Badge</h2>
+			<p>
+				Add a badge to your GitHub README so collaborators can open your repo in Martol with one click.
+			</p>
+
+			<h3>Preview</h3>
+			<p>
+				<img src="/badge/open-in-martol.svg" alt="Open in Martol" style="height: 28px;" />
+			</p>
+
+			<h3>Markdown</h3>
+			<pre><code>[![Open in Martol](https://martol.plitix.com/badge/open-in-martol.svg)](https://martol.plitix.com/open?repo=OWNER/REPO)</code></pre>
+
+			<h3>HTML</h3>
+			<pre><code>&lt;a href="https://martol.plitix.com/open?repo=OWNER/REPO"&gt;
+  &lt;img src="https://martol.plitix.com/badge/open-in-martol.svg" alt="Open in Martol" /&gt;
+&lt;/a&gt;</code></pre>
+
+			<div class="callout callout-info">
+				<strong>How it works:</strong> Replace <code>OWNER/REPO</code> with your GitHub repository
+				(e.g. <code>nyem69/martol-client</code>). Clicking the badge creates a Martol room for
+				your repo, generates an agent API key, and shows connection instructions.
 			</div>
 		</section>
 

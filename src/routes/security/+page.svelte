@@ -24,7 +24,7 @@
 	}
 
 	const comparisonRows = [
-		{ dim: 'Where agents run', unsafe: 'Your machine, your privileges', martol: 'Server-side, sandboxed per room' },
+		{ dim: 'Where agents run', unsafe: 'Your machine, your privileges', martol: 'Server-supervised, scoped per room' },
 		{ dim: 'What agents can do', unsafe: 'Anything — shell, files, network', martol: 'Only submit structured intents' },
 		{ dim: 'Who decides', unsafe: 'Agent decides and executes', martol: 'Server validates against role x risk matrix' },
 		{ dim: 'Trust model', unsafe: 'Trust the agent, hope for the best', martol: 'Zero trust — every action gated by server' },
@@ -48,7 +48,7 @@
 	const roleRows = [
 		{ role: 'Owner', low: 'auto', med: 'auto', high: 'auto', approve: 'Yes' },
 		{ role: 'Lead', low: 'auto', med: 'auto', high: 'Needs owner', approve: 'Yes (low/med)' },
-		{ role: 'Member', low: 'Needs approval', med: 'Needs approval', high: 'Needs approval', approve: 'No' },
+		{ role: 'Member', low: 'auto', med: 'Needs lead', high: 'Rejected*', approve: 'No' },
 		{ role: 'Agent', low: 'Submit only', med: 'Submit only', high: 'Submit only', approve: 'Never' }
 	];
 
@@ -217,6 +217,7 @@
 				<Lock size={14} />
 				<span>{m.security_roles_note()}</span>
 			</div>
+			<p class="roles-footnote">* Destructive high-risk actions (delete, deploy, config change) are rejected outright for members.</p>
 		</div>
 	</section>
 
@@ -568,6 +569,13 @@
 		color: var(--accent);
 		flex-shrink: 0;
 		margin-top: 3px;
+	}
+
+	.roles-footnote {
+		margin-top: 8px;
+		font-size: 12px;
+		color: var(--text-muted);
+		font-style: italic;
 	}
 
 	/* ── Infrastructure list ── */

@@ -1,10 +1,11 @@
 import { redirect, error } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
 import { user, member, organization, account, apikey, session as sessionTable } from '$lib/server/db/auth-schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 const REPO_PATTERN = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+const MAX_ROOMS_PER_USER = 20;
 
 export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 	const repo = url.searchParams.get('repo')?.trim() ?? '';
@@ -22,9 +23,37 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
 
-	// Slug uses random suffix — no per-repo uniqueness constraint.
-	// Users can create multiple rooms for the same repo (different keys, clean history).
-	// This also eliminates cross-user slug collisions on the UNIQUE index.
+	// ── Idempotency guard: if user already owns a room for this repo, reuse it ──
+	const [existing] = await db
+		.select({ orgId: organization.id })
+		.from(organization)
+		.innerJoin(member, eq(member.organizationId, organization.id))
+		.where(and(
+			eq(organization.name, repo),
+			eq(member.userId, locals.user.id),
+			eq(member.role, 'owner')
+		))
+		.limit(1);
+
+	if (existing) {
+		// Switch to existing room and redirect to chat
+		await db
+			.update(sessionTable)
+			.set({ activeOrganizationId: existing.orgId })
+			.where(eq(sessionTable.id, locals.session.id));
+		redirect(302, '/chat');
+	}
+
+	// ── Org count limit: prevent abuse ──
+	const [{ count: ownedRooms }] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(member)
+		.where(and(eq(member.userId, locals.user.id), eq(member.role, 'owner')));
+
+	if ((ownedRooms ?? 0) >= MAX_ROOMS_PER_USER) {
+		error(403, `Room limit reached (max ${MAX_ROOMS_PER_USER}). Delete unused rooms first.`);
+	}
+
 	const [owner, name] = repo.split('/');
 	const suffix = generateId().slice(0, 6);
 	const slug = `${owner.toLowerCase().replace(/[^a-z0-9]+/g, '-')}--${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}--${suffix}`;

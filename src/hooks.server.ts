@@ -428,7 +428,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const kv: KVNamespace | undefined = platform?.env?.CACHE;
 		if (apiKey) {
 			if (!kv && hasHyperdrive) {
-				console.warn('[MCP] CACHE KV binding missing — rate limiting disabled');
+				console.warn('[MCP] CACHE KV binding missing — rate limiting fail-closed');
+				return new Response(JSON.stringify({ ok: false, error: 'Service temporarily unavailable', code: 'rate_limit_unavailable' }), {
+					status: 503,
+					headers: { 'Content-Type': 'application/json' }
+				});
 			}
 			if (kv) {
 				const mcpLimit = await checkRateLimit(kv, {
@@ -437,7 +441,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					windowSeconds: 60
 				});
 				if (!mcpLimit.allowed) {
-					return new Response(JSON.stringify({ ok: false, error: 'Rate limited' }), {
+					return new Response(JSON.stringify({ ok: false, error: 'Rate limited', code: 'rate_limited' }), {
 						status: 429,
 						headers: { 'Content-Type': 'application/json' }
 					});

@@ -108,6 +108,12 @@
 				>
 					{data.repo}
 				</p>
+				<p
+					class="mt-1 text-[10px]"
+					style="color: var(--text-muted); font-family: var(--font-mono);"
+				>
+					Room ID: {data.roomId}
+				</p>
 			</div>
 
 			<!-- API Key -->
