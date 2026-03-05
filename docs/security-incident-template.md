@@ -45,16 +45,16 @@ Before any human approves an action, they see exactly what will happen:
 
 ### Role × risk matrix
 
-The server validates every intent against a role-based authority model:
+The server validates every intent against the role of the human who triggered the action:
 
-| | Low risk | Medium risk | High risk |
+| Triggering role | Low risk | Medium risk | High risk |
 |---|---|---|---|
 | **Owner** | Auto-approve | Auto-approve | Queue for review |
 | **Lead** | Auto-approve | Queue | Queue |
 | **Member** | Queue | Queue | Queue |
-| **Agent** | Queue | Queue | Reject |
+| **Viewer** | Reject | Reject | Reject |
 
-Even low-risk actions from agents are queued — they never auto-execute.
+Agents submit intents but never determine approval — the triggering human's role controls the outcome.
 
 ### HMAC-signed identity
 

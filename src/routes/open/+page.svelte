@@ -6,11 +6,22 @@
 	let { data } = $props();
 	let copied = $state(false);
 
-	function copyKey() {
+	async function copyKey() {
 		if ('agentKey' in data && data.agentKey) {
-			navigator.clipboard.writeText(data.agentKey);
-			copied = true;
-			setTimeout(() => (copied = false), 2000);
+			try {
+				await navigator.clipboard.writeText(data.agentKey);
+				copied = true;
+				setTimeout(() => (copied = false), 2000);
+			} catch {
+				// Fallback: select the key text for manual copy
+				const el = document.querySelector('[data-testid="agent-key"]');
+				if (el) {
+					const range = document.createRange();
+					range.selectNode(el);
+					window.getSelection()?.removeAllRanges();
+					window.getSelection()?.addRange(range);
+				}
+			}
 		}
 	}
 </script>
@@ -33,7 +44,7 @@
 				MARTOL
 			</h1>
 			<p class="mt-1 text-xs" style="color: var(--text-muted);">
-				{m.open_title()}
+				{m.open_subtitle()}
 			</p>
 		</div>
 
@@ -48,6 +59,13 @@
 					{m.open_invalid_repo()}
 				</p>
 			</div>
+			<a
+				href="/chat"
+				class="flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-xs transition-opacity hover:opacity-80"
+				style="color: var(--text-muted); border: 1px solid var(--border); text-decoration: none; font-family: var(--font-mono);"
+			>
+				{m.open_go_to_chat()}
+			</a>
 		{:else if 'agentKey' in data}
 			<!-- Room created successfully -->
 			<div

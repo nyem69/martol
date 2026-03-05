@@ -6,7 +6,7 @@
  * Pro: unlimited (high caps)
  */
 
-import { subscriptions, messages, agentRoomBindings } from '$lib/server/db/schema';
+import { subscriptions, messages } from '$lib/server/db/schema';
 import { member } from '$lib/server/db/auth-schema';
 import { eq, and, gte, sql } from 'drizzle-orm';
 
@@ -68,11 +68,11 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 		.from(member)
 		.where(eq(member.organizationId, orgId));
 
-	// 3. Count agents
+	// 3. Count agents (from member table where role = 'agent')
 	const [{ count: agents }] = await db
 		.select({ count: sql<number>`count(*)::int` })
-		.from(agentRoomBindings)
-		.where(eq(agentRoomBindings.orgId, orgId));
+		.from(member)
+		.where(and(eq(member.organizationId, orgId), eq(member.role, 'agent')));
 
 	// 4. Count today's messages
 	const todayStart = new Date();

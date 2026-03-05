@@ -1,13 +1,12 @@
 import { redirect, error } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
-import { user, member, organization, account, session as sessionTable } from '$lib/server/db/auth-schema';
+import { user, member, organization, account, apikey, session as sessionTable } from '$lib/server/db/auth-schema';
 import { eq, and, sql } from 'drizzle-orm';
-import { checkOrgLimits } from '$lib/server/feature-gates';
 import type { PageServerLoad } from './$types';
 
 const REPO_PATTERN = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
 
-export const load: PageServerLoad = async ({ url, locals }) => {
+export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 	const repo = url.searchParams.get('repo')?.trim() ?? '';
 
 	if (!repo || !REPO_PATTERN.test(repo)) {
@@ -23,9 +22,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
 
-	// Check if user already has a room for this repo (by slug)
-	const slug = repo.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+	// [C4] Use -- separator to prevent slug collisions (foo/bar-baz vs foo-bar/baz)
+	const [owner, name] = repo.split('/');
+	const slug = `${owner.toLowerCase().replace(/[^a-z0-9]+/g, '-')}--${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
+	// Check if user already has a room for this repo (by slug)
 	const [existingOrg] = await db
 		.select({ id: organization.id, name: organization.name })
 		.from(organization)
@@ -42,20 +43,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		redirect(302, '/chat');
 	}
 
-	// Feature gate: check org limits before creating
-	// Find user's first org to check limits (or use a lightweight check)
-	const [firstMembership] = await db
-		.select({ orgId: member.organizationId })
-		.from(member)
-		.where(eq(member.userId, locals.user.id))
-		.limit(1);
-
-	if (firstMembership) {
-		const orgLimits = await checkOrgLimits(db, firstMembership.orgId);
-		if (orgLimits.usage.agents >= orgLimits.limits.maxAgents) {
-			error(403, `Agent limit reached (${orgLimits.limits.maxAgents}). Upgrade to add more.`);
-		}
-	}
+	// [C2] Removed: feature gate was checking wrong org (user's first org, not new org).
+	// The new org starts with 1 agent; per-org limits are enforced by checkOrgLimits
+	// when the org is used (chat, agent creation via /api/agents).
 
 	// Create room (organization) named after repo — with advisory lock
 	const orgId = generateId();
@@ -66,9 +56,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const now = new Date();
 	const agentName = `${repo} agent`;
 
+	// [C1] Use sentinel to avoid redirect() inside transaction (throws SvelteKit exception,
+	// leaves Hyperdrive connection broken). Also use two-arg advisory lock to avoid collisions.
+	let existingRoomId: string | null = null;
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	await db.transaction(async (tx: any) => {
-		await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${locals.user.id + repo}))`);
+		// [I4] Two-arg form gives 64-bit lock space, no concatenation collisions
+		await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${locals.user.id})::int, hashtext(${repo})::int)`);
 
 		// Re-check after lock
 		const [recheck] = await tx
@@ -79,12 +74,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			.limit(1);
 
 		if (recheck) {
-			// Race condition — room was created between check and lock
-			await db
-				.update(sessionTable)
-				.set({ activeOrganizationId: recheck.id })
-				.where(eq(sessionTable.id, locals.session.id));
-			redirect(302, '/chat');
+			existingRoomId = recheck.id;
+			return; // exit transaction cleanly — redirect after commit
 		}
 
 		// 1. Create organization (room)
@@ -134,11 +125,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		});
 	});
 
-	// Set active org to the new room
-	await db
-		.update(sessionTable)
-		.set({ activeOrganizationId: orgId })
-		.where(eq(sessionTable.id, locals.session.id));
+	// [C1] Handle redirect outside transaction
+	if (existingRoomId) {
+		await db
+			.update(sessionTable)
+			.set({ activeOrganizationId: existingRoomId })
+			.where(eq(sessionTable.id, locals.session.id));
+		redirect(302, '/chat');
+	}
 
 	// Create API key via Better Auth (outside transaction)
 	let fullKey = '';
@@ -153,20 +147,30 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		fullKey = (keyResult as any)?.key ?? '';
 	} catch (e) {
 		console.error('[Open] API key creation failed:', e);
-		// Clean up on failure
+		// [C5] Clean up on failure — delete apikey first (FK: apikey.referenceId → user.id)
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			await db.transaction(async (tx: any) => {
+				await tx.delete(apikey).where(eq(apikey.referenceId, agentUserId));
 				await tx.delete(member).where(eq(member.organizationId, orgId));
-				await tx.delete(organization).where(eq(organization.id, orgId));
 				await tx.delete(account).where(eq(account.userId, agentUserId));
 				await tx.delete(user).where(eq(user.id, agentUserId));
+				await tx.delete(organization).where(eq(organization.id, orgId));
 			});
 		} catch (cleanupErr) {
 			console.error('[Open] Cleanup failed:', cleanupErr);
 		}
 		error(500, 'Failed to create API key');
 	}
+
+	// [C6] Set active org AFTER successful API key creation (not before)
+	await db
+		.update(sessionTable)
+		.set({ activeOrganizationId: orgId })
+		.where(eq(sessionTable.id, locals.session.id));
+
+	// [C7] Prevent caching of page containing plaintext API key
+	setHeaders({ 'cache-control': 'no-store, private' });
 
 	return {
 		roomId: orgId,
