@@ -1,0 +1,6 @@
+ALTER TABLE "subscriptions" ALTER COLUMN "founding_member" SET DATA TYPE boolean USING "founding_member"::boolean;--> statement-breakpoint
+ALTER TABLE "subscriptions" ALTER COLUMN "cancel_at_period_end" SET DATA TYPE boolean USING "cancel_at_period_end"::boolean;--> statement-breakpoint
+ALTER TABLE "content_reports" ADD CONSTRAINT "chk_cr_status" CHECK ("content_reports"."status" IN ('pending', 'reviewed', 'dismissed', 'actioned'));--> statement-breakpoint
+ALTER TABLE "pending_actions" ADD CONSTRAINT "chk_pa_status" CHECK ("pending_actions"."status" IN ('pending', 'approved', 'rejected', 'expired', 'executed'));--> statement-breakpoint
+ALTER TABLE "pending_actions" ADD CONSTRAINT "chk_pa_risk" CHECK ("pending_actions"."risk_level" IN ('low', 'medium', 'high'));--> statement-breakpoint
+ALTER TABLE "pending_actions" ADD CONSTRAINT "chk_pa_action_type" CHECK ("pending_actions"."action_type" IN ('question_answer', 'code_review', 'code_write', 'code_modify', 'code_delete', 'deploy', 'config_change'));
