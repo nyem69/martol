@@ -770,7 +770,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		if (entries.size === 0 && lastKnownSeqId > 0 && this.walMessageCount > 0) {
 			await this.safeSend(ws, {
 				type: 'error',
-				code: 'resync_required' as any,
+				code: 'resync_required',
 				message: 'Message history gap detected. Please resync.'
 			});
 			return;
