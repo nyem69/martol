@@ -5,6 +5,9 @@
  * We define the application-specific tables here.
  */
 
+// TODO: HI-13 — Add foreign key constraints to app tables (deferred: requires data analysis)
+// TODO: LO-09 — Add CHECK(length(id) <= 128) to auth table PKs (deferred: Better Auth managed)
+
 import {
 	pgTable,
 	serial,

@@ -19,28 +19,6 @@ interface EmailConfig {
 	emailName?: string;
 }
 
-interface KVSecondaryStorage {
-	get: (key: string) => Promise<string | null>;
-	set: (key: string, value: string, ttl?: number) => Promise<void>;
-	delete: (key: string) => Promise<void>;
-}
-
-/**
- * Wrap Cloudflare KV as Better Auth secondaryStorage
- */
-function createKVStorage(kv?: KVNamespace): KVSecondaryStorage | undefined {
-	if (!kv) return undefined;
-	return {
-		get: async (key: string) => kv.get(key),
-		set: async (key: string, value: string, ttl?: number) => {
-			await kv.put(key, value, ttl ? { expirationTtl: ttl } : undefined);
-		},
-		delete: async (key: string) => {
-			await kv.delete(key);
-		}
-	};
-}
-
 /**
  * Create Better Auth instance per-request.
  *
