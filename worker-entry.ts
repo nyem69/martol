@@ -59,8 +59,8 @@ export default {
 		}
 
 		const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
-		const { pendingActions } = await import('./src/lib/server/db/schema');
-		const { eq, and, lt } = await import('drizzle-orm');
+		const { pendingActions, attachments } = await import('./src/lib/server/db/schema');
+		const { eq, and, lt, isNull } = await import('drizzle-orm');
 
 		const { db, client, connectPromise } = createHyperdriveDb(hyperdrive);
 		await connectPromise;
@@ -104,9 +104,44 @@ export default {
 			}
 		} catch (err) {
 			console.error('[Cron] Invitation purge failed:', err);
-		} finally {
-			try { await client.end(); } catch { /* already closed */ }
 		}
+
+		// Clean up orphaned attachments (uploaded but never linked to a message)
+		try {
+			const orphanCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+			const orphans = await db.select()
+				.from(attachments)
+				.where(
+					and(
+						isNull(attachments.messageId),
+						lt(attachments.createdAt, orphanCutoff)
+					)
+				)
+				.limit(100);
+
+			const r2Bucket = env.STORAGE as R2Bucket | undefined;
+			for (const orphan of orphans) {
+				try {
+					if (r2Bucket) {
+						await r2Bucket.delete(orphan.r2Key);
+					}
+					await db.delete(attachments).where(eq(attachments.id, orphan.id));
+				} catch (e) {
+					console.error('[Cron] Failed to delete orphan attachment:', orphan.id, e);
+				}
+			}
+			if (orphans.length > 0) {
+				console.log(`[Cron] Cleaned up ${orphans.length} orphaned attachments`);
+			}
+		} catch (err) {
+			console.error('[Cron] Orphan attachment cleanup failed:', err);
+		}
+
+		// TODO: Message retention — requires product decision on retention periods per plan tier.
+		// When defined, add a cron job to soft-delete messages older than the retention period
+		// and clean up associated R2 objects.
+
+		try { await client.end(); } catch { /* already closed */ }
 	}
 };
 
