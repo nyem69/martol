@@ -127,7 +127,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const existing = await this.ctx.storage.getAlarm();
 				if (!existing) {
 					const delay = this.degraded
-						? Math.min(60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES), 3_600_000)
+						? Math.min(60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES), 600_000) // 10 min cap
 						: FLUSH_INTERVAL_MS;
 					await this.ctx.storage.setAlarm(Date.now() + delay);
 				}
@@ -352,7 +352,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				// [C4] Schedule retry with exponential backoff (self-healing)
 				const backoffMs = Math.min(
 					60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES),
-					3_600_000 // cap at 1 hour
+					600_000 // cap at 10 minutes
 				);
 				await this.ctx.storage.setAlarm(Date.now() + backoffMs);
 				return;
@@ -765,6 +765,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			prefix: 'msg:',
 			limit: 200
 		});
+
+		// [ME-11] Detect WAL gap — client's cursor is behind pruned entries
+		if (entries.size === 0 && lastKnownSeqId > 0 && this.walMessageCount > 0) {
+			await this.safeSend(ws, {
+				type: 'error',
+				code: 'resync_required' as any,
+				message: 'Message history gap detected. Please resync.'
+			});
+			return;
+		}
 
 		if (entries.size === 0) return;
 
