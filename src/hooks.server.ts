@@ -78,7 +78,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 				emailFrom: env.EMAIL_FROM || 'noreply@martol.app',
 				emailName: env.EMAIL_NAME || 'Martol'
 			},
-			env.CACHE
+			env.CACHE,
+			env.ENVIRONMENT
 		);
 
 		event.locals.auth = auth;
@@ -249,8 +250,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 					);
 				}
 			} catch (err) {
-				console.error('[Auth] Turnstile verification error:', err);
-				// Fail open in case of network error to Cloudflare — rate limiting still protects
+				console.warn('[Turnstile] Verification request failed, proceeding with rate limiting only:', err);
+				// Fall through — rate limiting still protects
 			}
 		}
 	}
@@ -471,6 +472,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			response.headers.set('Access-Control-Allow-Origin', origin);
 			response.headers.set('Access-Control-Allow-Credentials', 'true');
 		}
+		response.headers.append('Vary', 'Origin');
 
 		// Security headers
 		response.headers.set('X-Content-Type-Options', 'nosniff');

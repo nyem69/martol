@@ -55,7 +55,8 @@ export function createAuth(
 	secret: string,
 	baseURL: string,
 	emailConfig: EmailConfig,
-	kv?: KVNamespace
+	kv?: KVNamespace,
+	environment?: string
 ) {
 	const auth = betterAuth({
 		database: drizzleAdapter(db, {
@@ -74,7 +75,7 @@ export function createAuth(
 				disableSignUp: false,
 				sendVerificationOTP: async ({ email, otp }) => {
 					if (!emailConfig.resendApiKey) {
-						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
+						if ((baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) && environment !== 'production') {
 							console.warn(`[Auth] DEV ONLY — OTP for ${email}: ${otp}`);
 						} else {
 							console.error('[Auth] RESEND_API_KEY not configured — cannot send OTP');

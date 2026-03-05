@@ -1,5 +1,5 @@
 name = "martol"
-account_id = "ce472ff22555d61a27d583d552d5f461"
+# account_id set via CLOUDFLARE_ACCOUNT_ID environment variable
 main = "worker-entry.ts"
 compatibility_date = "2025-12-01"
 compatibility_flags = ["nodejs_compat"]

@@ -34,7 +34,10 @@ const WS_ROUTE_RE = /^\/api\/rooms\/([^/]+)\/ws$/;
 // Combined worker: SvelteKit fetch + WebSocket upgrade + scheduled handler
 export default {
 	async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {
-		// Intercept WebSocket upgrades — SvelteKit can't pass through WS responses
+		// Intercept WebSocket upgrades — SvelteKit can't pass through WS responses.
+		// NOTE: WebSocket upgrades are intercepted here before SvelteKit.
+		// The route at src/routes/api/rooms/[roomId]/ws/ was removed (ME-21)
+		// because it was dead code — this handler always processes WS upgrades first.
 		if (request.headers.get('Upgrade') === 'websocket') {
 			const url = new URL(request.url);
 			const match = url.pathname.match(WS_ROUTE_RE);

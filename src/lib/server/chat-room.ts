@@ -270,7 +270,10 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// ── Hibernation API Handlers ──────────────────────────────────────
 
 	async webSocketMessage(ws: WebSocket, rawMessage: string | ArrayBuffer): Promise<void> {
-		if (typeof rawMessage !== 'string') return;
+		if (typeof rawMessage !== 'string') {
+			await this.safeSend(ws, { type: 'error', code: 'invalid_message', message: 'Binary frames not supported' });
+			return;
+		}
 
 		let msg: ClientMessage;
 		try {
