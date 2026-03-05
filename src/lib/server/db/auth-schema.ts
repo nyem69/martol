@@ -93,6 +93,7 @@ export const member = pgTable(
 			.notNull()
 			.references(() => user.id),
 		role: text('role').notNull(),
+		aiOptOut: boolean('ai_opt_out').notNull().default(false),
 		createdAt: timestamp('createdAt').notNull()
 	},
 	(table) => [

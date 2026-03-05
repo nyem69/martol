@@ -133,6 +133,7 @@ export interface ChatWhoMember {
 	name: string;
 	role: string;
 	is_agent: boolean;
+	ai_opt_out: boolean;
 }
 
 export interface ChatWhoResult {

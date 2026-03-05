@@ -5,7 +5,6 @@
  * We define the application-specific tables here.
  */
 
-// TODO: HI-13 — Add foreign key constraints to app tables (deferred: requires data analysis)
 // TODO: LO-09 — Add CHECK(length(id) <= 128) to auth table PKs (deferred: Better Auth managed)
 
 import {
@@ -21,9 +20,11 @@ import {
 	uniqueIndex,
 	index,
 	primaryKey,
-	check
+	check,
+	foreignKey
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { user, organization } from './auth-schema';
 
 /**
  * Messages — chat messages with server-derived sender identity
@@ -47,7 +48,10 @@ export const messages = pgTable(
 	},
 	(table) => [
 		index('idx_messages_org_id').on(table.orgId, table.id),
-		index('idx_messages_org_sender').on(table.orgId, table.senderId, table.id)
+		index('idx_messages_org_sender').on(table.orgId, table.senderId, table.id),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.senderId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.replyTo], foreignColumns: [table.id] }).onDelete('set null')
 	]
 );
 
@@ -58,7 +62,7 @@ export const attachments = pgTable(
 	'attachments',
 	{
 		id: bigserial('id', { mode: 'number' }).primaryKey(),
-		messageId: bigint('message_id', { mode: 'number' }).references(() => messages.id),
+		messageId: bigint('message_id', { mode: 'number' }),
 		orgId: text('org_id').notNull(),
 		uploadedBy: text('uploaded_by').notNull(),
 		filename: text('filename').notNull(),
@@ -71,7 +75,10 @@ export const attachments = pgTable(
 		uniqueIndex('idx_attachments_r2_key').on(table.r2Key),
 		index('idx_attachments_message_id').on(table.messageId),
 		index('idx_attachments_org_message').on(table.orgId, table.messageId),
-		index('idx_attachments_org_uploaded_by').on(table.orgId, table.uploadedBy)
+		index('idx_attachments_org_uploaded_by').on(table.orgId, table.uploadedBy),
+		foreignKey({ columns: [table.messageId], foreignColumns: [messages.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.uploadedBy], foreignColumns: [user.id] }).onDelete('restrict')
 	]
 );
 
@@ -88,7 +95,9 @@ export const todos = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		index('idx_todos_org_status').on(table.orgId, table.status)
+		index('idx_todos_org_status').on(table.orgId, table.status),
+		foreignKey({ columns: [table.messageId], foreignColumns: [messages.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]
 );
 
@@ -109,7 +118,9 @@ export const agentRoomBindings = pgTable(
 	},
 	(table) => [
 		uniqueIndex('idx_agent_room_bindings_org_label').on(table.orgId, table.label),
-		uniqueIndex('idx_agent_room_bindings_agent_user').on(table.agentUserId)
+		uniqueIndex('idx_agent_room_bindings_agent_user').on(table.agentUserId),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -125,7 +136,9 @@ export const agentCursors = pgTable(
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		primaryKey({ columns: [table.orgId, table.agentUserId] })
+		primaryKey({ columns: [table.orgId, table.agentUserId] }),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -141,7 +154,9 @@ export const readCursors = pgTable(
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		primaryKey({ columns: [table.orgId, table.userId] })
+		primaryKey({ columns: [table.orgId, table.userId] }),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -189,7 +204,12 @@ export const pendingActions = pgTable(
 		index('idx_pending_actions_org_status').on(table.orgId, table.status, table.createdAt),
 		check('chk_pa_status', sql`${table.status} IN ('pending', 'approved', 'rejected', 'expired', 'executed')`),
 		check('chk_pa_risk', sql`${table.riskLevel} IN ('low', 'medium', 'high')`),
-		check('chk_pa_action_type', sql`${table.actionType} IN ('question_answer', 'code_review', 'code_write', 'code_modify', 'code_delete', 'deploy', 'config_change')`)
+		check('chk_pa_action_type', sql`${table.actionType} IN ('question_answer', 'code_review', 'code_write', 'code_modify', 'code_delete', 'deploy', 'config_change')`),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.triggerMessageId], foreignColumns: [messages.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.requestedBy], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.approvedBy], foreignColumns: [user.id] }).onDelete('set null')
 	]
 );
 
@@ -207,7 +227,12 @@ export const roleAudit = pgTable(
 		newRole: text('new_role'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('idx_role_audit_org').on(table.orgId, table.createdAt)]
+	(table) => [
+		index('idx_role_audit_org').on(table.orgId, table.createdAt),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.changedBy], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.targetUser], foreignColumns: [user.id] }).onDelete('restrict')
+	]
 );
 
 // ── Auth & Onboarding (docs/003-Auth.md) ────────────────────────────
@@ -228,7 +253,8 @@ export const usernameHistory = pgTable(
 	},
 	(table) => [
 		index('idx_username_history_user').on(table.userId),
-		index('idx_username_history_old').on(table.oldUsername)
+		index('idx_username_history_old').on(table.oldUsername),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -262,7 +288,9 @@ export const termsAcceptances = pgTable(
 	},
 	(table) => [
 		uniqueIndex('idx_terms_acceptances_user_version').on(table.userId, table.termsVersionId),
-		index('idx_terms_acceptances_user').on(table.userId)
+		index('idx_terms_acceptances_user').on(table.userId),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.termsVersionId], foreignColumns: [termsVersions.id] }).onDelete('restrict')
 	]
 );
 
@@ -297,7 +325,8 @@ export const accountAudit = pgTable(
 	},
 	(table) => [
 		index('idx_account_audit_user').on(table.userId, table.createdAt),
-		index('idx_account_audit_action').on(table.action, table.createdAt)
+		index('idx_account_audit_action').on(table.action, table.createdAt),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict')
 	]
 );
 
@@ -328,7 +357,11 @@ export const contentReports = pgTable(
 	(table) => [
 		index('idx_content_reports_org').on(table.orgId, table.status),
 		index('idx_content_reports_message').on(table.messageId),
-		check('chk_cr_status', sql`${table.status} IN ('pending', 'reviewed', 'dismissed', 'actioned')`)
+		check('chk_cr_status', sql`${table.status} IN ('pending', 'reviewed', 'dismissed', 'actioned')`),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.messageId], foreignColumns: [messages.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.reporterId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.reviewedBy], foreignColumns: [user.id] }).onDelete('set null')
 	]
 );
 
@@ -358,7 +391,8 @@ export const subscriptions = pgTable(
 	(table) => [
 		uniqueIndex('idx_subscriptions_org').on(table.orgId),
 		index('idx_subscriptions_stripe_customer').on(table.stripeCustomerId),
-		index('idx_subscriptions_stripe_sub').on(table.stripeSubscriptionId)
+		index('idx_subscriptions_stripe_sub').on(table.stripeSubscriptionId),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]
 );
 
