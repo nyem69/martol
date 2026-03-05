@@ -109,7 +109,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 				resendApiKey: process.env.RESEND_API_KEY,
 				emailFrom: process.env.EMAIL_FROM || 'noreply@martol.app',
 				emailName: process.env.EMAIL_NAME || 'Martol'
-			}
+			},
+			undefined,
+			process.env.ENVIRONMENT as string
 		);
 
 		event.locals.auth = auth;

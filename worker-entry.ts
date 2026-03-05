@@ -212,7 +212,8 @@ async function handleWebSocketUpgrade(
 				emailFrom: (env.EMAIL_FROM as string) || 'noreply@martol.app',
 				emailName: (env.EMAIL_NAME as string) || 'Martol'
 			},
-			env.CACHE as KVNamespace
+			env.CACHE as KVNamespace,
+			env.ENVIRONMENT as string
 		);
 
 		let userId: string;
