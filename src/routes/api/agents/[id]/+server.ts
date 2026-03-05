@@ -9,7 +9,8 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
-import { member, apikey } from '$lib/server/db/auth-schema';
+import { member, apikey, account, user } from '$lib/server/db/auth-schema';
+import { agentRoomBindings } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
@@ -61,13 +62,12 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 		error(404, 'Agent not found in this room');
 	}
 
-	// Find and delete API key(s) for this agent user
+	// Set KV revoked flags for real-time revocation (before DB deletion)
 	const keys = await locals.db
 		.select({ id: apikey.id })
 		.from(apikey)
 		.where(eq(apikey.userId, agentUserId));
 
-	// Set KV revoked flags for real-time revocation
 	const kv = platform?.env?.CACHE;
 	for (const key of keys) {
 		if (kv) {
@@ -79,16 +79,16 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 		}
 	}
 
-	// Delete in order: apikey → member
-	if (keys.length > 0) {
-		await locals.db
-			.delete(apikey)
-			.where(eq(apikey.userId, agentUserId));
-	}
-
-	await locals.db
-		.delete(member)
-		.where(and(eq(member.organizationId, orgId), eq(member.userId, agentUserId)));
+	// Transactional cleanup: delete all related records atomically
+	await locals.db.transaction(async (tx: typeof locals.db) => {
+		await tx.delete(apikey).where(eq(apikey.userId, agentUserId));
+		await tx.delete(member).where(
+			and(eq(member.userId, agentUserId), eq(member.organizationId, orgId))
+		);
+		await tx.delete(account).where(eq(account.userId, agentUserId));
+		await tx.delete(agentRoomBindings).where(eq(agentRoomBindings.agentUserId, agentUserId));
+		await tx.delete(user).where(eq(user.id, agentUserId));
+	});
 
 	return json({ ok: true });
 };

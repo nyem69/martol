@@ -111,8 +111,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		});
 	} catch (e: any) {
-		console.error('[Agents] createApiKey failed (agent created without key):', e);
-		error(500, 'Agent created but API key generation failed. Please revoke and try again.');
+		// Compensating cleanup — remove the agent user created in the transaction above
+		try {
+			await locals.db.transaction(async (tx: typeof locals.db) => {
+				await tx.delete(member).where(
+					and(eq(member.userId, agentUserId), eq(member.organizationId, orgId))
+				);
+				await tx.delete(account).where(eq(account.userId, agentUserId));
+				await tx.delete(user).where(eq(user.id, agentUserId));
+			});
+		} catch (cleanupErr) {
+			console.error('[Agents] Cleanup after API key failure also failed:', cleanupErr);
+		}
+		console.error('[Agents] API key creation failed, cleaned up agent user:', e);
+		error(500, 'Failed to create API key');
 	}
 
 	const fullKey = keyResult?.key;
