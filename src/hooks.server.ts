@@ -406,6 +406,25 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	// ── MCP endpoint rate limiting: 60 req/min per API key (CR-07) ──
+	if (pathname === '/mcp/v1' && event.request.method === 'POST') {
+		const apiKey = event.request.headers.get('x-api-key');
+		const kv: KVNamespace | undefined = platform?.env?.CACHE;
+		if (apiKey && kv) {
+			const mcpLimit = await checkRateLimit(kv, {
+				key: `mcp:${apiKey.slice(-8)}`,
+				maxRequests: 60,
+				windowSeconds: 60
+			});
+			if (!mcpLimit.allowed) {
+				return new Response(JSON.stringify({ ok: false, error: 'Rate limited' }), {
+					status: 429,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+		}
+	}
+
 	// ── Action approval rate limit: 60 per user per minute ──
 	if (isActionApproval && event.locals.user) {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
