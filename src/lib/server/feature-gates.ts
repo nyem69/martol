@@ -63,18 +63,16 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 	const limits = plan === 'pro' ? PRO_LIMITS : FREE_LIMITS;
 
 	// 2. Count members
-	const memberRows = await db
-		.select({ id: member.id })
+	const [{ count: users }] = await db
+		.select({ count: sql<number>`count(*)::int` })
 		.from(member)
 		.where(eq(member.organizationId, orgId));
-	const users = memberRows.length;
 
 	// 3. Count agents
-	const agentRows = await db
-		.select({ id: agentRoomBindings.id })
+	const [{ count: agents }] = await db
+		.select({ count: sql<number>`count(*)::int` })
 		.from(agentRoomBindings)
 		.where(eq(agentRoomBindings.orgId, orgId));
-	const agents = agentRows.length;
 
 	// 4. Count today's messages
 	const todayStart = new Date();
@@ -90,8 +88,8 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 		status: sub?.status ?? 'active',
 		limits,
 		usage: {
-			users,
-			agents,
+			users: users ?? 0,
+			agents: agents ?? 0,
 			msgsToday: msgCount?.count ?? 0
 		},
 		foundingMember: sub?.foundingMember === true,

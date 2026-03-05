@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
 import { createStripe } from '$lib/server/stripe';
 import { subscriptions } from '$lib/server/db/schema';
 import { member } from '$lib/server/db/auth-schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ locals, platform, url }) => {
 	if (!locals.user || !locals.session) error(401, 'Authentication required');
@@ -75,11 +75,11 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 	}
 
 	// Count current org members for seat quantity
-	const memberRows = await locals.db
-		.select({ id: member.id })
+	const [{ count: rawMemberCount }] = await locals.db
+		.select({ count: sql<number>`count(*)::int` })
 		.from(member)
 		.where(eq(member.organizationId, orgId));
-	const memberCount = Math.max(1, memberRows.length);
+	const memberCount = Math.max(1, rawMemberCount ?? 0);
 
 	// Create Checkout Session
 	const session = await stripe.checkout.sessions.create({

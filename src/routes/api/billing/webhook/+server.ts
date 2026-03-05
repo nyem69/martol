@@ -9,7 +9,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createStripe } from '$lib/server/stripe';
 import { subscriptions } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 /** Extract current_period_end from subscription items (moved from sub root in newer API) */
@@ -59,11 +59,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
 
 			// Check founding member eligibility (< 100 pro subscriptions)
-			const proCount = await db
-				.select({ id: subscriptions.id })
+			const [{ count: proCount }] = await db
+				.select({ count: sql<number>`count(*)::int` })
 				.from(subscriptions)
 				.where(eq(subscriptions.plan, 'pro'));
-			const isFoundingMember = proCount.length < 100;
+			const isFoundingMember = (proCount ?? 0) < 100;
 
 			const periodEnd = getPeriodEnd(sub);
 

@@ -17,7 +17,7 @@ import {
 	accountAudit,
 	contentReports
 } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user || !locals.session) {
@@ -80,7 +80,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 				deletedAt: messages.deletedAt
 			})
 			.from(messages)
-			.where(eq(messages.senderId, userId)),
+			.where(eq(messages.senderId, userId))
+			.orderBy(desc(messages.createdAt))
+			.limit(10000),
 		db.select().from(usernameHistory).where(eq(usernameHistory.userId, userId)),
 		db.select().from(termsAcceptances).where(eq(termsAcceptances.userId, userId)),
 		db.select().from(accountAudit).where(eq(accountAudit.userId, userId)),

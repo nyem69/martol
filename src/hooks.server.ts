@@ -17,7 +17,7 @@ import { createAuth } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rate-limit';
 import { isDisposableEmail } from '$lib/server/disposable-emails';
 import { termsVersions, termsAcceptances } from '$lib/server/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -142,44 +142,38 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const db = event.locals.db;
 			const userId = event.locals.user.id;
 
-			// Get latest version of each required type
-			const requiredTypes = ['tos', 'privacy', 'aup'] as const;
-			const latestVersions: { id: number; type: string }[] = [];
+			// Batch query: get latest version of each required type using DISTINCT ON
+			const latestVersions = await db
+				.select({ id: termsVersions.id, type: termsVersions.type })
+				.from(termsVersions)
+				.where(inArray(termsVersions.type, ['tos', 'privacy', 'aup']))
+				.orderBy(termsVersions.type, desc(termsVersions.effectiveAt));
 
-			for (const type of requiredTypes) {
-				const [latest] = await db
-					.select({ id: termsVersions.id, type: termsVersions.type })
-					.from(termsVersions)
-					.where(eq(termsVersions.type, type))
-					.orderBy(desc(termsVersions.effectiveAt))
-					.limit(1);
-				if (latest) {
-					latestVersions.push(latest);
+			// Deduplicate to latest per type (first row per type due to ORDER BY)
+			const latestByType = new Map<string, number>();
+			for (const v of latestVersions) {
+				if (!latestByType.has(v.type)) {
+					latestByType.set(v.type, v.id);
 				}
 			}
 
 			// Only check if at least one terms version exists
-			if (latestVersions.length > 0) {
-				// Get user's acceptances for these versions
-				const acceptedVersionIds: number[] = [];
-				for (const v of latestVersions) {
-					const [acceptance] = await db
-						.select({ id: termsAcceptances.id })
-						.from(termsAcceptances)
-						.where(
-							and(
-								eq(termsAcceptances.userId, userId),
-								eq(termsAcceptances.termsVersionId, v.id)
-							)
+			if (latestByType.size > 0) {
+				const requiredIds = [...latestByType.values()];
+
+				// Single query: count user's acceptances for these version IDs
+				const [{ count: acceptedCount }] = await db
+					.select({ count: sql<number>`count(*)::int` })
+					.from(termsAcceptances)
+					.where(
+						and(
+							eq(termsAcceptances.userId, userId),
+							inArray(termsAcceptances.termsVersionId, requiredIds)
 						)
-						.limit(1);
-					if (acceptance) {
-						acceptedVersionIds.push(v.id);
-					}
-				}
+					);
 
 				// If any required type is missing acceptance, redirect
-				if (acceptedVersionIds.length < latestVersions.length) {
+				if ((acceptedCount ?? 0) < latestByType.size) {
 					return new Response(null, {
 						status: 302,
 						headers: { Location: '/accept-terms' }
