@@ -340,12 +340,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 					);
 				}
 
-				// Verification rate limit: 5 attempts / 15 min per email
+				// Verification rate limit: 5 attempts / 15 min per email (fail-closed)
 				const verifyLimit = await checkRateLimit(kv, {
 					key: `otp-verify:${email}`,
 					maxRequests: 5,
 					windowSeconds: 900
-				});
+				}, true);
 				if (!verifyLimit.allowed) {
 					// Lockout: set a flag so subsequent requests also fail fast
 					await kv.put(`lockout:${email}`, 'locked', { expirationTtl: 900 });
