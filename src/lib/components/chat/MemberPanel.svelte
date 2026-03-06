@@ -453,7 +453,7 @@
 							{#if inviteStatus}
 								<div
 									class="mt-2 rounded px-2 py-1 text-[10px]"
-									style="background: color-mix(in oklch, var({inviteStatus.type === 'success' ? '--success' : '--error'}) 15%, transparent); color: var({inviteStatus.type === 'success' ? '--success' : '--error'});"
+									style="background: color-mix(in oklch, var({inviteStatus.type === 'success' ? '--success' : '--danger'}) 15%, transparent); color: var({inviteStatus.type === 'success' ? '--success' : '--danger'});"
 								>
 									{inviteStatus.message}
 								</div>
@@ -471,7 +471,7 @@
 												<!-- Status dot -->
 												<span
 													class="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-													style="background: var({inv.status === 'accepted' ? '--success' : inv.status === 'pending' ? '--warning' : '--error'});"
+													style="background: var({inv.status === 'accepted' ? '--success' : inv.status === 'pending' ? '--warning' : '--danger'});"
 													aria-hidden="true"
 												></span>
 												<div class="flex min-w-0 flex-1 flex-col">
@@ -737,7 +737,7 @@
 								</div>
 
 								{#if agentError}
-									<div class="mb-2 rounded px-2 py-1 text-[10px]" style="background: color-mix(in oklch, var(--error) 15%, transparent); color: var(--error);">
+									<div class="mb-2 rounded px-2 py-1 text-[10px]" style="background: color-mix(in oklch, var(--danger) 15%, transparent); color: var(--danger);">
 										{agentError}
 									</div>
 								{/if}
@@ -801,7 +801,7 @@
 													{#if canManageAgents}
 														<button
 															class="rounded p-0.5 transition-colors hover:opacity-80"
-															style="color: var(--error);"
+															style="color: var(--danger);"
 															onclick={() => promptRevoke(agent.agentUserId, agent.name)}
 															aria-label={m.agent_revoke()}
 															data-testid="agent-revoke-btn"
@@ -926,7 +926,7 @@
 	>
 		<button
 			class="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
-			style="background: color-mix(in oklch, var(--error) 12%, transparent); color: var(--error); font-family: var(--font-mono);"
+			style="background: color-mix(in oklch, var(--danger) 12%, transparent); color: var(--danger); font-family: var(--font-mono);"
 			onclick={handleLogout}
 			disabled={loggingOut}
 			data-testid="logout-btn"
@@ -976,7 +976,7 @@
 				<button
 					bind:this={confirmBtn}
 					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
-					style="background: var(--error); color: #fff; font-family: var(--font-mono);"
+					style="background: var(--danger); color: #fff; font-family: var(--font-mono);"
 					onclick={executeRevoke}
 				>
 					{m.agent_revoke()}

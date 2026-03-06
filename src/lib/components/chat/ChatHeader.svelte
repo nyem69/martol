@@ -323,7 +323,7 @@
 					<div style="border-top: 1px solid var(--border);">
 						<button
 							class="menu-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-							style="color: var(--error);"
+							style="color: var(--danger);"
 							onclick={handleSignOut}
 							role="menuitem"
 						>
