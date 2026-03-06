@@ -122,6 +122,11 @@
 	let agentError = $state('');
 	let agentsFetched = $state(false);
 
+	// ── Confirm dialog state ──
+	let confirmTarget = $state<{ agentUserId: string; name: string } | null>(null);
+	let confirmBtn = $state<HTMLButtonElement | undefined>();
+	let confirmPrevFocus: HTMLElement | null = null;
+
 	const canManageAgents = $derived(userRole === 'owner' || userRole === 'lead');
 
 	async function fetchAgents() {
@@ -158,8 +163,23 @@
 		}
 	}
 
-	async function revokeAgent(agentUserId: string) {
-		if (!confirm(m.agent_revoke_confirm())) return;
+	function promptRevoke(agentUserId: string, name: string) {
+		confirmPrevFocus = document.activeElement as HTMLElement;
+		confirmTarget = { agentUserId, name };
+		// Focus confirm button after render
+		requestAnimationFrame(() => confirmBtn?.focus());
+	}
+
+	function cancelRevoke() {
+		confirmTarget = null;
+		confirmPrevFocus?.focus();
+	}
+
+	async function executeRevoke() {
+		if (!confirmTarget) return;
+		const { agentUserId } = confirmTarget;
+		confirmTarget = null;
+		confirmPrevFocus?.focus();
 		try {
 			const res = await fetch(`/api/agents/${agentUserId}`, { method: 'DELETE' });
 			const data: { ok?: boolean } = await res.json();
@@ -782,7 +802,7 @@
 														<button
 															class="rounded p-0.5 transition-colors hover:opacity-80"
 															style="color: var(--error);"
-															onclick={() => revokeAgent(agent.agentUserId)}
+															onclick={() => promptRevoke(agent.agentUserId, agent.name)}
 															aria-label={m.agent_revoke()}
 															data-testid="agent-revoke-btn"
 														>
@@ -920,6 +940,51 @@
 		</button>
 	</div>
 </aside>
+
+<!-- ═══ CONFIRM REVOKE DIALOG ═══ -->
+{#if confirmTarget}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+		<div
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="confirm-revoke-title"
+			tabindex="-1"
+			class="mx-4 w-full max-w-sm rounded-lg p-5 shadow-xl"
+			style="background: var(--bg-elevated); border: 1px solid var(--border);"
+			onkeydown={(e) => {
+				if (e.key === 'Escape') cancelRevoke();
+			}}
+		>
+			<h3
+				id="confirm-revoke-title"
+				class="mb-1 text-sm font-bold"
+				style="color: var(--text);"
+			>
+				{m.agent_revoke()} — {confirmTarget.name}
+			</h3>
+			<p class="mb-5 text-xs" style="color: var(--text-muted);">
+				{m.agent_revoke_confirm()}
+			</p>
+			<div class="flex justify-end gap-2">
+				<button
+					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
+					style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); font-family: var(--font-mono);"
+					onclick={cancelRevoke}
+				>
+					{m.cancel()}
+				</button>
+				<button
+					bind:this={confirmBtn}
+					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
+					style="background: var(--error); color: var(--bg); font-family: var(--font-mono);"
+					onclick={executeRevoke}
+				>
+					{m.agent_revoke()}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	/* Panel width: full on small phones, fixed on larger screens */

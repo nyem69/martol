@@ -123,6 +123,7 @@
   "agent_no_agents": "No agents connected",
   "agent_revoke": "Revoke",
   "agent_revoke_confirm": "Revoke this agent key? The agent will disconnect.",
+  "cancel": "Cancel",
   "agent_key_prefix": "Key",
   "age_gate_title": "Date of birth",
   "age_gate_subtitle": "We need to verify your age before continuing.",
