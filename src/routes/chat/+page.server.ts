@@ -132,6 +132,20 @@ export const load: PageServerLoad = async (event) => {
 		.where(eq(organization.id, roomId))
 		.limit(1);
 
+	// Auto-fix stale room names: if owner's room still has a different user's auto-generated name
+	const currentUserName = locals.user.username || locals.user.name;
+	if (org?.name && userRole === 'owner' && currentUserName) {
+		const endsWithRoom = org.name.endsWith('\u2019s Room') || org.name.endsWith("'s Room");
+		const expectedName = `${currentUserName}'s Room`;
+		if (endsWithRoom && org.name !== expectedName) {
+			await db
+				.update(organization)
+				.set({ name: expectedName })
+				.where(eq(organization.id, roomId));
+			org.name = expectedName;
+		}
+	}
+
 	// Load all rooms the user belongs to (for room switcher)
 	const userRooms = await db
 		.select({ id: organization.id, name: organization.name })

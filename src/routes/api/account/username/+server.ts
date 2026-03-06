@@ -174,19 +174,23 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 				userAgent
 			});
 
-			// Update auto-generated room names that still use the old username
-			const oldRoomName = `${currentUsername}'s Room`;
+			// Update auto-generated room names for owned rooms
+			// Match both current username and any previous auto-generated patterns
 			const newRoomName = `${newUsername}'s Room`;
 			const ownedOrgs = await tx
-				.select({ orgId: member.organizationId })
+				.select({ orgId: member.organizationId, orgName: organization.name })
 				.from(member)
+				.innerJoin(organization, eq(organization.id, member.organizationId))
 				.where(and(eq(member.userId, locals.user.id), eq(member.role, 'owner')));
 
 			for (const org of ownedOrgs) {
-				await tx
-					.update(organization)
-					.set({ name: newRoomName })
-					.where(and(eq(organization.id, org.orgId), eq(organization.name, oldRoomName)));
+				// Rename if it ends with "'s Room" (auto-generated pattern)
+				if (org.orgName?.endsWith('\u2019s Room') || org.orgName?.endsWith("'s Room")) {
+					await tx
+						.update(organization)
+						.set({ name: newRoomName })
+						.where(eq(organization.id, org.orgId));
+				}
 			}
 		});
 	} catch (err: any) {
