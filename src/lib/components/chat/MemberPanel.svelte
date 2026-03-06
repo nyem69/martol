@@ -976,7 +976,7 @@
 				<button
 					bind:this={confirmBtn}
 					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
-					style="background: var(--error); color: var(--bg); font-family: var(--font-mono);"
+					style="background: var(--error); color: #fff; font-family: var(--font-mono);"
 					onclick={executeRevoke}
 				>
 					{m.agent_revoke()}
