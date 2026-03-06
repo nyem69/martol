@@ -176,7 +176,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		error(403, 'Not a member of this room');
 	}
 
-	// Query agent members joined with apikey for key prefix
+	// Query agent members that have an active API key (revoked agents have no key)
 	const agents = await locals.db
 		.select({
 			agentUserId: member.userId,
@@ -186,7 +186,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		})
 		.from(member)
 		.innerJoin(user, eq(user.id, member.userId))
-		.leftJoin(apikey, eq(apikey.referenceId, member.userId))
+		.innerJoin(apikey, eq(apikey.referenceId, member.userId))
 		.where(and(eq(member.organizationId, orgId), eq(member.role, 'agent')))
 		.orderBy(member.createdAt);
 
