@@ -22,6 +22,8 @@ export const user = pgTable(
 		username: text('username'),
 		displayName: text('displayName'),
 		ageVerifiedAt: timestamp('ageVerifiedAt'),
+		// Platform-level role (user | admin)
+		role: text('role').notNull().default('user').$type<'user' | 'admin'>(),
 		// twoFactor plugin — required for user creation to succeed
 		twoFactorEnabled: boolean('twoFactorEnabled').default(false),
 		createdAt: timestamp('createdAt').notNull(),

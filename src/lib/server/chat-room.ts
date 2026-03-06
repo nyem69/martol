@@ -15,7 +15,7 @@ import type {
 	ErrorCode
 } from '../types/ws';
 import { createHyperdriveDb } from './db/hyperdrive';
-import { messages as messagesTable, readCursors, pendingActions, attachments } from './db/schema';
+import { messages as messagesTable, readCursors, pendingActions, attachments, supportTickets } from './db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -1045,6 +1045,42 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							timestamp: new Date().toISOString()
 						}
 					});
+				}
+				break;
+			}
+
+			case 'ticket': {
+				const ticketTitle = args.trim();
+				if (!ticketTitle || ticketTitle.length < 3) {
+					await this.sendError(ws, 'invalid_message', 'Usage: /ticket <title> (min 3 chars)');
+					return;
+				}
+				try {
+					const ticketId = crypto.randomUUID().replace(/-/g, '').slice(0, 21);
+					await this.withDb(async (db) => {
+						await db.insert(supportTickets).values({
+							id: ticketId,
+							userId,
+							title: ticketTitle.slice(0, 200),
+							description: ticketTitle,
+							category: 'issue' as const
+						});
+					});
+					await this.broadcast({
+						type: 'message',
+						message: {
+							localId: `sys-${Date.now()}`,
+							serverSeqId: 0,
+							senderId: 'system',
+							senderRole: 'system',
+							senderName: 'System',
+							body: `${userName} created ticket: ${ticketTitle} → /support/${ticketId}`,
+							timestamp: new Date().toISOString()
+						}
+					});
+				} catch (e) {
+					console.error('[ChatRoom] Ticket creation failed:', e);
+					await this.sendError(ws, 'invalid_message', 'Failed to create ticket');
 				}
 				break;
 			}

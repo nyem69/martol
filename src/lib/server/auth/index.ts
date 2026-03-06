@@ -166,7 +166,8 @@ export function createAuth(
 			additionalFields: {
 				username: { type: 'string', unique: true, required: false },
 				displayName: { type: 'string', required: false },
-				ageVerifiedAt: { type: 'date', required: false }
+				ageVerifiedAt: { type: 'date', required: false },
+				role: { type: 'string', required: false, defaultValue: 'user', input: false }
 			}
 		},
 
