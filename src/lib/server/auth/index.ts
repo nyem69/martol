@@ -153,7 +153,7 @@ export function createAuth(
 
 			// Passkey (WebAuthn) authentication
 			passkey({
-				rpID: baseURL.includes('localhost') ? 'localhost' : 'martol.app',
+				rpID: new URL(baseURL).hostname,
 				rpName: 'Martol',
 				origin: baseURL
 			})
