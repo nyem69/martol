@@ -233,13 +233,14 @@ async function handleWebSocketUpgrade(
 			let keyData: any;
 			try {
 				keyData = await auth.api.verifyApiKey({ body: { key: apiKeyHeader } });
-			} catch {
+			} catch (e) {
+				console.error('[WS] verifyApiKey threw:', e);
 				return new Response('Invalid API key', { status: 401 });
 			}
-			if (!keyData?.valid || !keyData.key?.userId) {
+			if (!keyData?.valid || !keyData.key?.referenceId) {
 				return new Response('Invalid API key', { status: 401 });
 			}
-			userId = keyData.key.userId;
+			userId = keyData.key.referenceId;
 
 			// Check revocation in KV
 			const kv = env.CACHE as KVNamespace | undefined;
