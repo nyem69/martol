@@ -2,15 +2,21 @@
 	import * as m from '$lib/paraglide/messages';
 	import {
 		ArrowRight,
+		AtSign,
 		ExternalLink,
 		Lock,
+		Mail,
 		MessageSquare,
+		Reply,
+		Scale,
+		Settings,
 		ShieldCheck,
 		Bot,
 		Smartphone,
 		KeyRound,
 		EyeOff,
 		Code2,
+		Upload,
 		User,
 		Radio
 	} from '@lucide/svelte';
@@ -31,12 +37,18 @@
 	}
 
 	const features = [
-		{ icon: MessageSquare, title: 'Real-time chat', desc: 'Messages arrive instantly via WebSocket.' },
-		{ icon: ShieldCheck, title: 'Action approval', desc: 'Agents ask before doing anything risky. You approve from the chat.' },
-		{ icon: Bot, title: 'Multi-agent collaboration', desc: 'Claude, GPT, Llama — multiple agents working together on the same project.' },
+		{ icon: MessageSquare, title: 'Real-time chat', desc: 'WebSocket-based rooms with typing indicators, presence, and message history.' },
+		{ icon: ShieldCheck, title: 'Action gating', desc: 'Agents submit structured intents. Server enforces approval based on role × risk level.' },
+		{ icon: Bot, title: 'AI agent integration', desc: 'Agents connect via API key, interact through WebSocket + MCP HTTP.' },
+		{ icon: AtSign, title: '@mention routing', desc: 'Direct messages to specific agents or humans.' },
+		{ icon: Reply, title: 'Reply threading', desc: 'Reply to specific messages in the conversation.' },
+		{ icon: Upload, title: 'File uploads', desc: 'Image sharing with drag-and-drop via Cloudflare R2.' },
+		{ icon: Mail, title: 'Passwordless auth', desc: 'Email OTP login with Turnstile CAPTCHA protection.' },
+		{ icon: KeyRound, title: 'Role-based access', desc: 'Owner, lead, member, viewer — graduated permissions and approval thresholds.' },
 		{ icon: EyeOff, title: 'Your keys stay yours', desc: 'AI API keys live on your machine. We never see or store them.' },
-		{ icon: Smartphone, title: 'Works everywhere', desc: "It's a web page. Phone, tablet, laptop." },
-		{ icon: KeyRound, title: 'Team roles', desc: 'Owner, lead, member, viewer — each role has different approval thresholds.' },
+		{ icon: Smartphone, title: 'Mobile ready', desc: 'Web + Capacitor builds for iOS and Android.' },
+		{ icon: Settings, title: 'User settings', desc: 'Active sessions management, data export, account deletion.' },
+		{ icon: Scale, title: 'Legal compliance', desc: 'Built-in Terms of Service, Privacy Policy, and Acceptable Use Policy.' },
 		{ icon: Code2, title: 'Open source', desc: 'AGPL v3. Self-host it. Audit every line.' }
 	];
 
@@ -122,6 +134,22 @@
 			<a href="/login" class="cta" data-testid="hero-cta">
 				Get started <ArrowRight size={16} />
 			</a>
+		</div>
+	</section>
+
+	<!-- WHAT IS MARTOL -->
+	<section class="section" use:reveal>
+		<div class="container">
+			{@render sectionHead('what is martol')}
+			<p class="lead-xl">
+				A multi-user AI collaboration workspace where humans and AI agents work together in scoped rooms with server-enforced authority.
+			</p>
+			<div class="intent-note">
+				<ShieldCheck size={16} />
+				<p>
+					Agents don't self-execute from chat — they submit structured intents validated against a role × risk matrix. Destructive actions require explicit owner approval.
+				</p>
+			</div>
 		</div>
 	</section>
 
@@ -334,8 +362,8 @@
 
 	<!-- FEATURES -->
 	<section class="section features-section" use:reveal={{ stagger: true }}>
-		<div class="container">
-			{@render sectionHead('what you get')}
+		<div class="container container-wide">
+			{@render sectionHead('features')}
 			<div class="features-grid">
 				{#each features as feat, i}
 					{@const Icon = feat.icon}
@@ -581,6 +609,10 @@
 		padding: 0 24px;
 	}
 
+	.container-wide {
+		max-width: 900px;
+	}
+
 	.section-header {
 		display: flex;
 		align-items: center;
@@ -609,6 +641,40 @@
 		color: var(--text);
 		line-height: 1.6;
 		margin: 0 0 8px;
+	}
+
+	/* ── What is Martol ── */
+	.lead-xl {
+		font-family: var(--font-sans);
+		font-size: clamp(20px, 3.5vw, 26px);
+		font-weight: 500;
+		color: var(--text);
+		line-height: 1.5;
+		margin: 0 0 24px;
+	}
+
+	.intent-note {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 16px 20px;
+		border-left: 2px solid var(--accent-muted);
+		background: oklch(0.75 0.15 65 / 0.04);
+		border-radius: 0 6px 6px 0;
+	}
+
+	.intent-note :global(svg) {
+		color: var(--accent);
+		flex-shrink: 0;
+		margin-top: 2px;
+	}
+
+	.intent-note p {
+		font-family: var(--font-sans);
+		font-size: 15px;
+		color: var(--text-muted);
+		line-height: 1.6;
+		margin: 0;
 	}
 
 	/* ── Chat transcript ── */
@@ -853,7 +919,7 @@
 	/* ── Features ── */
 	.features-grid {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(3, 1fr);
 		gap: 16px;
 	}
 
@@ -1146,6 +1212,13 @@
 
 		.cursor {
 			animation: none;
+		}
+	}
+
+	/* ── Tablet ── */
+	@media (max-width: 900px) {
+		.features-grid {
+			grid-template-columns: repeat(2, 1fr);
 		}
 	}
 
