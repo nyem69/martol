@@ -37,6 +37,7 @@ declare global {
 			session: any | null;
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			db: any | null;
+			isAdmin: boolean;
 		}
 
 		interface Platform {

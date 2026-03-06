@@ -55,6 +55,13 @@ export const COMMANDS: SlashCommand[] = [
 		roles: ['owner', 'lead', 'member', 'viewer'],
 		requiresArg: true,
 		argPlaceholder: '<nick>'
+	},
+	{
+		name: 'ticket',
+		description: 'chat_slash_ticket',
+		roles: ['owner', 'lead', 'member', 'viewer', 'agent'],
+		requiresArg: true,
+		argPlaceholder: '<title>'
 	}
 ];
 

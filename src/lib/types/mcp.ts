@@ -85,6 +85,40 @@ export const actionConfirmSchema = z.object({
 	}),
 });
 
+export const ticketListSchema = z.object({
+	tool: z.literal('ticket_list'),
+	params: z
+		.object({
+			status: z.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+			limit: z.number().int().min(1).max(100).default(20),
+		})
+		.default({ limit: 20 }),
+});
+
+export const ticketReadSchema = z.object({
+	tool: z.literal('ticket_read'),
+	params: z.object({
+		ticket_id: z.string().min(1).max(64),
+	}),
+});
+
+export const ticketCommentSchema = z.object({
+	tool: z.literal('ticket_comment'),
+	params: z.object({
+		ticket_id: z.string().min(1).max(64),
+		content: z.string().min(1).max(5000),
+	}),
+});
+
+export const ticketUpdateSchema = z.object({
+	tool: z.literal('ticket_update'),
+	params: z.object({
+		ticket_id: z.string().min(1).max(64),
+		status: z.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+		assigned_to: z.array(z.string()).optional(),
+	}),
+});
+
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatSendSchema,
 	chatReadSchema,
@@ -94,6 +128,10 @@ export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	actionSubmitSchema,
 	actionStatusSchema,
 	actionConfirmSchema,
+	ticketListSchema,
+	ticketReadSchema,
+	ticketCommentSchema,
+	ticketUpdateSchema,
 ]);
 
 export type McpRequest = z.infer<typeof mcpRequestSchema>;
@@ -166,4 +204,28 @@ export interface ActionStatusResult {
 	created_at: string;
 	approved_by: string | null;
 	approved_at: string | null;
+}
+
+export interface TicketListItem {
+	id: string;
+	title: string;
+	category: string;
+	status: string;
+	created_at: string;
+}
+
+export interface TicketDetail extends TicketListItem {
+	description: string;
+	user_id: string;
+	assigned_to: string[] | null;
+	resolved_at: string | null;
+	closed_at: string | null;
+	updated_at: string;
+	comments: Array<{
+		id: string;
+		user_id: string | null;
+		agent_user_id: string | null;
+		content: string;
+		created_at: string;
+	}>;
 }

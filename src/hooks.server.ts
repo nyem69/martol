@@ -55,6 +55,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 	event.locals.session = null;
 	event.locals.db = null;
+	event.locals.isAdmin = false;
 
 	// Track Hyperdrive client for cleanup after request
 	let hyperdriveClient: import('pg').Client | null = null;
@@ -127,6 +128,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		} catch (error) {
 			console.error('[Auth] Session validation failed:', error);
 		}
+	}
+
+	// Derive isAdmin from user role (available via Better Auth additionalFields)
+	if (event.locals.user?.role === 'admin') {
+		event.locals.isAdmin = true;
 	}
 
 	// ── Terms Re-acceptance Check ────────────────────────────────────────

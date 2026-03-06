@@ -423,3 +423,75 @@ export const userSanctions = pgTable(
 		foreignKey({ columns: [table.issuedBy], foreignColumns: [user.id] }).onDelete('restrict')
 	]
 );
+
+// ── Support Tickets ─────────────────────────────────────────────────
+
+/**
+ * Support Tickets — user-submitted support requests.
+ * Visible to submitter + platform admins. Agents can read/comment via MCP.
+ */
+export const supportTickets = pgTable(
+	'support_tickets',
+	{
+		id: text('id').primaryKey(), // nanoid
+		userId: text('user_id').notNull(),
+		title: text('title').notNull(),
+		description: text('description').notNull(),
+		category: text('category')
+			.notNull()
+			.default('other')
+			.$type<'bug' | 'feature_request' | 'question' | 'issue' | 'other'>(),
+		status: text('status')
+			.notNull()
+			.default('open')
+			.$type<'open' | 'in_progress' | 'resolved' | 'closed'>(),
+		assignedTo: jsonb('assigned_to').$type<string[]>(),
+		resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+		resolvedBy: text('resolved_by'),
+		closedAt: timestamp('closed_at', { withTimezone: true }),
+		closedBy: text('closed_by'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_support_tickets_user').on(table.userId, table.createdAt),
+		index('idx_support_tickets_status').on(table.status, table.createdAt),
+		check(
+			'chk_st_category',
+			sql`${table.category} IN ('bug', 'feature_request', 'question', 'issue', 'other')`
+		),
+		check(
+			'chk_st_status',
+			sql`${table.status} IN ('open', 'in_progress', 'resolved', 'closed')`
+		),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.resolvedBy], foreignColumns: [user.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.closedBy], foreignColumns: [user.id] }).onDelete('set null')
+	]
+);
+
+/**
+ * Ticket Comments — threaded discussion on support tickets.
+ * Both humans and MCP agents can comment (mutually exclusive userId/agentUserId).
+ */
+export const ticketComments = pgTable(
+	'ticket_comments',
+	{
+		id: text('id').primaryKey(), // nanoid
+		ticketId: text('ticket_id').notNull(),
+		userId: text('user_id'),
+		agentUserId: text('agent_user_id'),
+		content: text('content').notNull(),
+		parentId: text('parent_id'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_ticket_comments_ticket').on(table.ticketId, table.createdAt),
+		foreignKey({ columns: [table.ticketId], foreignColumns: [supportTickets.id] }).onDelete(
+			'cascade'
+		),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null')
+	]
+);

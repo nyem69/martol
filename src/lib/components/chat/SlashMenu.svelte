@@ -19,7 +19,8 @@
 		chat_slash_actions: () => m.chat_slash_actions(),
 		chat_slash_clear: () => m.chat_slash_clear(),
 		chat_slash_continue: () => m.chat_slash_continue(),
-		chat_slash_whois: () => m.chat_slash_whois()
+		chat_slash_whois: () => m.chat_slash_whois(),
+		chat_slash_ticket: () => m.chat_slash_ticket()
 	};
 
 	function getDescription(key: string): string {

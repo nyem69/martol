@@ -667,6 +667,14 @@
 							<ExternalLink size={12} />
 							{m.guide_documentation()}
 						</a>
+						<a
+							href="/support"
+							class="flex items-center gap-1 text-[11px] hover:underline"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={12} />
+							{m.support_title()}
+						</a>
 					</div>
 				</div>
 			</div>
