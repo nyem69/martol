@@ -9,7 +9,7 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
-import { member, apikey, account, user } from '$lib/server/db/auth-schema';
+import { member, apikey, account } from '$lib/server/db/auth-schema';
 import { agentRoomBindings } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -79,7 +79,8 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 		}
 	}
 
-	// Transactional cleanup: delete all related records atomically
+	// Revoke: delete API key + membership + bindings.
+	// Keep user row — messages/actions have ON DELETE RESTRICT foreign keys.
 	await locals.db.transaction(async (tx: typeof locals.db) => {
 		await tx.delete(apikey).where(eq(apikey.referenceId, agentUserId));
 		await tx.delete(member).where(
@@ -87,7 +88,6 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 		);
 		await tx.delete(account).where(eq(account.userId, agentUserId));
 		await tx.delete(agentRoomBindings).where(eq(agentRoomBindings.agentUserId, agentUserId));
-		await tx.delete(user).where(eq(user.id, agentUserId));
 	});
 
 	return json({ ok: true });
