@@ -182,11 +182,15 @@
 		confirmPrevFocus?.focus();
 		try {
 			const res = await fetch(`/api/agents/${agentUserId}`, { method: 'DELETE' });
-			const data: { ok?: boolean } = await res.json();
+			const data: { ok?: boolean; message?: string } = await res.json();
 			if (data.ok) {
 				registeredAgents = registeredAgents.filter((a) => a.agentUserId !== agentUserId);
+			} else {
+				agentError = data.message || 'Failed to revoke agent';
 			}
-		} catch { /* silent */ }
+		} catch (e) {
+			agentError = 'Network error revoking agent';
+		}
 	}
 
 	// Fetch agents when agentSetup section opens
