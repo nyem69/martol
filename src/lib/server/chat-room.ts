@@ -906,6 +906,32 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.handleClearRoom(orgId, userName);
 				break;
 
+			case 'repair': {
+				if (role !== 'owner') {
+					await this.sendError(ws, 'unauthorized', 'Only owner can repair rooms');
+					return;
+				}
+				this.flushFailures = 0;
+				this.degraded = false;
+				await this.ctx.storage.put('meta:flushFailures', 0);
+				// Schedule an immediate flush attempt
+				await this.ctx.storage.setAlarm(Date.now() + 100);
+				await this.broadcast({
+					type: 'message',
+					message: {
+						localId: '',
+						serverSeqId: 0,
+						senderId: 'system',
+						senderName: 'System',
+						senderRole: 'system',
+						body: `Room repaired by ${userName} — degraded mode cleared, flush scheduled.`,
+						timestamp: new Date().toISOString()
+					}
+				});
+				console.log('[ChatRoom] Degraded mode manually cleared by', userName);
+				break;
+			}
+
 			case 'approve':
 			case 'reject': {
 				if (role !== 'owner' && role !== 'lead') {
