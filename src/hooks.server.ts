@@ -4,15 +4,8 @@
  * Per-request auth, DB connection, session enrichment, CORS, security headers.
  */
 
-import type { Handle } from '@sveltejs/kit';
-import { sequence } from '@sveltejs/kit/hooks';
-import * as Sentry from '@sentry/sveltekit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import type { CloudflareEnv } from './app.d.ts';
-
-Sentry.init({
-	dsn: import.meta.env.VITE_SENTRY_DSN,
-	tracesSampleRate: 0.1
-});
 
 // Load .dev.vars for local development ONLY (Vite dev server).
 // In Cloudflare Workers, env vars come from wrangler secrets/.dev.vars binding.
@@ -36,7 +29,7 @@ const ALLOWED_ORIGINS = new Set([
 	'https://martol.plitix.com'
 ]);
 
-const martolHandle: Handle = async ({ event, resolve }) => {
+export const handle: Handle = async ({ event, resolve }) => {
 	// CORS: Allow Capacitor schemes + localhost
 	const origin = event.request.headers.get('origin');
 	if (origin && ALLOWED_ORIGINS.has(origin)) {
@@ -612,5 +605,9 @@ const martolHandle: Handle = async ({ event, resolve }) => {
 	}
 };
 
-export const handle = sequence(Sentry.sentryHandle(), martolHandle);
-export const handleError = Sentry.handleErrorWithSentry();
+// Server-side error handling — Sentry capture is handled by @sentry/cloudflare
+// in worker-entry.ts. Client-side Sentry is in hooks.client.ts.
+export const handleError: HandleServerError = ({ error, event }) => {
+	console.error(`[SvelteKit] ${event.url.pathname}:`, error);
+	return { message: 'An unexpected error occurred.' };
+};
