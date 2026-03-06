@@ -8,7 +8,7 @@
 	<title>{m.legal_title()} — {m.app_name()}</title>
 </svelte:head>
 
-<div class="flex min-h-dvh items-center justify-center px-4 py-8" style="background: var(--bg);">
+<div class="flex min-h-dvh justify-center px-4 py-8 overflow-y-auto h-dvh" style="background: var(--bg);">
 	<div
 		class="w-full max-w-2xl"
 		style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem;"

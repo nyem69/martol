@@ -161,7 +161,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			.from(member)
 			.where(eq(member.userId, locals.user.id))
 			.limit(1);
-		if (!firstMembership) error(400, 'No active organization');
+		if (!firstMembership) return json({ ok: true, data: [] });
 		orgId = firstMembership.orgId;
 	}
 

@@ -8,9 +8,9 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
-import { user } from '$lib/server/db/auth-schema';
+import { user, organization, member } from '$lib/server/db/auth-schema';
 import { usernameHistory, accountAudit } from '$lib/server/db/schema';
-import { eq, desc, sql, or, isNull, gt } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const RESERVED_WORDS = new Set([
@@ -173,6 +173,21 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 				ipAddress,
 				userAgent
 			});
+
+			// Update auto-generated room names that still use the old username
+			const oldRoomName = `${currentUsername}'s Room`;
+			const newRoomName = `${newUsername}'s Room`;
+			const ownedOrgs = await tx
+				.select({ orgId: member.organizationId })
+				.from(member)
+				.where(and(eq(member.userId, locals.user.id), eq(member.role, 'owner')));
+
+			for (const org of ownedOrgs) {
+				await tx
+					.update(organization)
+					.set({ name: newRoomName })
+					.where(and(eq(organization.id, org.orgId), eq(organization.name, oldRoomName)));
+			}
 		});
 	} catch (err: any) {
 		if (err?.code === '23505') {

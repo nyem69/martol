@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
 	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, Mail } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
@@ -62,6 +62,7 @@
 			currentUsername = result.username ?? newUsername;
 			newUsername = '';
 			successMsg = m.settings_username_changed();
+			await invalidateAll();
 			setTimeout(() => (successMsg = ''), 4000);
 		} catch {
 			errorMsg = m.error_generic();
@@ -392,7 +393,7 @@
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-<div class="flex min-h-dvh justify-center px-4 py-8" style="background: var(--bg);">
+<div class="flex min-h-dvh justify-center px-4 py-8 overflow-y-auto h-dvh" style="background: var(--bg);">
 	<div class="w-full max-w-lg">
 		<!-- Back to chat -->
 		<button
