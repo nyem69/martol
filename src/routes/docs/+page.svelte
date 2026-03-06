@@ -165,7 +165,7 @@
 			<div class="arch-diagram">
 				<pre>                      CLI / .env
                           |
-               python -m martol_agent
+                     martol
                           |
             +--------- <span class="h">Wrapper</span> ---------+
             |                           |
@@ -225,16 +225,12 @@
 			<h3>Setup</h3>
 			<ol class="steps-list">
 				<li>
-					<strong>Clone and install</strong>
-					<pre><code>git clone https://github.com/nicazmi/martol-client.git
-cd martol-client
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt</code></pre>
+					<strong>Install</strong>
+					<pre><code>pip install "martol-agent @ git+https://github.com/nyem69/martol-client.git"</code></pre>
 				</li>
 				<li>
 					<strong>Create your environment file</strong>
-					<pre><code>cp .env.example .env
-chmod 600 .env</code></pre>
+					<pre><code>touch .env && chmod 600 .env</code></pre>
 				</li>
 				<li>
 					<strong>Configure connection</strong>
@@ -246,7 +242,7 @@ chmod 600 .env</code></pre>
 				</li>
 				<li>
 					<strong>Run the agent</strong>
-					<pre><code>python -m martol_agent</code></pre>
+					<pre><code>martol</code></pre>
 				</li>
 			</ol>
 
@@ -500,10 +496,10 @@ chmod 600 .env</code></pre>
 				<code>.env</code>.
 			</p>
 			<pre><code><span class="cmt"># Run different agents from the same directory</span>
-python -m martol_agent <span class="flg">--profile</span> <span class="val">claude</span>      <span class="cmt"># loads .env.claude</span>
-python -m martol_agent <span class="flg">--profile</span> <span class="val">gpt</span>         <span class="cmt"># loads .env.gpt</span>
-python -m martol_agent <span class="flg">--profile</span> <span class="val">ollama</span>      <span class="cmt"># loads .env.ollama</span>
-python -m martol_agent <span class="flg">--profile</span> <span class="val">claude-code</span> <span class="cmt"># loads .env.claude-code</span></code></pre>
+martol <span class="flg">--profile</span> <span class="val">claude</span>      <span class="cmt"># loads .env.claude</span>
+martol <span class="flg">--profile</span> <span class="val">gpt</span>         <span class="cmt"># loads .env.gpt</span>
+martol <span class="flg">--profile</span> <span class="val">ollama</span>      <span class="cmt"># loads .env.ollama</span>
+martol <span class="flg">--profile</span> <span class="val">claude-code</span> <span class="cmt"># loads .env.claude-code</span></code></pre>
 
 			<h3>Example: Anthropic Claude</h3>
 			<pre><code><span class="cmt"># .env.claude</span>
@@ -601,27 +597,27 @@ python -m martol_agent <span class="flg">--profile</span> <span class="val">clau
 			</p>
 
 			<h3>Anthropic Claude</h3>
-			<pre><code>python -m martol_agent \
+			<pre><code>martol \
   <span class="flg">--provider</span> <span class="val">anthropic</span> \
   <span class="flg">--ai-key</span> <span class="val">sk-ant-...</span> \
   <span class="flg">--model</span> <span class="val">claude-sonnet-4-20250514</span></code></pre>
 
 			<h3>OpenAI</h3>
-			<pre><code>python -m martol_agent \
+			<pre><code>martol \
   <span class="flg">--provider</span> <span class="val">openai</span> \
   <span class="flg">--ai-key</span> <span class="val">sk-...</span> \
   <span class="flg">--model</span> <span class="val">gpt-4o</span></code></pre>
 
 			<h3>OpenAI-Compatible (Ollama, Groq, vLLM)</h3>
 			<pre><code><span class="cmt"># Local Ollama</span>
-python -m martol_agent \
+martol \
   <span class="flg">--provider</span> <span class="val">openai</span> \
   <span class="flg">--ai-key</span> <span class="val">ollama</span> \
   <span class="flg">--ai-base-url</span> <span class="val">http://localhost:11434/v1</span> \
   <span class="flg">--model</span> <span class="val">llama3.3</span>
 
 <span class="cmt"># Groq</span>
-python -m martol_agent \
+martol \
   <span class="flg">--provider</span> <span class="val">openai</span> \
   <span class="flg">--ai-key</span> <span class="val">gsk_...</span> \
   <span class="flg">--ai-base-url</span> <span class="val">https://api.groq.com/openai/v1</span> \
@@ -659,13 +655,13 @@ python -m martol_agent \
 
 			<div class="callout callout-info">
 				<span class="callout-label">Prerequisite</span>
-				Install the Claude Code CLI (<code>npm install -g @anthropic-ai/claude-code</code>) and the
-				Python SDK (<code>pip install claude-agent-sdk</code>).
+				Install with Claude Code support:
+				<code>pip install "martol-agent[claude-code] @ git+https://github.com/nyem69/martol-client.git"</code>
 			</div>
 
 			<pre><code><span class="cmt"># Run against a project directory</span>
 cd /path/to/your/project
-python -m martol_agent <span class="flg">--mode</span> <span class="val">claude-code</span> <span class="flg">--profile</span> <span class="val">claude-code</span></code></pre>
+martol <span class="flg">--profile</span> <span class="val">claude-code</span></code></pre>
 
 			<h3>Permission Modes</h3>
 			<div class="table-wrap">
@@ -1364,7 +1360,7 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 						<tr>
 							<td>"claude-agent-sdk required"</td>
 							<td>Missing dependency</td>
-							<td><code>pip install claude-agent-sdk</code></td>
+							<td><code>pip install "martol-agent[claude-code]"</code></td>
 						</tr>
 						<tr>
 							<td>Tools always denied</td>
