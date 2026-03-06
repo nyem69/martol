@@ -911,11 +911,32 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					await this.sendError(ws, 'unauthorized', 'Only owner can repair rooms');
 					return;
 				}
+				const dropWal = args.trim() === 'drop';
 				this.flushFailures = 0;
 				this.degraded = false;
 				await this.ctx.storage.put('meta:flushFailures', 0);
-				// Schedule an immediate flush attempt
-				await this.ctx.storage.setAlarm(Date.now() + 100);
+
+				let detail = 'degraded mode cleared, flush scheduled';
+				if (dropWal && this.unflushedIds.length > 0) {
+					// Drop unflushed WAL entries (messages lost but room unblocked)
+					const keys = this.unflushedIds.map(storageKey);
+					for (let i = 0; i < keys.length; i += 128) {
+						await this.ctx.storage.delete(keys.slice(i, i + 128));
+					}
+					console.log('[ChatRoom] Dropped %d unflushed WAL entries', this.unflushedIds.length);
+					this.unflushedIds = [];
+					this.walMessageCount = 0;
+					this.walByteSize = 0;
+					await this.ctx.storage.put('meta:unflushedIds', []);
+					await this.ctx.storage.put('meta:walMessageCount', 0);
+					await this.ctx.storage.put('meta:walByteSize', 0);
+					await this.ctx.storage.deleteAlarm();
+					detail = `degraded mode cleared, ${keys.length} unflushed messages dropped`;
+				} else {
+					// Schedule an immediate flush attempt
+					await this.ctx.storage.setAlarm(Date.now() + 100);
+				}
+
 				await this.broadcast({
 					type: 'message',
 					message: {
@@ -924,11 +945,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 						senderId: 'system',
 						senderName: 'System',
 						senderRole: 'system',
-						body: `Room repaired by ${userName} — degraded mode cleared, flush scheduled.`,
+						body: `Room repaired by ${userName} — ${detail}.`,
 						timestamp: new Date().toISOString()
 					}
 				});
-				console.log('[ChatRoom] Degraded mode manually cleared by', userName);
+				console.log('[ChatRoom] Repair by %s: %s (unflushed: %d)', userName, detail, this.unflushedIds.length);
 				break;
 			}
 
