@@ -98,12 +98,14 @@
 		if (parsed && onCommand) {
 			onCommand(parsed.command, parsed.args);
 			value = '';
+			showSlashMenu = false;
 			resize();
 			return;
 		}
 
 		onSend(body, replyTo?.dbId);
 		value = '';
+		showSlashMenu = false;
 		resize();
 		onCancelReply?.();
 	}
