@@ -641,7 +641,7 @@
 						</div>
 
 						<!-- Features -->
-						<div>
+						<div class="mb-3">
 							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
 								{m.guide_features()}
 							</h4>
@@ -656,6 +656,17 @@
 								</div>
 							{/each}
 						</div>
+
+						<!-- Documentation link -->
+						<a
+							href="/docs"
+							target="_blank"
+							class="flex items-center gap-1.5 text-[11px] font-medium"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={12} />
+							{m.guide_documentation()}
+						</a>
 					</div>
 				</div>
 			</div>
