@@ -118,6 +118,7 @@
 	let registeredAgents = $state<Array<{agentUserId: string, name: string, keyStart: string | null, createdAt: string | null}>>([]);
 	let newAgentName = $state('');
 	let generatedKey = $state<string | null>(null);
+	let generatedAgentName = $state('');
 	let agentLoading = $state(false);
 	let agentError = $state('');
 	let agentsFetched = $state(false);
@@ -154,6 +155,7 @@
 				return;
 			}
 			generatedKey = data.data?.key ?? null;
+			generatedAgentName = newAgentName;
 			newAgentName = '';
 			await fetchAgents();
 		} catch {
@@ -748,6 +750,11 @@
 
 								{#if generatedKey}
 									<div class="mb-2 rounded p-2" style="background: color-mix(in oklch, var(--success) 10%, transparent); border: 1px solid color-mix(in oklch, var(--success) 30%, transparent);">
+										{#if generatedAgentName}
+											<div class="mb-1 text-[11px] font-bold" style="color: var(--text);">
+												{generatedAgentName}
+											</div>
+										{/if}
 										<div class="mb-1 text-[10px] font-semibold" style="color: var(--success);">
 											{m.agent_key_warning()}
 										</div>
