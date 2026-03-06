@@ -10,6 +10,7 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
+import { generateId } from 'better-auth';
 import { member, user, account, apikey } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
@@ -67,9 +68,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Create agent atomically — user + account + membership in a single transaction.
-	const agentUserId = crypto.randomUUID();
+	const agentUserId = generateId();
 	const agentEmail = `agent-${crypto.randomUUID().slice(0, 12)}@agent.invalid`;
-	const memberId = crypto.randomUUID();
+	const memberId = generateId();
 
 	try {
 		await locals.db.transaction(async (tx: typeof locals.db) => {
@@ -85,7 +86,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			// 2. Create account record for Better Auth consistency
 			await tx.insert(account).values({
-				id: crypto.randomUUID(),
+				id: generateId(),
 				accountId: agentUserId,
 				providerId: 'agent',
 				userId: agentUserId,

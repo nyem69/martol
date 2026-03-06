@@ -60,9 +60,9 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 
 	const orgId = generateId();
 	const memberId = generateId();
-	const agentUserId = crypto.randomUUID();
+	const agentUserId = generateId();
 	const agentEmail = `agent-${crypto.randomUUID().slice(0, 12)}@agent.invalid`;
-	const agentMemberId = crypto.randomUUID();
+	const agentMemberId = generateId();
 	const now = new Date();
 	const agentName = `${repo} agent`;
 
@@ -97,7 +97,7 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 
 		// 4. Create account record for Better Auth consistency
 		await tx.insert(account).values({
-			id: crypto.randomUUID(),
+			id: generateId(),
 			accountId: agentUserId,
 			providerId: 'agent',
 			userId: agentUserId,
