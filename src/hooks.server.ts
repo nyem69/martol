@@ -597,6 +597,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// CSP is now handled by SvelteKit's built-in csp config in svelte.config.js
 		// which auto-generates nonces for inline scripts during SSR.
 
+		// Prevent Cloudflare edge from caching HTML pages (stale after deploys).
+		// Immutable assets already have content hashes in filenames.
+		if (response.headers.get('content-type')?.includes('text/html')) {
+			response.headers.set('Cache-Control', 'no-cache');
+		}
+
 		return response;
 	} finally {
 		if (hyperdriveClient) {
