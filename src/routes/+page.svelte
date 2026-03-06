@@ -255,6 +255,11 @@
 				Human previews the action with risk score. Approves, edits, or rejects.<br />
 				Execution only after approval. Every decision audited.
 			</p>
+			<div class="section-link-row">
+				<a href="/docs" class="section-link">
+					Setup guide <ArrowRight size={14} />
+				</a>
+			</div>
 		</div>
 	</section>
 
@@ -332,6 +337,7 @@
 				<a href="https://github.com/nyem69/martol-client" class="inline-link" target="_blank" rel="noopener">
 					martol-client <ExternalLink size={11} />
 				</a>
+				&mdash; <a href="/docs" class="inline-link">see setup docs</a>
 			</p>
 
 			<div class="screenshot-frame" style="margin-top: 32px;">
@@ -393,6 +399,7 @@
 					<a href="https://github.com/nyem69/martol-client" class="inline-link" target="_blank" rel="noopener">
 						agent wrapper <ExternalLink size={11} />
 					</a>
+					&mdash; <a href="/docs" class="inline-link">setup docs</a>
 				</li>
 				<li><span class="step-num">5</span> Chat from any device</li>
 			</ol>
@@ -890,6 +897,24 @@
 		color: var(--text-muted);
 		line-height: 1.6;
 		margin: 0;
+	}
+
+	.section-link-row {
+		margin-top: 20px;
+	}
+
+	.section-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--font-mono);
+		font-size: 13px;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.section-link:hover {
+		text-decoration: underline;
 	}
 
 	/* ── Screenshot ── */
