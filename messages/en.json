@@ -399,5 +399,6 @@
   "ticket_cat_issue": "Issue",
   "ticket_cat_other": "Other",
   "chat_slash_ticket": "Create a support ticket",
+  "chat_slash_repair": "Repair degraded room (retry flush or drop unflushed)",
   "ticket_chat_created": "Ticket created: {title}"
 }

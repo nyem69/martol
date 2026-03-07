@@ -347,7 +347,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.broadcast({
 					type: 'error',
 					code: 'degraded',
-					message: 'Room temporarily unavailable — messages paused'
+					message: `Room temporarily unavailable — messages paused. Owner: use /repair to retry flush (${this.unflushedIds.length} buffered). Use /repair drop only as last resort (drops unflushed messages).`
 				});
 				// [C4] Schedule retry with exponential backoff (self-healing)
 				const backoffMs = Math.min(
@@ -358,7 +358,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				return;
 			}
 
-			console.error(`[ChatRoom] Flush failed (attempt ${this.flushFailures})`, err);
+			const pgCode = (err as { code?: string })?.code;
+			console.error(
+				`[ChatRoom] Flush failed (attempt ${this.flushFailures}, unflushed: ${this.unflushedIds.length}${pgCode ? `, pg: ${pgCode}` : ''})`,
+				err
+			);
 		}
 
 		if (this.unflushedIds.length > 0) {
