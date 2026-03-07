@@ -51,9 +51,13 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	// which restricts leads from approving high-risk). Rejection is safe — it
 	// blocks the action rather than authorizing it.
 
-	// Fetch the action
+	// Fetch the action (scoped select)
 	const [action] = await locals.db
-		.select({ id: pendingActions.id, status: pendingActions.status })
+		.select({
+			id: pendingActions.id,
+			status: pendingActions.status,
+			agentUserId: pendingActions.agentUserId
+		})
 		.from(pendingActions)
 		.where(and(eq(pendingActions.id, actionId), eq(pendingActions.orgId, orgId)))
 		.limit(1);
@@ -65,12 +69,25 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		error(409, `Action already ${action.status}`);
 	}
 
-	// Update the action
+	// [S1] Block agent self-rejection
+	if (action.agentUserId === locals.user.id) {
+		error(403, 'Cannot reject your own action');
+	}
+
+	// [S2] Atomic update — status guard in WHERE prevents TOCTOU race
 	const [updated] = await locals.db
 		.update(pendingActions)
 		.set({ status: 'rejected' })
-		.where(eq(pendingActions.id, actionId))
+		.where(and(
+			eq(pendingActions.id, actionId),
+			eq(pendingActions.orgId, orgId),
+			eq(pendingActions.status, 'pending')
+		))
 		.returning({ id: pendingActions.id, status: pendingActions.status });
+
+	if (!updated) {
+		error(409, 'Action is no longer pending');
+	}
 
 	return json({ ok: true, data: { id: updated.id, status: updated.status } });
 };

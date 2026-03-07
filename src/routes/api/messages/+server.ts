@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
 	const orgId = locals.session.activeOrganizationId;
 	if (!orgId) {
-		error(400, 'No active organization');
+		return json({ ok: true, data: [] });
 	}
 
 	// Verify membership

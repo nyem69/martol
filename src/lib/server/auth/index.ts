@@ -7,8 +7,10 @@
  */
 
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { emailOTP, organization, apiKey, twoFactor } from 'better-auth/plugins';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter';
+import { emailOTP, organization, twoFactor } from 'better-auth/plugins';
+import { apiKey } from '@better-auth/api-key';
+import { passkey } from '@better-auth/passkey';
 import { sendEmail, otpEmailTemplate, invitationEmailTemplate } from '$lib/server/email';
 import * as authSchema from '$lib/server/db/auth-schema';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -17,28 +19,6 @@ interface EmailConfig {
 	resendApiKey?: string;
 	emailFrom?: string;
 	emailName?: string;
-}
-
-interface KVSecondaryStorage {
-	get: (key: string) => Promise<string | null>;
-	set: (key: string, value: string, ttl?: number) => Promise<void>;
-	delete: (key: string) => Promise<void>;
-}
-
-/**
- * Wrap Cloudflare KV as Better Auth secondaryStorage
- */
-function createKVStorage(kv?: KVNamespace): KVSecondaryStorage | undefined {
-	if (!kv) return undefined;
-	return {
-		get: async (key: string) => kv.get(key),
-		set: async (key: string, value: string, ttl?: number) => {
-			await kv.put(key, value, ttl ? { expirationTtl: ttl } : undefined);
-		},
-		delete: async (key: string) => {
-			await kv.delete(key);
-		}
-	};
 }
 
 /**
@@ -55,7 +35,8 @@ export function createAuth(
 	secret: string,
 	baseURL: string,
 	emailConfig: EmailConfig,
-	kv?: KVNamespace
+	kv?: KVNamespace,
+	environment?: string
 ) {
 	const auth = betterAuth({
 		database: drizzleAdapter(db, {
@@ -74,7 +55,7 @@ export function createAuth(
 				disableSignUp: false,
 				sendVerificationOTP: async ({ email, otp }) => {
 					if (!emailConfig.resendApiKey) {
-						if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) {
+						if ((baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) && environment !== 'production') {
 							console.warn(`[Auth] DEV ONLY — OTP for ${email}: ${otp}`);
 						} else {
 							console.error('[Auth] RESEND_API_KEY not configured — cannot send OTP');
@@ -168,8 +149,14 @@ export function createAuth(
 					length: 10, // characters per code
 					count: 8 // number of codes
 				}
+			}),
+
+			// Passkey (WebAuthn) authentication
+			passkey({
+				rpID: new URL(baseURL).hostname,
+				rpName: 'Martol',
+				origin: baseURL
 			})
-			// Passkey plugin will be added when available (P1)
 		],
 
 		// NO emailAndPassword — agents created via direct DB insert
@@ -179,7 +166,8 @@ export function createAuth(
 			additionalFields: {
 				username: { type: 'string', unique: true, required: false },
 				displayName: { type: 'string', required: false },
-				ageVerifiedAt: { type: 'date', required: false }
+				ageVerifiedAt: { type: 'date', required: false },
+				role: { type: 'string', required: false, defaultValue: 'user', input: false }
 			}
 		},
 

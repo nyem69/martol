@@ -3,6 +3,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
+import dotenv from 'dotenv';
+
+// Load .dev.vars into process.env for local dev (pnpm dev)
+// In Cloudflare Workers, env vars come from wrangler bindings instead.
+dotenv.config({ path: '.dev.vars' });
 
 /**
  * Strip invalid sourceMappingURL comments from paraglide-generated files.

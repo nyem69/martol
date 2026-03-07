@@ -6,9 +6,10 @@
  */
 
 import { redirect, error } from '@sveltejs/kit';
-import { user } from '$lib/server/db/auth-schema';
+import { user, member } from '$lib/server/db/auth-schema';
 import { usernameHistory } from '$lib/server/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -49,6 +50,35 @@ export const load: PageServerLoad = async ({ locals }) => {
 			? emailParts[0].slice(0, 2) + '***@' + emailParts[1]
 			: emailParts[0][0] + '***@' + emailParts[1];
 
+	// Load billing data for active org
+	let activeOrgId = locals.session.activeOrganizationId;
+	if (!activeOrgId) {
+		const [first] = await db
+			.select({ orgId: member.organizationId })
+			.from(member)
+			.where(eq(member.userId, locals.user.id))
+			.limit(1);
+		activeOrgId = first?.orgId ?? null;
+	}
+
+	// Check org role for billing management
+	let isOwnerOrLead = false;
+	if (activeOrgId) {
+		const [memberRecord] = await db
+			.select({ role: member.role })
+			.from(member)
+			.where(
+				and(eq(member.organizationId, activeOrgId), eq(member.userId, locals.user.id))
+			)
+			.limit(1);
+		isOwnerOrLead =
+			memberRecord?.role === 'owner' || memberRecord?.role === 'lead';
+	}
+
+	const billing = activeOrgId
+		? await checkOrgLimits(db, activeOrgId)
+		: null;
+
 	return {
 		profile: {
 			id: userData.id,
@@ -57,6 +87,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			email: maskedEmail,
 			createdAt: userData.createdAt.toISOString()
 		},
-		lastUsernameChange: lastChange?.changedAt?.toISOString() ?? null
+		lastUsernameChange: lastChange?.changedAt?.toISOString() ?? null,
+		billing,
+		isOwnerOrLead
 	};
 };

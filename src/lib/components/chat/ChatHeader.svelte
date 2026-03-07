@@ -15,7 +15,7 @@
 	}: {
 		roomName: string;
 		roomId: string;
-		rooms: Array<{ id: string; name: string }>;
+		rooms: Array<{ id: string; name: string; unreadCount: number }>;
 		userName: string;
 		userRole: string;
 		onlineCount: number;
@@ -131,23 +131,23 @@
 		tabindex="-1"
 	></button>
 {/if}
-	<div class="relative flex items-center gap-2">
+	<div class="relative flex min-w-0 items-center gap-2">
 		<span
-			class="text-sm font-bold tracking-widest"
+			class="shrink-0 text-sm font-bold tracking-widest"
 			style="color: var(--accent); font-family: var(--font-mono);"
 		>
 			MARTOL
 		</span>
-		<span class="text-xs tabular-nums" style="color: var(--text-muted); font-family: var(--font-mono);">b{__BUILD_NUMBER__}</span>
+		<span class="hidden text-xs tabular-nums sm:inline" style="color: var(--text-muted); font-family: var(--font-mono);">b{__BUILD_NUMBER__}</span>
 		<span class="text-xs" style="color: var(--text-muted);">/</span>
 		<button
-			class="room-switcher-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium transition-colors"
+			class="room-switcher-btn flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium transition-colors"
 			onclick={toggleDropdown}
 			aria-expanded={dropdownOpen}
 			aria-haspopup="listbox"
 			data-testid="room-switcher"
 		>
-			<span style="color: var(--text);">{displayName}</span>
+			<span class="truncate" style="color: var(--text);">{displayName}</span>
 			<span
 				class="transition-transform duration-150"
 				style="color: var(--text-muted); transform: rotate({dropdownOpen ? '180' : '0'}deg);"
@@ -170,6 +170,7 @@
 							onsubmit={(e) => { e.preventDefault(); renameRoom(); }}
 						>
 							<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--accent);"></span>
+							<!-- svelte-ignore a11y_autofocus -->
 							<input
 								type="text"
 								bind:value={renameValue}
@@ -205,15 +206,26 @@
 								<span class="inline-block h-1.5 w-1.5 shrink-0"></span>
 							{/if}
 							<span class="flex-1 truncate">{room.name}</span>
+							{#if room.id !== roomId && room.unreadCount > 0}
+								<span
+									class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+									style="background: var(--accent); color: var(--bg);"
+								>
+									{room.unreadCount > 99 ? '99+' : room.unreadCount}
+								</span>
+							{/if}
 							{#if room.id === roomId && (userRole === 'owner' || userRole === 'lead')}
-								<button
+								<span
 									class="rename-btn rounded p-0.5 transition-opacity hover:opacity-70"
-									style="color: var(--text-muted);"
+									style="color: var(--text-muted); cursor: pointer;"
+									role="button"
+									tabindex={0}
 									onclick={(e) => { e.stopPropagation(); startRename(); }}
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); startRename(); } }}
 									aria-label="Rename room"
 								>
 									<Pencil size={12} />
-								</button>
+								</span>
 							{/if}
 						</button>
 					{/if}
@@ -225,6 +237,7 @@
 							class="flex items-center gap-1.5 px-3 py-2"
 							onsubmit={(e) => { e.preventDefault(); createRoom(); }}
 						>
+							<!-- svelte-ignore a11y_autofocus -->
 							<input
 								type="text"
 								bind:value={newRoomName}
@@ -261,15 +274,18 @@
 			</div>
 		{/if}
 	</div>
-	<div class="flex items-center gap-3">
+	<div class="flex shrink-0 items-center gap-1.5 sm:gap-3">
 		{#if onlineCount > 0}
-			<div class="flex items-center gap-1.5" aria-live="polite">
+			<div class="flex items-center gap-1 sm:gap-1.5" aria-live="polite">
 				<span
 					class="inline-block h-2 w-2 rounded-full"
 					style="background: var(--success);"
 					aria-hidden="true"
 				></span>
-				<span class="text-xs" style="color: var(--text-muted);">
+				<span class="text-xs sm:hidden tabular-nums" style="color: var(--text-muted);">
+					{onlineCount}
+				</span>
+				<span class="hidden text-xs sm:inline" style="color: var(--text-muted);">
 					{m.chat_online({ count: String(onlineCount) })}
 				</span>
 			</div>
@@ -283,7 +299,7 @@
 				data-testid="user-menu-btn"
 			>
 				<User size={14} />
-				<span style="color: var(--text); font-family: var(--font-mono);">{userName}</span>
+				<span class="hidden sm:inline" style="color: var(--text); font-family: var(--font-mono);">{userName}</span>
 			</button>
 			{#if userMenuOpen}
 				<button
@@ -310,7 +326,7 @@
 					<div style="border-top: 1px solid var(--border);">
 						<button
 							class="menu-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-							style="color: var(--error);"
+							style="color: var(--danger);"
 							onclick={handleSignOut}
 							role="menuitem"
 						>

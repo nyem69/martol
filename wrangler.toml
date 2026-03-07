@@ -1,5 +1,5 @@
 name = "martol"
-account_id = "ce472ff22555d61a27d583d552d5f461"
+# account_id set via CLOUDFLARE_ACCOUNT_ID environment variable
 main = "worker-entry.ts"
 compatibility_date = "2025-12-01"
 compatibility_flags = ["nodejs_compat"]
@@ -17,18 +17,18 @@ mode = "smart"
 
 [observability]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.1
 
 [observability.logs]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.1
 persist = true
 invocation_logs = true
 
 [observability.traces]
 enabled = false
 persist = true
-head_sampling_rate = 1
+head_sampling_rate = 0.1
 
 [[kv_namespaces]]
 binding = "CACHE"
@@ -41,8 +41,7 @@ zone_name = "plitix.com"
 [[r2_buckets]]
 binding = "STORAGE"
 bucket_name = "opensesame"
-preview_bucket_name = "opensesame"
-remote = true
+preview_bucket_name = "opensesame-dev"
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
@@ -65,6 +64,12 @@ EMAIL_NAME="Martol"
 
 # Public key — embedded in client HTML for Turnstile widget
 TURNSTILE_SITE_KEY = "0x4AAAAAACkQpeHr3nM8lyRa"
+ENABLE_UPLOADS = "true"
+
+# Stripe publishable key (safe for client)
+STRIPE_PUBLISHABLE_KEY = ""
+# Stripe price ID for Pro plan (created in Stripe Dashboard)
+STRIPE_PRO_PRICE_ID = ""
 
 # secrets
 # TURNSTILE_SECRET_KEY
@@ -77,6 +82,9 @@ TURNSTILE_SITE_KEY = "0x4AAAAAACkQpeHr3nM8lyRa"
 
 # CSAM scanning: enable in Cloudflare dashboard → Caching > Configuration > CSAM Scanning Tool
 # Image responses are cached via Workers Cache API so they flow through the scanning pipeline.
+
+[ai]
+binding = "AI"
 
 [triggers]
 crons = ["0 * * * *"]

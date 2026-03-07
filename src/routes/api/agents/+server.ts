@@ -10,8 +10,10 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
+import { generateId } from 'better-auth';
 import { member, user, account, apikey } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 /** Resolve orgId + verify owner/lead role */
 async function resolveOrgAndRole(locals: App.Locals) {
@@ -52,6 +54,12 @@ async function resolveOrgAndRole(locals: App.Locals) {
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const orgId = await resolveOrgAndRole(locals);
 
+	// Feature gate: check agent limit
+	const orgLimits = await checkOrgLimits(locals.db, orgId);
+	if (orgLimits.usage.agents >= orgLimits.limits.maxAgents) {
+		error(403, `Free plan allows ${orgLimits.limits.maxAgents} agents. Upgrade to add more.`);
+	}
+
 	const body = await request.json().catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>;
 	const name = typeof body.name === 'string' ? body.name.trim() : '';
 
@@ -60,9 +68,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Create agent atomically — user + account + membership in a single transaction.
-	const agentUserId = crypto.randomUUID();
+	const agentUserId = generateId();
 	const agentEmail = `agent-${crypto.randomUUID().slice(0, 12)}@agent.invalid`;
-	const memberId = crypto.randomUUID();
+	const memberId = generateId();
 
 	try {
 		await locals.db.transaction(async (tx: typeof locals.db) => {
@@ -78,7 +86,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			// 2. Create account record for Better Auth consistency
 			await tx.insert(account).values({
-				id: crypto.randomUUID(),
+				id: generateId(),
 				accountId: agentUserId,
 				providerId: 'agent',
 				userId: agentUserId,
@@ -111,8 +119,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		});
 	} catch (e: any) {
-		console.error('[Agents] createApiKey failed (agent created without key):', e);
-		error(500, 'Agent created but API key generation failed. Please revoke and try again.');
+		// Compensating cleanup — remove the agent user created in the transaction above
+		try {
+			await locals.db.transaction(async (tx: typeof locals.db) => {
+				await tx.delete(member).where(
+					and(eq(member.userId, agentUserId), eq(member.organizationId, orgId))
+				);
+				await tx.delete(account).where(eq(account.userId, agentUserId));
+				await tx.delete(user).where(eq(user.id, agentUserId));
+			});
+		} catch (cleanupErr) {
+			console.error('[Agents] Cleanup after API key failure also failed:', cleanupErr);
+		}
+		console.error('[Agents] API key creation failed, cleaned up agent user:', e);
+		error(500, 'Failed to create API key');
 	}
 
 	const fullKey = keyResult?.key;
@@ -142,7 +162,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			.from(member)
 			.where(eq(member.userId, locals.user.id))
 			.limit(1);
-		if (!firstMembership) error(400, 'No active organization');
+		if (!firstMembership) return json({ ok: true, data: [] });
 		orgId = firstMembership.orgId;
 	}
 
@@ -157,7 +177,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		error(403, 'Not a member of this room');
 	}
 
-	// Query agent members joined with apikey for key prefix
+	// Query agent members that have an active API key (revoked agents have no key)
 	const agents = await locals.db
 		.select({
 			agentUserId: member.userId,
@@ -167,7 +187,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		})
 		.from(member)
 		.innerJoin(user, eq(user.id, member.userId))
-		.leftJoin(apikey, eq(apikey.userId, member.userId))
+		.innerJoin(apikey, eq(apikey.referenceId, member.userId))
 		.where(and(eq(member.organizationId, orgId), eq(member.role, 'agent')))
 		.orderBy(member.createdAt);
 

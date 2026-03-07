@@ -13,7 +13,7 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
-import { user, session as sessionTable, account, member, apikey, twoFactor, invitation } from '$lib/server/db/auth-schema';
+import { user, session as sessionTable, account, member, apikey, twoFactor, invitation, passkey as passkeyTable } from '$lib/server/db/auth-schema';
 import { messages, accountAudit, termsAcceptances, usernameHistory } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -59,10 +59,13 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			await tx.delete(sessionTable).where(eq(sessionTable.userId, userId));
 
 			// 3. Delete API keys (prevents continued agent auth after deletion)
-			await tx.delete(apikey).where(eq(apikey.userId, userId));
+			await tx.delete(apikey).where(eq(apikey.referenceId, userId));
 
 			// 4. Delete 2FA secrets and backup codes
 			await tx.delete(twoFactor).where(eq(twoFactor.userId, userId));
+
+			// 4b. Delete passkeys
+			await tx.delete(passkeyTable).where(eq(passkeyTable.userId, userId));
 
 			// 5. Delete pending invitations sent by user
 			await tx.delete(invitation).where(eq(invitation.inviterId, userId));

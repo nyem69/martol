@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { X } from '@lucide/svelte';
 
@@ -17,6 +18,15 @@
 	let reason = $state<Reason | null>(null);
 	let details = $state('');
 	let status = $state<'idle' | 'submitting' | 'success' | 'error'>('idle');
+	let closeBtn: HTMLButtonElement | undefined;
+	let prevFocus: HTMLElement | null = null;
+	let dialogEl: HTMLDivElement | undefined;
+
+	$effect(() => {
+		prevFocus = document.activeElement as HTMLElement;
+		untrack(() => closeBtn?.focus());
+		return () => prevFocus?.focus();
+	});
 
 	const truncatedBody = $derived(
 		messageBody.length > 120 ? messageBody.slice(0, 120) + '...' : messageBody
@@ -55,6 +65,21 @@
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
+		if (e.key === 'Tab' && dialogEl) {
+			const focusable = dialogEl.querySelectorAll<HTMLElement>(
+				'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			);
+			if (focusable.length === 0) return;
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			if (e.shiftKey && document.activeElement === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && document.activeElement === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		}
 	}
 </script>
 
@@ -77,11 +102,13 @@
 	></button>
 
 	<div
+		bind:this={dialogEl}
 		class="relative z-10 w-full max-w-md rounded-lg p-6"
 		style="background: var(--bg-surface); border: 1px solid var(--border);"
 	>
 		<!-- Close button -->
 		<button
+			bind:this={closeBtn}
 			class="absolute top-3 right-3 cursor-pointer rounded-full p-1.5 transition-opacity hover:opacity-70"
 			style="background: var(--bg-elevated); color: var(--text);"
 			onclick={onClose}
@@ -133,7 +160,7 @@
 
 			<!-- Details textarea -->
 			<textarea
-				class="mb-4 w-full resize-none rounded px-3 py-2 text-sm outline-none"
+				class="mb-4 w-full resize-none rounded px-3 py-2 text-sm"
 				style="background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border);"
 				rows="3"
 				placeholder={m.report_details_placeholder()}

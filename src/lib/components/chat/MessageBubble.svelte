@@ -44,36 +44,11 @@
 		return `${days}d`;
 	}
 
-	let bubbleEl: HTMLDivElement | undefined = $state();
-
-	// Make inline images keyboard-accessible after markdown renders
-	$effect(() => {
-		if (!bubbleEl) return;
-		const imgs = bubbleEl.querySelectorAll<HTMLImageElement>('img.chat-img-thumb');
-		for (const img of imgs) {
-			if (!img.hasAttribute('tabindex')) {
-				img.setAttribute('tabindex', '0');
-				img.setAttribute('role', 'button');
-			}
-		}
-	});
-
-	function openLightbox(target: HTMLElement) {
-		if (target.tagName === 'IMG' && target.classList.contains('chat-img-thumb')) {
-			const img = target as HTMLImageElement;
-			lightboxSrc = img.src;
-			lightboxAlt = img.alt;
-		}
-	}
-
-	function onBubbleClick(e: MouseEvent) {
-		openLightbox(e.target as HTMLElement);
-	}
-
-	function onBubbleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ') {
-			openLightbox(e.target as HTMLElement);
-		}
+	function handleImageClick(e: MouseEvent) {
+		const img = (e.target as HTMLElement).closest('img.r2-image') as HTMLImageElement | null;
+		if (!img) return;
+		lightboxSrc = img.getAttribute('src');
+		lightboxAlt = img.getAttribute('alt') || '';
 	}
 
 	function scrollToParent() {
@@ -95,15 +70,12 @@
 	<!-- Bubble -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		bind:this={bubbleEl}
 		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
 		style="background: {message.isOwn
 			? 'var(--bubble-own)'
 			: 'var(--bg-surface)'}; border: 1px solid {message.failed
 			? 'var(--danger)'
 			: 'var(--border-subtle)'};"
-		onclick={onBubbleClick}
-		onkeydown={onBubbleKeydown}
 	>
 		{#if replyParent}
 			<button
@@ -112,7 +84,7 @@
 				onclick={scrollToParent}
 			>
 				<span class="shrink-0 font-medium" style="color: var(--accent);">{replyParent.senderName}</span>
-				<span class="ml-1 truncate">{replyParent.body.slice(0, 80)}</span>
+				<span class="ml-1 truncate">{replyParent.body.replace(/!\[[^\]]*\]\([^)]+\)/g, '[image]').slice(0, 80)}</span>
 			</button>
 		{/if}
 		{#if !message.isOwn}
@@ -128,7 +100,13 @@
 				</span>
 			</div>
 		{/if}
-		<article class="prose text-sm" style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};">
+		<article
+			class="prose text-sm"
+			style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};"
+			role="presentation"
+			onclick={handleImageClick}
+			onkeydown={(e) => { if (e.key === 'Enter') handleImageClick(e as unknown as MouseEvent); }}
+		>
 			{@html htmlBody}
 		</article>
 		{#if message.pending}
@@ -232,10 +210,14 @@
 		100% { background: transparent; }
 	}
 
-	:global(.chat-img-thumb) {
+	:global(article.prose .r2-image) {
 		max-width: 300px;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		margin: 0.25rem 0;
+		max-height: 240px;
+		border-radius: 0.375rem;
+		object-fit: contain;
+		background: var(--bg-elevated);
+		display: block;
+		margin: 0.5rem 0;
+		cursor: zoom-in;
 	}
 </style>

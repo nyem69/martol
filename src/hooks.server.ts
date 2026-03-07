@@ -4,7 +4,7 @@
  * Per-request auth, DB connection, session enrichment, CORS, security headers.
  */
 
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import type { CloudflareEnv } from './app.d.ts';
 
 // Load .dev.vars for local development ONLY (Vite dev server).
@@ -17,7 +17,8 @@ import { createAuth } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rate-limit';
 import { isDisposableEmail } from '$lib/server/disposable-emails';
 import { termsVersions, termsAcceptances } from '$lib/server/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -54,6 +55,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 	event.locals.session = null;
 	event.locals.db = null;
+	event.locals.isAdmin = false;
 
 	// Track Hyperdrive client for cleanup after request
 	let hyperdriveClient: import('pg').Client | null = null;
@@ -78,7 +80,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 				emailFrom: env.EMAIL_FROM || 'noreply@martol.app',
 				emailName: env.EMAIL_NAME || 'Martol'
 			},
-			env.CACHE
+			env.CACHE,
+			env.ENVIRONMENT
 		);
 
 		event.locals.auth = auth;
@@ -108,7 +111,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 				resendApiKey: process.env.RESEND_API_KEY,
 				emailFrom: process.env.EMAIL_FROM || 'noreply@martol.app',
 				emailName: process.env.EMAIL_NAME || 'Martol'
-			}
+			},
+			undefined,
+			process.env.ENVIRONMENT as string
 		);
 
 		event.locals.auth = auth;
@@ -123,6 +128,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		} catch (error) {
 			console.error('[Auth] Session validation failed:', error);
 		}
+	}
+
+	// Derive isAdmin from user role (available via Better Auth additionalFields)
+	if (event.locals.user?.role === 'admin') {
+		event.locals.isAdmin = true;
 	}
 
 	// ── Terms Re-acceptance Check ────────────────────────────────────────
@@ -141,44 +151,38 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const db = event.locals.db;
 			const userId = event.locals.user.id;
 
-			// Get latest version of each required type
-			const requiredTypes = ['tos', 'privacy', 'aup'] as const;
-			const latestVersions: { id: number; type: string }[] = [];
+			// Batch query: get latest version of each required type using DISTINCT ON
+			const latestVersions = await db
+				.select({ id: termsVersions.id, type: termsVersions.type })
+				.from(termsVersions)
+				.where(inArray(termsVersions.type, ['tos', 'privacy', 'aup']))
+				.orderBy(termsVersions.type, desc(termsVersions.effectiveAt));
 
-			for (const type of requiredTypes) {
-				const [latest] = await db
-					.select({ id: termsVersions.id, type: termsVersions.type })
-					.from(termsVersions)
-					.where(eq(termsVersions.type, type))
-					.orderBy(desc(termsVersions.effectiveAt))
-					.limit(1);
-				if (latest) {
-					latestVersions.push(latest);
+			// Deduplicate to latest per type (first row per type due to ORDER BY)
+			const latestByType = new Map<string, number>();
+			for (const v of latestVersions) {
+				if (!latestByType.has(v.type)) {
+					latestByType.set(v.type, v.id);
 				}
 			}
 
 			// Only check if at least one terms version exists
-			if (latestVersions.length > 0) {
-				// Get user's acceptances for these versions
-				const acceptedVersionIds: number[] = [];
-				for (const v of latestVersions) {
-					const [acceptance] = await db
-						.select({ id: termsAcceptances.id })
-						.from(termsAcceptances)
-						.where(
-							and(
-								eq(termsAcceptances.userId, userId),
-								eq(termsAcceptances.termsVersionId, v.id)
-							)
+			if (latestByType.size > 0) {
+				const requiredIds = [...latestByType.values()];
+
+				// Single query: count user's acceptances for these version IDs
+				const [{ count: acceptedCount }] = await db
+					.select({ count: sql<number>`count(*)::int` })
+					.from(termsAcceptances)
+					.where(
+						and(
+							eq(termsAcceptances.userId, userId),
+							inArray(termsAcceptances.termsVersionId, requiredIds)
 						)
-						.limit(1);
-					if (acceptance) {
-						acceptedVersionIds.push(v.id);
-					}
-				}
+					);
 
 				// If any required type is missing acceptance, redirect
-				if (acceptedVersionIds.length < latestVersions.length) {
+				if ((acceptedCount ?? 0) < latestByType.size) {
 					return new Response(null, {
 						status: 302,
 						headers: { Location: '/accept-terms' }
@@ -208,8 +212,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isInvite =
 		event.url.pathname === '/api/auth/organization/invite-member' &&
 		event.request.method === 'POST';
+	const isActionApproval =
+		/^\/api\/actions\/\d+\/(approve|reject)$/.test(event.url.pathname) &&
+		event.request.method === 'POST';
 	const isUpload =
 		event.url.pathname === '/api/upload' && event.request.method === 'POST';
+	const isEmailChange =
+		event.url.pathname === '/api/account/email' && event.request.method === 'POST';
 
 	// ── Turnstile CAPTCHA verification (OTP send only) ──
 	// Turnstile tokens are single-use. Enforce only on send, not verify.
@@ -246,8 +255,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 					);
 				}
 			} catch (err) {
-				console.error('[Auth] Turnstile verification error:', err);
-				// Fail open in case of network error to Cloudflare — rate limiting still protects
+				console.warn('[Turnstile] Verification request failed, proceeding with rate limiting only:', err);
+				// Fall through — rate limiting still protects
 			}
 		}
 	}
@@ -256,8 +265,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
 
 		if (!kv && hasHyperdrive) {
-			// Production without KV — rate limiting is critical, warn loudly
-			console.warn('[Auth] CACHE KV binding missing — OTP rate limiting disabled');
+			// Production without KV — rate limiting is critical, fail closed
+			console.error('[Auth] CACHE KV binding missing — OTP requests blocked');
+			return new Response(
+				JSON.stringify({ error: { message: 'Service temporarily unavailable.' } }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
 		}
 
 		if (kv) {
@@ -282,12 +295,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 				const ip = event.getClientAddress();
 
-				// ── Per-IP rate limit: 10 requests / hour ──
+				// ── Per-IP rate limit: 10 requests / hour (fail-closed) ──
 				const ipLimit = await checkRateLimit(kv, {
 					key: `otp-ip:${ip}`,
 					maxRequests: 10,
 					windowSeconds: 3600
-				});
+				}, true);
 				if (!ipLimit.allowed) {
 					// Silent drop — same 200 OK so attacker can't distinguish
 					return new Response(JSON.stringify({ ok: true }), {
@@ -296,13 +309,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 					});
 				}
 
-				// ── Per-email rate limit: 3 requests / 15 min ──
+				// ── Per-email rate limit: 3 requests / 15 min (fail-closed) ──
 				if (email) {
 					const emailLimit = await checkRateLimit(kv, {
 						key: `otp-email:${email}`,
 						maxRequests: 3,
 						windowSeconds: 900
-					});
+					}, true);
 					if (!emailLimit.allowed) {
 						return new Response(JSON.stringify({ ok: true }), {
 							status: 200,
@@ -311,12 +324,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 					}
 				}
 
-				// ── Global rate limit: 100 requests / minute ──
+				// ── Global rate limit: 100 requests / minute (fail-closed) ──
 				const globalLimit = await checkRateLimit(kv, {
 					key: 'otp-global',
 					maxRequests: 100,
 					windowSeconds: 60
-				});
+				}, true);
 				if (!globalLimit.allowed) {
 					return new Response(JSON.stringify({ ok: true }), {
 						status: 200,
@@ -337,12 +350,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 					);
 				}
 
-				// Verification rate limit: 5 attempts / 15 min per email
+				// Verification rate limit: 5 attempts / 15 min per email (fail-closed)
 				const verifyLimit = await checkRateLimit(kv, {
 					key: `otp-verify:${email}`,
 					maxRequests: 5,
 					windowSeconds: 900
-				});
+				}, true);
 				if (!verifyLimit.allowed) {
 					// Lockout: set a flag so subsequent requests also fail fast
 					await kv.put(`lockout:${email}`, 'locked', { expirationTtl: 900 });
@@ -357,19 +370,188 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// ── Invitation rate limit: 20 per user per hour ──
+	// ── Invitation rate limit: 20 per user per hour (fail-closed) ──
 	if (isInvite && event.locals.user) {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (!kv && hasHyperdrive) {
+			return new Response(
+				JSON.stringify({ error: { message: 'Service temporarily unavailable.' } }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
 		if (kv) {
 			const userId = event.locals.user.id;
 			const inviteLimit = await checkRateLimit(kv, {
 				key: `invite-user:${userId}`,
 				maxRequests: 20,
 				windowSeconds: 3600
-			});
+			}, true);
 			if (!inviteLimit.allowed) {
 				return new Response(
 					JSON.stringify({ error: { message: 'Too many invitations. Try again later.' } }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+
+		// ── Feature gate: check member limit before inviting ──
+		if (event.locals.db && event.locals.session?.activeOrganizationId) {
+			const orgLimits = await checkOrgLimits(
+				event.locals.db,
+				event.locals.session.activeOrganizationId
+			);
+			if (orgLimits.usage.users >= orgLimits.limits.maxUsers) {
+				return new Response(
+					JSON.stringify({
+						error: {
+							message: `Free plan allows ${orgLimits.limits.maxUsers} users. Upgrade to add more.`
+						}
+					}),
+					{ status: 403, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+	}
+
+	// ── Upload rate limit: 20 per user per minute ──
+	// Fail CLOSED: uploads blocked when KV is missing (unlike OTP which fails open)
+	if (isUpload && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (!kv && hasHyperdrive) {
+			console.error('[Upload] CACHE KV binding missing — uploads blocked');
+			return new Response(
+				JSON.stringify({ error: { message: 'Upload service temporarily unavailable.' } }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+		if (kv) {
+			const userId = event.locals.user.id;
+			const uploadLimit = await checkRateLimit(kv, {
+				key: `upload:${userId}`,
+				maxRequests: 20,
+				windowSeconds: 60
+			});
+			if (!uploadLimit.allowed) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Too many uploads. Try again later.' } }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+	}
+
+	// ── MCP endpoint rate limiting: 60 req/min per API key (CR-07) ──
+	if (pathname === '/mcp/v1' && event.request.method === 'POST') {
+		const apiKey = event.request.headers.get('x-api-key');
+		const kv: KVNamespace | undefined = platform?.env?.CACHE;
+		if (apiKey) {
+			if (!kv && hasHyperdrive) {
+				console.warn('[MCP] CACHE KV binding missing — rate limiting fail-closed');
+				return new Response(JSON.stringify({ ok: false, error: 'Service temporarily unavailable', code: 'rate_limit_unavailable' }), {
+					status: 503,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			if (kv) {
+				const mcpLimit = await checkRateLimit(kv, {
+					key: `mcp:${apiKey.slice(-8)}`,
+					maxRequests: 60,
+					windowSeconds: 60
+				});
+				if (!mcpLimit.allowed) {
+					return new Response(JSON.stringify({ ok: false, error: 'Rate limited', code: 'rate_limited' }), {
+						status: 429,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+			}
+		}
+	}
+
+	// ── Action approval rate limit: 60 per user per minute (fail-closed) ──
+	if (isActionApproval && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (!kv && hasHyperdrive) {
+			return new Response(
+				JSON.stringify({ error: { message: 'Service temporarily unavailable.' } }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+		if (kv) {
+			const userId = event.locals.user.id;
+			const actionLimit = await checkRateLimit(kv, {
+				key: `action-approval:${userId}`,
+				maxRequests: 60,
+				windowSeconds: 60
+			}, true);
+			if (!actionLimit.allowed) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Too many approval requests. Try again later.' } }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+	}
+
+	// ── Authenticated endpoint rate limits (fail-closed) ──
+	// All keyed to authenticated user ID, return 503 when KV missing in prod
+	if (event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+
+		const rateLimitedPaths: Record<string, { max: number; window: number }> = {
+			'/api/account/delete': { max: 3, window: 3600 },
+			'/api/account/export': { max: 5, window: 3600 },
+			'/api/account/sessions': { max: 30, window: 60 },
+			'/api/account/username': { max: 5, window: 3600 },
+			'/api/reports': { max: 20, window: 3600 },
+			'/api/agents': { max: 20, window: 3600 },
+			'/api/billing/checkout': { max: 10, window: 3600 },
+			'/api/billing/portal': { max: 10, window: 3600 }
+		};
+
+		const limit = rateLimitedPaths[pathname];
+		if (limit) {
+			if (!kv && hasHyperdrive) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Service temporarily unavailable.' } }),
+					{ status: 503, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+			if (kv) {
+				const userId = event.locals.user.id;
+				const result = await checkRateLimit(kv, {
+					key: `ep:${pathname}:${userId}`,
+					maxRequests: limit.max,
+					windowSeconds: limit.window
+				}, true);
+				if (!result.allowed) {
+					return new Response(
+						JSON.stringify({ error: { message: 'Too many requests. Try again later.' } }),
+						{ status: 429, headers: { 'Content-Type': 'application/json' } }
+					);
+				}
+			}
+		}
+	}
+
+	// ── Email change rate limit: 3 per user per hour (fail-closed) ──
+	if (isEmailChange && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (!kv && hasHyperdrive) {
+			return new Response(
+				JSON.stringify({ error: { message: 'Service temporarily unavailable.' } }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+		if (kv) {
+			const emailChangeLimit = await checkRateLimit(kv, {
+				key: `email-change:${event.locals.user.id}`,
+				maxRequests: 3,
+				windowSeconds: 3600
+			}, true);
+			if (!emailChangeLimit.allowed) {
+				return new Response(
+					JSON.stringify({ error: { message: 'Too many email change requests. Try again later.' } }),
 					{ status: 429, headers: { 'Content-Type': 'application/json' } }
 				);
 			}
@@ -421,6 +603,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			response.headers.set('Access-Control-Allow-Origin', origin);
 			response.headers.set('Access-Control-Allow-Credentials', 'true');
 		}
+		response.headers.append('Vary', 'Origin');
 
 		// Security headers
 		response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -438,10 +621,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// CSP is now handled by SvelteKit's built-in csp config in svelte.config.js
 		// which auto-generates nonces for inline scripts during SSR.
 
+		// Prevent Cloudflare edge from caching HTML pages (stale after deploys).
+		// Immutable assets already have content hashes in filenames.
+		if (response.headers.get('content-type')?.includes('text/html')) {
+			response.headers.set('Cache-Control', 'no-cache');
+		}
+
 		return response;
 	} finally {
 		if (hyperdriveClient) {
 			try { await hyperdriveClient.end(); } catch { /* already closed */ }
 		}
 	}
+};
+
+// Server-side error handling — Sentry capture is handled by @sentry/cloudflare
+// in worker-entry.ts. Client-side Sentry is in hooks.client.ts.
+export const handleError: HandleServerError = ({ error, event }) => {
+	console.error(`[SvelteKit] ${event.url.pathname}:`, error);
+	return { message: 'An unexpected error occurred.' };
 };

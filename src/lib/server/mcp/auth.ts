@@ -6,6 +6,7 @@ export interface AgentContext {
 	agentName: string;
 	orgId: string;
 	orgRole: string;
+	isAdmin: boolean;
 }
 
 interface McpError {
@@ -52,7 +53,7 @@ export async function authenticateAgent(
 		};
 	}
 
-	const agentUserId = keyData.key?.userId;
+	const agentUserId = keyData.key?.referenceId;
 	if (!agentUserId) {
 		return {
 			ok: false,
@@ -77,7 +78,8 @@ export async function authenticateAgent(
 		.select({
 			orgId: member.organizationId,
 			role: member.role,
-			name: user.name
+			name: user.name,
+			userRole: user.role
 		})
 		.from(member)
 		.innerJoin(user, eq(user.id, member.userId))
@@ -99,7 +101,8 @@ export async function authenticateAgent(
 			agentUserId,
 			agentName: result.name ?? `Agent-${agentUserId.slice(0, 6)}`,
 			orgId: result.orgId,
-			orgRole: result.role
+			orgRole: result.role,
+			isAdmin: result.userRole === 'admin'
 		}
 	};
 }

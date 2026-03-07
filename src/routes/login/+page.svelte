@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { tick } from 'svelte';
+	import { Fingerprint } from '@lucide/svelte';
 	import { emailOtp, signIn } from '$lib/auth-client';
 	import * as m from '$lib/paraglide/messages';
 
@@ -45,7 +46,7 @@
 			});
 			if (res.ok) {
 				const redirectTo = $page.url.searchParams.get('redirect');
-				goto(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/chat');
+				goto(redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/chat');
 			} else {
 				magicError = m.login_code_invalid();
 			}
@@ -248,7 +249,7 @@
 					}).catch(() => {});
 				}
 				const redirectTo = $page.url.searchParams.get('redirect');
-				goto(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/chat');
+				goto(redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/chat');
 			}
 		} catch {
 			error = m.error_generic();
@@ -267,6 +268,27 @@
 		error = '';
 		await tick();
 		if (step === 'email') document.getElementById('email-input')?.focus();
+	}
+
+	let passkeyLoading = $state(false);
+
+	async function handlePasskeySignIn() {
+		if (passkeyLoading) return;
+		passkeyLoading = true;
+		error = '';
+		try {
+			const res = await signIn.passkey();
+			if (res?.error) {
+				error = res.error.message || m.error_generic();
+			} else {
+				const redirectTo = $page.url.searchParams.get('redirect');
+				goto(redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/chat');
+			}
+		} catch {
+			error = m.error_generic();
+		} finally {
+			passkeyLoading = false;
+		}
 	}
 
 	const months = Array.from({ length: 12 }, (_, i) => ({
@@ -341,7 +363,7 @@
 							id="dob-month"
 							bind:value={dobMonth}
 							data-testid="dob-month"
-							class="w-full rounded-md px-2 py-2.5 text-sm outline-none"
+							class="w-full rounded-md px-2 py-2.5 text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<option value="">—</option>
@@ -362,7 +384,7 @@
 							bind:value={dobDay}
 							placeholder="DD"
 							data-testid="dob-day"
-							class="w-full rounded-md px-2 py-2.5 text-center text-sm outline-none"
+							class="w-full rounded-md px-2 py-2.5 text-center text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						/>
 					</div>
@@ -378,7 +400,7 @@
 							bind:value={dobYear}
 							placeholder="YYYY"
 							data-testid="dob-year"
-							class="w-full rounded-md px-2 py-2.5 text-center text-sm outline-none"
+							class="w-full rounded-md px-2 py-2.5 text-center text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						/>
 					</div>
@@ -418,7 +440,7 @@
 						readonly={emailLocked}
 						disabled={loading}
 						data-testid="email-input"
-						class="w-full rounded-md px-3 py-2.5 text-sm outline-none"
+						class="w-full rounded-md px-3 py-2.5 text-sm"
 						style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);{emailLocked ? ' opacity: 0.7; cursor: not-allowed;' : ''}"
 					/>
 
@@ -514,7 +536,7 @@
 						required
 						disabled={loading}
 						data-testid="code-input"
-						class="w-full rounded-md px-3 py-3 text-center text-2xl tracking-[0.5em] outline-none"
+						class="w-full rounded-md px-3 py-3 text-center text-2xl tracking-[0.5em]"
 						style="background: var(--bg); border: 1px solid var(--border); color: var(--accent); font-family: var(--font-mono);"
 					/>
 					<button
@@ -565,6 +587,26 @@
 			<p class="mt-4 text-center text-sm" style="color: var(--danger);" data-testid="error-msg">
 				{error}
 			</p>
+		{/if}
+
+		{#if !magicToken && step !== 'age'}
+			<div class="mt-6" style="border-top: 1px solid var(--border); padding-top: 1rem;">
+				<button
+					onclick={handlePasskeySignIn}
+					disabled={passkeyLoading}
+					data-testid="passkey-sign-in-btn"
+					class="flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); letter-spacing: 0.5px;"
+				>
+					{#if passkeyLoading}
+						<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+						{m.login_verifying()}
+					{:else}
+						<Fingerprint size={16} />
+						{m.passkey_sign_in()}
+					{/if}
+				</button>
+			</div>
 		{/if}
 	</div>
 </div>

@@ -4,6 +4,7 @@ import { user, member, organization, invitation, session as sessionTable } from 
 import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 export const load: PageServerLoad = async (event) => {
 	const { locals, platform } = event;
@@ -131,12 +132,83 @@ export const load: PageServerLoad = async (event) => {
 		.where(eq(organization.id, roomId))
 		.limit(1);
 
+	// Auto-fix stale room names: if owner's room still has a different user's auto-generated name
+	const currentUserName = locals.user.username || locals.user.name;
+	if (org?.name && userRole === 'owner' && currentUserName) {
+		const endsWithRoom = org.name.endsWith('\u2019s Room') || org.name.endsWith("'s Room");
+		const expectedName = `${currentUserName}'s Room`;
+		if (endsWithRoom && org.name !== expectedName) {
+			await db
+				.update(organization)
+				.set({ name: expectedName })
+				.where(eq(organization.id, roomId));
+			org.name = expectedName;
+		}
+	}
+
+	// Auto-accept any pending invitations for this user
+	if (locals.user.email) {
+		const pendingInvites = await db
+			.select({ id: invitation.id })
+			.from(invitation)
+			.where(
+				and(
+					sql`LOWER(${invitation.email}) = LOWER(${locals.user.email})`,
+					eq(invitation.status, 'pending'),
+					gt(invitation.expiresAt, new Date())
+				)
+			);
+
+		for (const inv of pendingInvites) {
+			try {
+				await locals.auth!.api.acceptInvitation({
+					body: { invitationId: inv.id },
+					headers: event.request.headers
+				});
+			} catch {
+				// Invitation may have been revoked or already accepted
+			}
+		}
+	}
+
 	// Load all rooms the user belongs to (for room switcher)
 	const userRooms = await db
 		.select({ id: organization.id, name: organization.name })
 		.from(member)
 		.innerJoin(organization, eq(organization.id, member.organizationId))
 		.where(eq(member.userId, locals.user.id));
+
+	// Load unread counts for all rooms
+	const unreadCounts = new Map<string, number>();
+	if (userRooms.length > 0) {
+		const roomIds = userRooms.map((r: typeof userRooms[number]) => r.id);
+		const counts = await db
+			.select({
+				orgId: readCursors.orgId,
+				lastReadId: readCursors.lastReadMessageId
+			})
+			.from(readCursors)
+			.where(
+				and(eq(readCursors.userId, locals.user.id), inArray(readCursors.orgId, roomIds))
+			);
+
+		const cursorMap = new Map(counts.map((c: typeof counts[number]) => [c.orgId, c.lastReadId]));
+
+		for (const room of userRooms) {
+			const lastRead = cursorMap.get(room.id) ?? 0;
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(messagesTable)
+				.where(
+					and(
+						eq(messagesTable.orgId, room.id),
+						isNull(messagesTable.deletedAt),
+						sql`${messagesTable.id} > ${lastRead}`
+					)
+				);
+			if (count > 0) unreadCounts.set(room.id, count);
+		}
+	}
 
 	// Load recent messages from PostgreSQL as fallback history
 	const recentMessages = await db
@@ -248,8 +320,11 @@ export const load: PageServerLoad = async (event) => {
 	// Expose HMAC secret for owner/lead (needed by external clients like martol-client)
 	let hmacSecret: string | null = null;
 	if ((userRole === 'owner' || userRole === 'lead') && platform?.env) {
-		hmacSecret = platform.env.HMAC_SIGNING_SECRET || platform.env.BETTER_AUTH_SECRET || null;
+		hmacSecret = platform.env.HMAC_SIGNING_SECRET ?? null;
 	}
+
+	// Feature gates: plan-based limits for uploads and message sending
+	const orgLimits = roomId ? await checkOrgLimits(db, roomId) : null;
 
 	return {
 		roomId,
@@ -257,10 +332,16 @@ export const load: PageServerLoad = async (event) => {
 		userName: locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`,
 		userRole,
 		roomName: org?.name || 'Chat',
-		userRooms,
+		userRooms: userRooms.map((r: typeof userRooms[number]) => ({
+			...r,
+			unreadCount: unreadCounts.get(r.id) ?? 0
+		})),
 		roomInvitations: filteredInvitations,
 		initialMessages,
 		hasAgents,
-		hmacSecret
+		hmacSecret,
+		enableUploads: orgLimits?.limits.uploadsEnabled ?? false,
+		canSend: orgLimits ? orgLimits.usage.msgsToday < orgLimits.limits.maxMsgsPerDay : true,
+		plan: orgLimits?.plan ?? 'free'
 	};
 };

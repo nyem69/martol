@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { X } from '@lucide/svelte';
 	import { trapFocus } from '$lib/utils/focus-trap';
@@ -15,14 +15,24 @@
 	} = $props();
 
 	let dialogEl: HTMLDivElement | undefined = $state();
+	let closeBtn: HTMLButtonElement | undefined;
+	let prevFocus: HTMLElement | null = null;
+
+	$effect(() => {
+		prevFocus = document.activeElement as HTMLElement;
+		// Use untrack so this effect doesn't re-run when closeBtn is assigned
+		untrack(() => closeBtn?.focus());
+		return () => prevFocus?.focus();
+	});
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
+		// Trap focus within modal
+		if (e.key === 'Tab') {
+			e.preventDefault();
+			closeBtn?.focus();
+		}
 	}
-
-	onMount(() => {
-		if (dialogEl) return trapFocus(dialogEl);
-	});
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -44,6 +54,7 @@
 	></button>
 
 	<button
+		bind:this={closeBtn}
 		class="absolute top-4 right-4 z-10 cursor-pointer rounded-full p-2 transition-opacity hover:opacity-70"
 		style="background: var(--bg-elevated); color: var(--text);"
 		onclick={onClose}

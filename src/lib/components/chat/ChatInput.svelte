@@ -1,12 +1,18 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Send, ImagePlus } from '@lucide/svelte';
+	import { Send, Paperclip } from '@lucide/svelte';
 	import { matchCommands, parseCommand, type SlashCommand } from '$lib/chat/commands';
 	import SlashMenu from './SlashMenu.svelte';
 	import MentionPopup from './MentionPopup.svelte';
 	import type { MentionUser } from '$lib/types/chat';
 	import ReplyPreview from './ReplyPreview.svelte';
 	import UploadProgress from './UploadProgress.svelte';
+
+	const ALLOWED_TYPES = new Set([
+		'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+		'application/pdf', 'text/plain'
+	]);
+	const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
 	let {
 		onSend,
@@ -20,9 +26,7 @@
 		onCancelReply,
 		pendingMention = null,
 		onMentionConsumed,
-		onUploadImage,
-		uploading = false,
-		uploadFilename = ''
+		uploadEnabled = false
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
@@ -35,43 +39,24 @@
 		onCancelReply?: () => void;
 		pendingMention?: string | null;
 		onMentionConsumed?: () => void;
-		onUploadImage?: (file: File) => void;
-		uploading?: boolean;
-		uploadFilename?: string;
+		uploadEnabled?: boolean;
 	} = $props();
 
 	let value = $state('');
-	let textarea: HTMLTextAreaElement | undefined = $state();
-	let fileInput: HTMLInputElement | undefined = $state();
-	let dragging = $state(false);
+	let textarea: HTMLTextAreaElement | undefined;
+	let fileInput = $state<HTMLInputElement | undefined>();
 
-	const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp';
+	// Upload state
+	let uploading = $state(false);
+	let uploadProgress = $state(0);
+	let uploadError = $state('');
+	let activeXhr: XMLHttpRequest | null = null;
+	let draggingOver = $state(false);
 
-	function handleFileSelect(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (file && onUploadImage) onUploadImage(file);
-		input.value = '';
-	}
-
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		dragging = false;
-		const file = e.dataTransfer?.files?.[0];
-		if (file?.type.startsWith('image/') && onUploadImage) onUploadImage(file);
-	}
-
-	function handleDragOver(e: DragEvent) {
-		e.preventDefault();
-		dragging = true;
-	}
-
-	function handleDragLeave(e: DragEvent) {
-		const target = e.currentTarget as Element;
-		if (!target.contains(e.relatedTarget as Node)) {
-			dragging = false;
-		}
-	}
+	// Abort in-flight upload when component is destroyed (e.g. room switch)
+	$effect(() => {
+		return () => { activeXhr?.abort(); };
+	});
 
 	// Slash menu state
 	let showSlashMenu = $state(false);
@@ -93,7 +78,8 @@
 		}
 	});
 
-	const canSend = $derived(value.trim().length > 0 && !disabled);
+	const isViewer = $derived(userRole === 'viewer');
+	const canSend = $derived(value.trim().length > 0 && !disabled && !isViewer);
 
 	const typingText = $derived.by(() => {
 		if (typingNames.length === 0) return '';
@@ -113,12 +99,14 @@
 		if (parsed && onCommand) {
 			onCommand(parsed.command, parsed.args);
 			value = '';
+			showSlashMenu = false;
 			resize();
 			return;
 		}
 
 		onSend(body, replyTo?.dbId);
 		value = '';
+		showSlashMenu = false;
 		resize();
 		onCancelReply?.();
 	}
@@ -235,11 +223,12 @@
 			const atIdx = textBeforeCursor.lastIndexOf('@');
 			if (atIdx !== -1 && (atIdx === 0 || textBeforeCursor[atIdx - 1] === ' ')) {
 				const query = textBeforeCursor.slice(atIdx + 1).toLowerCase();
+				const allEntry = 'all'.startsWith(query) ? [{ id: 'all', name: 'all' }] : [];
 				const matches = [...onlineUsers.entries()]
 					.filter(([_, u]) => u.name.toLowerCase().startsWith(query))
-					.map(([id, u]) => ({ id, name: u.name }))
-					.slice(0, 8);
-				mentionMatches = matches;
+					.map(([id, u]) => ({ id, name: u.name }));
+				const combined = [...allEntry, ...matches].slice(0, 8);
+				mentionMatches = combined;
 				mentionIndex = 0;
 				mentionStart = atIdx;
 				showMentionPopup = matches.length > 0;
@@ -248,15 +237,134 @@
 		}
 		showMentionPopup = false;
 	}
+
+	function cancelUpload() {
+		activeXhr?.abort();
+		activeXhr = null;
+		uploading = false;
+		uploadProgress = 0;
+	}
+
+	function uploadFile(file: File) {
+		if (uploading) return; // Prevent concurrent uploads
+
+		if (!ALLOWED_TYPES.has(file.type)) {
+			uploadError = m.chat_upload_type_not_allowed();
+			setTimeout(() => (uploadError = ''), 4000);
+			return;
+		}
+		if (file.size > MAX_SIZE) {
+			uploadError = m.chat_upload_too_large();
+			setTimeout(() => (uploadError = ''), 4000);
+			return;
+		}
+
+		uploading = true;
+		uploadProgress = 0;
+		uploadError = '';
+
+		const xhr = new XMLHttpRequest();
+		activeXhr = xhr;
+		const formData = new FormData();
+		formData.append('file', file);
+
+		xhr.upload.onprogress = (e) => {
+			if (e.lengthComputable) uploadProgress = e.loaded / e.total;
+		};
+
+		xhr.onload = () => {
+			activeXhr = null;
+			uploading = false;
+			if (xhr.status >= 200 && xhr.status < 300) {
+				try {
+					const json = JSON.parse(xhr.responseText);
+					if (json.ok && json.key) {
+						// Use server-sanitized filename to avoid markdown injection from raw file.name
+						const safeAlt = (json.filename as string).replace(/[[\]]/g, '');
+						const marker = `![${safeAlt}](r2:${json.key})`;
+						const pos = textarea?.selectionStart ?? value.length;
+						value = value.slice(0, pos) + marker + value.slice(pos);
+						resize();
+					} else {
+						uploadError = m.chat_upload_failed();
+						setTimeout(() => (uploadError = ''), 4000);
+					}
+				} catch {
+					uploadError = m.chat_upload_failed();
+					setTimeout(() => (uploadError = ''), 4000);
+				}
+			} else {
+				uploadError = m.chat_upload_failed();
+				setTimeout(() => (uploadError = ''), 4000);
+			}
+		};
+
+		xhr.onerror = () => {
+			activeXhr = null;
+			uploading = false;
+			uploadError = m.chat_upload_failed();
+			setTimeout(() => (uploadError = ''), 4000);
+		};
+
+		xhr.open('POST', '/api/upload');
+		xhr.send(formData);
+	}
+
+	function onFileSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (file) uploadFile(file);
+		// Reset so the same file can be re-selected
+		input.value = '';
+	}
+
+	function onPaste(e: ClipboardEvent) {
+		if (!uploadEnabled) return;
+		const items = e.clipboardData?.items;
+		if (!items) return;
+		for (const item of items) {
+			if (item.kind === 'file' && ALLOWED_TYPES.has(item.type)) {
+				const file = item.getAsFile();
+				if (file) {
+					e.preventDefault();
+					uploadFile(file);
+					return;
+				}
+			}
+		}
+	}
+
+	function onDragOver(e: DragEvent) {
+		if (!uploadEnabled) return;
+		e.preventDefault();
+		draggingOver = true;
+	}
+
+	function onDragLeave(e: DragEvent) {
+		// Only hide when leaving the container (not entering a child)
+		if (e.currentTarget && !((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node))) {
+			draggingOver = false;
+		}
+	}
+
+	function onDrop(e: DragEvent) {
+		if (!uploadEnabled) return;
+		e.preventDefault();
+		draggingOver = false;
+		const file = e.dataTransfer?.files?.[0];
+		if (file) uploadFile(file);
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="relative px-4 pt-2"
-	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));{dragging ? ' outline: 2px dashed var(--accent); outline-offset: -2px;' : ''}"
-	ondrop={handleDrop}
-	ondragover={handleDragOver}
-	ondragleave={handleDragLeave}
+	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
+	role="region"
+	aria-label={uploadEnabled ? m.chat_attach_file() : undefined}
+	ondragover={onDragOver}
+	ondragleave={onDragLeave}
+	ondrop={onDrop}
 >
 	{#if typingText}
 		<div class="mb-1.5 text-xs" style="color: var(--text-muted);" aria-live="polite">
@@ -270,6 +378,42 @@
 			body={replyTo.body}
 			onCancel={() => onCancelReply?.()}
 		/>
+	{/if}
+
+	{#if uploading}
+		<div class="mb-1.5 flex items-center gap-2">
+			<div
+				class="h-2 flex-1 overflow-hidden rounded-full"
+				style="background: var(--bg-elevated);"
+				role="progressbar"
+				aria-valuenow={Math.round(uploadProgress * 100)}
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-label={m.chat_uploading()}
+			>
+				<div class="h-full rounded-full transition-all" style="width: {uploadProgress * 100}%; background: var(--accent);"></div>
+			</div>
+			<span class="shrink-0 text-[10px]" style="color: var(--text-muted);">{Math.round(uploadProgress * 100)}%</span>
+			<button onclick={cancelUpload} class="shrink-0 text-[10px] underline" style="color: var(--text-muted);" aria-label={m.chat_dismiss()}>
+				{m.chat_dismiss()}
+			</button>
+		</div>
+	{/if}
+
+	{#if uploadError}
+		<div class="mb-1.5 flex items-center justify-between text-xs" style="color: var(--danger);" role="alert">
+			<span>{uploadError}</span>
+			<button onclick={() => (uploadError = '')} class="ml-2 underline" aria-label={m.chat_dismiss()}>{m.chat_dismiss()}</button>
+		</div>
+	{/if}
+
+	{#if draggingOver && uploadEnabled}
+		<div
+			class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed"
+			style="border-color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, transparent);"
+		>
+			<span class="text-sm font-medium" style="color: var(--accent);">{m.chat_attach_file()}</span>
+		</div>
 	{/if}
 
 	<!-- Popup container (positioned relative to input area) -->
@@ -289,31 +433,31 @@
 			/>
 		{/if}
 
-		<UploadProgress active={uploading} filename={uploadFilename} />
-
-		<input
-			bind:this={fileInput}
-			type="file"
-			accept={IMAGE_ACCEPT}
-			class="hidden"
-			onchange={handleFileSelect}
-			data-testid="file-input"
-		/>
+		{#if uploadEnabled}
+			<input
+				bind:this={fileInput}
+				type="file"
+				accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain"
+				class="hidden"
+				onchange={onFileSelect}
+				data-testid="file-input"
+			/>
+		{/if}
 
 		<div
 			class="flex items-end gap-2 rounded-lg px-3 py-2"
 			style="background: var(--bg); border: 1px solid var(--border);"
 		>
-			{#if onUploadImage}
+			{#if uploadEnabled}
 				<button
 					onclick={() => fileInput?.click()}
 					disabled={disabled || uploading}
-					data-testid="upload-button"
-					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+					data-testid="attach-button"
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-all hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
 					style="color: var(--text-muted);"
-					aria-label={m.upload_attach_image()}
+					aria-label={m.chat_attach_file()}
 				>
-					<ImagePlus size={18} />
+					<Paperclip size={16} />
 				</button>
 			{/if}
 			<textarea
@@ -321,13 +465,14 @@
 				bind:value
 				oninput={onInput}
 				onkeydown={onKeydown}
-				placeholder={m.chat_placeholder()}
+				onpaste={onPaste}
+				placeholder={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
 				rows="1"
-				{disabled}
+				disabled={disabled || isViewer}
 				data-testid="chat-input"
-				aria-label={m.chat_placeholder()}
-				class="flex-1 resize-none border-0 bg-transparent leading-relaxed outline-none"
-				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;"
+				aria-label={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
+				class="flex-1 resize-none border-0 bg-transparent leading-relaxed"
+				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;{isViewer ? ' opacity: 0.5;' : ''}"
 			></textarea>
 			<button
 				onclick={send}

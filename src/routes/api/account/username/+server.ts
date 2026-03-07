@@ -8,9 +8,9 @@
 
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
-import { user } from '$lib/server/db/auth-schema';
+import { user, organization, member } from '$lib/server/db/auth-schema';
 import { usernameHistory, accountAudit } from '$lib/server/db/schema';
-import { eq, desc, sql, or, isNull, gt } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const RESERVED_WORDS = new Set([
@@ -144,34 +144,64 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 		);
 	}
 
-	// ── Apply change ──
+	// ── Apply change (atomic transaction with unique constraint catch) ──
 
 	const releasedAt = new Date(now.getTime() + COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+	const ipAddress = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for');
+	const userAgent = request.headers.get('user-agent');
 
-	// Update user.username
-	await db
-		.update(user)
-		.set({ username: newUsername, updatedAt: now })
-		.where(eq(user.id, locals.user.id));
+	try {
+		await db.transaction(async (tx: typeof db) => {
+			await tx
+				.update(user)
+				.set({ username: newUsername, updatedAt: now })
+				.where(eq(user.id, locals.user.id));
 
-	// Insert username history
-	await db.insert(usernameHistory).values({
-		userId: locals.user.id,
-		oldUsername: currentUsername,
-		newUsername: newUsername,
-		changedAt: now,
-		releasedAt: releasedAt
-	});
+			await tx.insert(usernameHistory).values({
+				userId: locals.user.id,
+				oldUsername: currentUsername,
+				newUsername: newUsername,
+				changedAt: now,
+				releasedAt: releasedAt
+			});
 
-	// Audit log
-	await db.insert(accountAudit).values({
-		userId: locals.user.id,
-		action: 'username_change',
-		oldValue: currentUsername,
-		newValue: newUsername,
-		ipAddress: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for'),
-		userAgent: request.headers.get('user-agent')
-	});
+			await tx.insert(accountAudit).values({
+				userId: locals.user.id,
+				action: 'username_change',
+				oldValue: currentUsername,
+				newValue: newUsername,
+				ipAddress,
+				userAgent
+			});
+
+			// Update auto-generated room names for owned rooms
+			// Match both current username and any previous auto-generated patterns
+			const newRoomName = `${newUsername}'s Room`;
+			const ownedOrgs = await tx
+				.select({ orgId: member.organizationId, orgName: organization.name })
+				.from(member)
+				.innerJoin(organization, eq(organization.id, member.organizationId))
+				.where(and(eq(member.userId, locals.user.id), eq(member.role, 'owner')));
+
+			for (const org of ownedOrgs) {
+				// Rename if it ends with "'s Room" (auto-generated pattern)
+				if (org.orgName?.endsWith('\u2019s Room') || org.orgName?.endsWith("'s Room")) {
+					await tx
+						.update(organization)
+						.set({ name: newRoomName })
+						.where(eq(organization.id, org.orgId));
+				}
+			}
+		});
+	} catch (err: any) {
+		if (err?.code === '23505') {
+			return json(
+				{ ok: false, error: 'Username is already taken.' },
+				{ status: 409 }
+			);
+		}
+		throw err;
+	}
 
 	return json({ ok: true, username: newUsername });
 };

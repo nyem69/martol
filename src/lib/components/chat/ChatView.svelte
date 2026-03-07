@@ -8,7 +8,6 @@
 	import MessageList from './MessageList.svelte';
 	import ChatInput from './ChatInput.svelte';
 	import MemberPanel from './MemberPanel.svelte';
-	import PendingActionLine from './PendingActionLine.svelte';
 	import AIDisclosureModal from './AIDisclosureModal.svelte';
 	import ReportModal from './ReportModal.svelte';
 	import OnlineBar from './OnlineBar.svelte';
@@ -20,7 +19,7 @@
 	// These values are stable for this component instance.
 	// When roomId changes, the parent {#key} destroys and recreates this component.
 	// svelte-ignore state_referenced_locally — intentional: {#key} guarantees fresh instance per room.
-	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret } = data;
+	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret, enableUploads } = data;
 
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
@@ -46,7 +45,8 @@
 	let pendingMention = $state<string | null>(null);
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
 	let reportTarget = $state<{ messageId: number; messageBody: string } | null>(null);
-	let pendingActions = $state<PendingAction[]>([]);
+	let recentActions = $state<PendingAction[]>([]);
+	let actionsInFlight = $state(new Set<number>());
 	let loadingHistory = $state(false);
 	let hasMoreHistory = $state(initialMessages.length >= 50);
 	let uploading = $state(false);
@@ -54,17 +54,16 @@
 	let showUpgradeModal = $state(false);
 	let upgradeWasCanceled = $state(false);
 
-	const canViewActions = userRole === 'owner' || userRole === 'lead';
+	// [I11] All members see action cards; only owner/lead get approve/reject buttons
 	const canApproveActions = userRole === 'owner' || userRole === 'lead';
 
-	async function loadPendingActions() {
-		if (!canViewActions) return;
+	async function loadRecentActions() {
 		try {
-			const res = await fetch('/api/actions?status=pending');
+			const res = await fetch('/api/actions?status=recent');
 			if (!res.ok) return;
 			const json: { ok: boolean; data: Record<string, unknown>[] } = await res.json();
 			if (json.ok) {
-				pendingActions = json.data.map((a) => ({
+				recentActions = json.data.map((a) => ({
 					id: a.id as number,
 					actionType: a.action_type as string,
 					riskLevel: a.risk_level as 'low' | 'medium' | 'high',
@@ -73,7 +72,11 @@
 					requestedRole: a.requested_role as string,
 					agentName: (a.agent_user_id as string) ?? 'Agent',
 					status: a.status as PendingAction['status'],
-					timestamp: a.created_at as string
+					timestamp: a.created_at as string,
+				simulationType: (a.simulation_type as string) ?? null,
+				simulationPayload: (a.simulation_payload as Record<string, unknown>) ?? null,
+				riskFactors: (a.risk_factors as { factor: string; severity: string; detail: string }[]) ?? null,
+				estimatedImpact: (a.estimated_impact as { files_modified?: number; services_affected?: string[]; reversible?: boolean }) ?? null
 				}));
 			}
 		} catch {
@@ -124,18 +127,35 @@
 		}
 	}
 
-	async function handleApproveAction(actionId: number) {
-		try {
-			const res = await fetch(`/api/actions/${actionId}/approve`, { method: 'POST' });
-			if (res.ok) await loadPendingActions();
-		} catch { /* handled by reload */ }
+	// [I1] Route approve/reject through DO WebSocket for real-time broadcast to all clients
+	function handleApproveAction(actionId: number) {
+		if (actionsInFlight.has(actionId)) return;
+		actionsInFlight = new Set([...actionsInFlight, actionId]);
+		// Optimistic update
+		recentActions = recentActions.map((a) =>
+			a.id === actionId ? { ...a, status: 'approved' as const } : a
+		);
+		store.ws.send({ type: 'command', name: 'approve', args: String(actionId) });
+		// Refresh after DO processes — clears in-flight and syncs true state
+		setTimeout(async () => {
+			await loadRecentActions();
+			actionsInFlight = new Set([...actionsInFlight].filter((id) => id !== actionId));
+		}, 1000);
 	}
 
-	async function handleRejectAction(actionId: number) {
-		try {
-			const res = await fetch(`/api/actions/${actionId}/reject`, { method: 'POST' });
-			if (res.ok) await loadPendingActions();
-		} catch { /* handled by reload */ }
+	function handleRejectAction(actionId: number) {
+		if (actionsInFlight.has(actionId)) return;
+		actionsInFlight = new Set([...actionsInFlight, actionId]);
+		// Optimistic update
+		recentActions = recentActions.map((a) =>
+			a.id === actionId ? { ...a, status: 'rejected' as const } : a
+		);
+		store.ws.send({ type: 'command', name: 'reject', args: String(actionId) });
+		// Refresh after DO processes — clears in-flight and syncs true state
+		setTimeout(async () => {
+			await loadRecentActions();
+			actionsInFlight = new Set([...actionsInFlight].filter((id) => id !== actionId));
+		}, 1000);
 	}
 
 	function handleCommand(command: string, args: string) {
@@ -143,7 +163,7 @@
 		store.ws.send({ type: 'command', name: command, args });
 		// Refresh actions after approve/reject command
 		if (command === 'approve' || command === 'reject') {
-			setTimeout(() => loadPendingActions(), 500);
+			setTimeout(() => loadRecentActions(), 500);
 		}
 	}
 
@@ -220,17 +240,25 @@
 
 	onMount(() => {
 		store.connect();
-		loadPendingActions();
+		loadRecentActions();
 		// Show AI disclosure if room has agents and user hasn't acknowledged
 		if (hasAgents && !localStorage.getItem(`ai-disclosed-${roomId}`)) {
 			showAIDisclosure = true;
 		}
 		return () => store.disconnect();
 	});
+
+	// [I3] Refresh actions when new agent messages arrive (debounced 2s)
+	$effect(() => {
+		const lastMsg = store.messages[store.messages.length - 1];
+		if (lastMsg?.senderRole !== 'agent') return;
+		const timerId = setTimeout(() => loadRecentActions(), 2000);
+		return () => clearTimeout(timerId);
+	});
 </script>
 
 <main class="h-dvh overflow-hidden" aria-label="Chat room: {roomName}">
-	<div class="mx-auto flex h-full max-w-5xl flex-col overflow-hidden">
+	<div class="flex h-full flex-col overflow-hidden">
 		<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
 		<ChatHeader
 			{roomName}
@@ -253,27 +281,19 @@
 		<MessageList
 			messages={store.messages}
 			systemEvents={store.systemEvents}
+			actions={recentActions}
+			{actionsInFlight}
 			loading={store.ws.status === 'connecting'}
 			{loadingHistory}
 			{hasMoreHistory}
+			{canApproveActions}
 			onRetry={(localId) => store.retrySend(localId)}
 			onReply={handleReply}
 			onReport={handleReport}
 			onLoadMore={loadMoreHistory}
+			onApproveAction={handleApproveAction}
+			onRejectAction={handleRejectAction}
 		/>
-
-		{#if pendingActions.length > 0}
-			<div class="shrink-0 border-t" style="border-color: var(--border); background: var(--bg-surface);">
-				{#each pendingActions as action (action.id)}
-					<PendingActionLine
-						{action}
-						canApprove={canApproveActions}
-						onApprove={handleApproveAction}
-						onReject={handleRejectAction}
-					/>
-				{/each}
-			</div>
-		{/if}
 
 		<ChatInput
 			onSend={(body, replyToId) => {
@@ -290,9 +310,7 @@
 			onCancelReply={() => (replyTo = null)}
 			{pendingMention}
 			onMentionConsumed={() => (pendingMention = null)}
-			onUploadImage={handleUploadImage}
-			{uploading}
-			{uploadFilename}
+			uploadEnabled={enableUploads}
 		/>
 
 		{#if store.error}

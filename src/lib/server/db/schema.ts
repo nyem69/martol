@@ -5,6 +5,8 @@
  * We define the application-specific tables here.
  */
 
+// TODO: LO-09 — Add CHECK(length(id) <= 128) to auth table PKs (deferred: Better Auth managed)
+
 import {
 	pgTable,
 	serial,
@@ -13,12 +15,16 @@ import {
 	timestamp,
 	bigint,
 	integer,
+	boolean,
 	jsonb,
 	uniqueIndex,
 	index,
-	primaryKey
+	primaryKey,
+	check,
+	foreignKey
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { user, organization } from './auth-schema';
 
 /**
  * Messages — chat messages with server-derived sender identity
@@ -42,7 +48,10 @@ export const messages = pgTable(
 	},
 	(table) => [
 		index('idx_messages_org_id').on(table.orgId, table.id),
-		index('idx_messages_org_sender').on(table.orgId, table.senderId, table.id)
+		index('idx_messages_org_sender').on(table.orgId, table.senderId, table.id),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.senderId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.replyTo], foreignColumns: [table.id] }).onDelete('set null')
 	]
 );
 
@@ -53,15 +62,24 @@ export const attachments = pgTable(
 	'attachments',
 	{
 		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		messageId: bigint('message_id', { mode: 'number' }),
 		orgId: text('org_id').notNull(),
 		uploadedBy: text('uploaded_by').notNull(),
 		filename: text('filename').notNull(),
 		r2Key: text('r2_key').notNull(),
-		contentType: text('content_type'),
-		sizeBytes: bigint('size_bytes', { mode: 'number' }),
+		contentType: text('content_type').notNull(),
+		sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('idx_attachments_uploaded_by').on(table.uploadedBy)]
+	(table) => [
+		uniqueIndex('idx_attachments_r2_key').on(table.r2Key),
+		index('idx_attachments_message_id').on(table.messageId),
+		index('idx_attachments_org_message').on(table.orgId, table.messageId),
+		index('idx_attachments_org_uploaded_by').on(table.orgId, table.uploadedBy),
+		foreignKey({ columns: [table.messageId], foreignColumns: [messages.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.uploadedBy], foreignColumns: [user.id] }).onDelete('restrict')
+	]
 );
 
 /**
@@ -77,7 +95,9 @@ export const todos = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		index('idx_todos_org_status').on(table.orgId, table.status)
+		index('idx_todos_org_status').on(table.orgId, table.status),
+		foreignKey({ columns: [table.messageId], foreignColumns: [messages.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]
 );
 
@@ -98,7 +118,9 @@ export const agentRoomBindings = pgTable(
 	},
 	(table) => [
 		uniqueIndex('idx_agent_room_bindings_org_label').on(table.orgId, table.label),
-		uniqueIndex('idx_agent_room_bindings_agent_user').on(table.agentUserId)
+		uniqueIndex('idx_agent_room_bindings_agent_user').on(table.agentUserId),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -114,7 +136,9 @@ export const agentCursors = pgTable(
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		primaryKey({ columns: [table.orgId, table.agentUserId] })
+		primaryKey({ columns: [table.orgId, table.agentUserId] }),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -130,7 +154,9 @@ export const readCursors = pgTable(
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		primaryKey({ columns: [table.orgId, table.userId] })
+		primaryKey({ columns: [table.orgId, table.userId] }),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -161,6 +187,10 @@ export const pendingActions = pgTable(
 		riskLevel: text('risk_level').notNull().$type<'low' | 'medium' | 'high'>(),
 		description: text('description').notNull(),
 		payloadJson: jsonb('payload_json'),
+		simulationType: text('simulation_type').$type<'code_diff' | 'shell_preview' | 'api_call' | 'file_ops' | 'custom'>(),
+		simulationPayload: jsonb('simulation_payload'),
+		riskFactors: jsonb('risk_factors'),
+		estimatedImpact: jsonb('estimated_impact'),
 		status: text('status')
 			.notNull()
 			.default('pending')
@@ -171,7 +201,15 @@ export const pendingActions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		index('idx_pending_actions_org_status').on(table.orgId, table.status, table.createdAt)
+		index('idx_pending_actions_org_status').on(table.orgId, table.status, table.createdAt),
+		check('chk_pa_status', sql`${table.status} IN ('pending', 'approved', 'rejected', 'expired', 'executed')`),
+		check('chk_pa_risk', sql`${table.riskLevel} IN ('low', 'medium', 'high')`),
+		check('chk_pa_action_type', sql`${table.actionType} IN ('question_answer', 'code_review', 'code_write', 'code_modify', 'code_delete', 'deploy', 'config_change')`),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.triggerMessageId], foreignColumns: [messages.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.requestedBy], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.approvedBy], foreignColumns: [user.id] }).onDelete('set null')
 	]
 );
 
@@ -189,7 +227,12 @@ export const roleAudit = pgTable(
 		newRole: text('new_role'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [index('idx_role_audit_org').on(table.orgId, table.createdAt)]
+	(table) => [
+		index('idx_role_audit_org').on(table.orgId, table.createdAt),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.changedBy], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.targetUser], foreignColumns: [user.id] }).onDelete('restrict')
+	]
 );
 
 // ── Auth & Onboarding (docs/003-Auth.md) ────────────────────────────
@@ -210,7 +253,8 @@ export const usernameHistory = pgTable(
 	},
 	(table) => [
 		index('idx_username_history_user').on(table.userId),
-		index('idx_username_history_old').on(table.oldUsername)
+		index('idx_username_history_old').on(table.oldUsername),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade')
 	]
 );
 
@@ -244,7 +288,9 @@ export const termsAcceptances = pgTable(
 	},
 	(table) => [
 		uniqueIndex('idx_terms_acceptances_user_version').on(table.userId, table.termsVersionId),
-		index('idx_terms_acceptances_user').on(table.userId)
+		index('idx_terms_acceptances_user').on(table.userId),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.termsVersionId], foreignColumns: [termsVersions.id] }).onDelete('restrict')
 	]
 );
 
@@ -279,7 +325,8 @@ export const accountAudit = pgTable(
 	},
 	(table) => [
 		index('idx_account_audit_user').on(table.userId, table.createdAt),
-		index('idx_account_audit_action').on(table.action, table.createdAt)
+		index('idx_account_audit_action').on(table.action, table.createdAt),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict')
 	]
 );
 
@@ -309,29 +356,43 @@ export const contentReports = pgTable(
 	},
 	(table) => [
 		index('idx_content_reports_org').on(table.orgId, table.status),
-		index('idx_content_reports_message').on(table.messageId)
+		index('idx_content_reports_message').on(table.messageId),
+		check('chk_cr_status', sql`${table.status} IN ('pending', 'reviewed', 'dismissed', 'actioned')`),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.messageId], foreignColumns: [messages.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.reporterId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.reviewedBy], foreignColumns: [user.id] }).onDelete('set null')
 	]
 );
 
 /**
- * Subscriptions — Stripe subscription records for paid features (e.g. image upload).
+ * Subscriptions — org-level billing via Stripe
+ * One subscription per org. Free orgs may not have a row (default to free).
  */
 export const subscriptions = pgTable(
 	'subscriptions',
 	{
-		id: text('id').primaryKey(),
-		userId: text('user_id').notNull(),
+		id: text('id').primaryKey(), // nanoid
+		orgId: text('org_id').notNull(),
 		stripeCustomerId: text('stripe_customer_id').notNull(),
 		stripeSubscriptionId: text('stripe_subscription_id').unique(),
-		plan: text('plan').notNull().default('free').$type<'free' | 'image_upload'>(),
-		status: text('status').notNull().default('active').$type<'active' | 'canceled' | 'past_due'>(),
+		plan: text('plan').notNull().default('free').$type<'free' | 'pro'>(),
+		status: text('status')
+			.notNull()
+			.default('active')
+			.$type<'active' | 'past_due' | 'canceled' | 'incomplete'>(),
+		quantity: integer('quantity').notNull().default(1),
+		foundingMember: boolean('founding_member').notNull().default(false),
 		currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+		cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date())
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		uniqueIndex('idx_subscriptions_user').on(table.userId),
-		index('idx_subscriptions_stripe_customer').on(table.stripeCustomerId)
+		uniqueIndex('idx_subscriptions_org').on(table.orgId),
+		index('idx_subscriptions_stripe_customer').on(table.stripeCustomerId),
+		index('idx_subscriptions_stripe_sub').on(table.stripeSubscriptionId),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]
 );
 
@@ -356,6 +417,81 @@ export const userSanctions = pgTable(
 	},
 	(table) => [
 		index('idx_user_sanctions_user').on(table.userId),
-		index('idx_user_sanctions_active').on(table.userId, table.sanctionType)
+		index('idx_user_sanctions_active').on(table.userId, table.sanctionType),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.reportId], foreignColumns: [contentReports.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.issuedBy], foreignColumns: [user.id] }).onDelete('restrict')
+	]
+);
+
+// ── Support Tickets ─────────────────────────────────────────────────
+
+/**
+ * Support Tickets — user-submitted support requests.
+ * Visible to submitter + platform admins. Agents can read/comment via MCP.
+ */
+export const supportTickets = pgTable(
+	'support_tickets',
+	{
+		id: text('id').primaryKey(), // nanoid
+		userId: text('user_id').notNull(),
+		title: text('title').notNull(),
+		description: text('description').notNull(),
+		category: text('category')
+			.notNull()
+			.default('other')
+			.$type<'bug' | 'feature_request' | 'question' | 'issue' | 'other'>(),
+		status: text('status')
+			.notNull()
+			.default('open')
+			.$type<'open' | 'in_progress' | 'resolved' | 'closed'>(),
+		assignedTo: jsonb('assigned_to').$type<string[]>(),
+		resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+		resolvedBy: text('resolved_by'),
+		closedAt: timestamp('closed_at', { withTimezone: true }),
+		closedBy: text('closed_by'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_support_tickets_user').on(table.userId, table.createdAt),
+		index('idx_support_tickets_status').on(table.status, table.createdAt),
+		check(
+			'chk_st_category',
+			sql`${table.category} IN ('bug', 'feature_request', 'question', 'issue', 'other')`
+		),
+		check(
+			'chk_st_status',
+			sql`${table.status} IN ('open', 'in_progress', 'resolved', 'closed')`
+		),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('restrict'),
+		foreignKey({ columns: [table.resolvedBy], foreignColumns: [user.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.closedBy], foreignColumns: [user.id] }).onDelete('set null')
+	]
+);
+
+/**
+ * Ticket Comments — threaded discussion on support tickets.
+ * Both humans and MCP agents can comment (mutually exclusive userId/agentUserId).
+ */
+export const ticketComments = pgTable(
+	'ticket_comments',
+	{
+		id: text('id').primaryKey(), // nanoid
+		ticketId: text('ticket_id').notNull(),
+		userId: text('user_id'),
+		agentUserId: text('agent_user_id'),
+		content: text('content').notNull(),
+		parentId: text('parent_id'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_ticket_comments_ticket').on(table.ticketId, table.createdAt),
+		foreignKey({ columns: [table.ticketId], foreignColumns: [supportTickets.id] }).onDelete(
+			'cascade'
+		),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.agentUserId], foreignColumns: [user.id] }).onDelete('set null'),
+		foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null')
 	]
 );

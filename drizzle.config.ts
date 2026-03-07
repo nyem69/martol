@@ -13,6 +13,9 @@ export default defineConfig({
 	out: './drizzle',
 	dbCredentials: {
 		url: connectionString,
+		// TODO: For secure migrations, download Aiven CA cert and use:
+		// ssl: { ca: readFileSync('aiven-ca.pem') }
+		// Currently using rejectUnauthorized: false for development convenience.
 		ssl: { rejectUnauthorized: false }
 	}
 });

@@ -9,18 +9,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.db) error(503, 'Database unavailable');
 
 	const userId = locals.user.id;
+	const orgId = locals.session.activeOrganizationId;
 	const db = locals.db;
 
-	// Check subscription
-	const [sub] = await db
+	// Check subscription (org-level)
+	const [sub] = orgId ? await db
 		.select({
 			plan: subscriptions.plan,
 			status: subscriptions.status,
 			currentPeriodEnd: subscriptions.currentPeriodEnd
 		})
 		.from(subscriptions)
-		.where(eq(subscriptions.userId, userId))
-		.limit(1);
+		.where(eq(subscriptions.orgId, orgId))
+		.limit(1) : [];
 
 	const isSubscribed =
 		sub?.plan === 'image_upload' &&

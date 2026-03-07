@@ -42,7 +42,8 @@ export type ErrorCode =
 	| 'invalid_message'
 	| 'unauthorized'
 	| 'degraded'
-	| 'internal';
+	| 'internal'
+	| 'resync_required';
 
 // ── DO Internal ─────────────────────────────────────────────────────
 

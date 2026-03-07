@@ -2,6 +2,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 interface CloudflareEnv {
+	AI: Ai;
 	CACHE: KVNamespace;
 	HYPERDRIVE: Hyperdrive;
 	STORAGE: R2Bucket;
@@ -17,9 +18,12 @@ interface CloudflareEnv {
 	TURNSTILE_SITE_KEY: string;
 	TURNSTILE_SECRET_KEY: string;
 	ENABLE_UPLOADS: string;
+	ENABLE_IMAGE_SCANNING: string;
 	STRIPE_SECRET_KEY: string;
 	STRIPE_WEBHOOK_SECRET: string;
 	STRIPE_PRICE_ID: string;
+	STRIPE_PUBLISHABLE_KEY: string;
+	STRIPE_PRO_PRICE_ID: string;
 }
 
 declare global {
@@ -34,6 +38,7 @@ declare global {
 			session: any | null;
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			db: any | null;
+			isAdmin: boolean;
 		}
 
 		interface Platform {

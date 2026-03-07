@@ -22,6 +22,8 @@ export const user = pgTable(
 		username: text('username'),
 		displayName: text('displayName'),
 		ageVerifiedAt: timestamp('ageVerifiedAt'),
+		// Platform-level role (user | admin)
+		role: text('role').notNull().default('user').$type<'user' | 'admin'>(),
 		// twoFactor plugin — required for user creation to succeed
 		twoFactorEnabled: boolean('twoFactorEnabled').default(false),
 		createdAt: timestamp('createdAt').notNull(),
@@ -93,6 +95,7 @@ export const member = pgTable(
 			.notNull()
 			.references(() => user.id),
 		role: text('role').notNull(),
+		aiOptOut: boolean('ai_opt_out').notNull().default(false),
 		createdAt: timestamp('createdAt').notNull()
 	},
 	(table) => [
@@ -132,11 +135,12 @@ export const twoFactor = pgTable('twoFactor', {
 
 export const apikey = pgTable('apikey', {
 	id: text('id').primaryKey(),
+	configId: text('configId').notNull().default('default'),
 	name: text('name'),
 	start: text('start'),
 	prefix: text('prefix'),
 	key: text('key').notNull(),
-	userId: text('userId')
+	referenceId: text('referenceId')
 		.notNull()
 		.references(() => user.id),
 	refillInterval: integer('refillInterval'),
@@ -154,4 +158,21 @@ export const apikey = pgTable('apikey', {
 	updatedAt: timestamp('updatedAt').notNull(),
 	permissions: text('permissions'),
 	metadata: text('metadata')
+});
+
+// ── Passkey plugin ──────────────────────────────────────────────────
+
+export const passkey = pgTable('passkey', {
+	id: text('id').primaryKey(),
+	name: text('name'),
+	publicKey: text('publicKey').notNull(),
+	userId: text('userId')
+		.notNull()
+		.references(() => user.id),
+	webauthnUserID: text('webauthnUserID').notNull(),
+	counter: integer('counter').notNull(),
+	deviceType: text('deviceType').notNull(),
+	backedUp: boolean('backedUp').notNull(),
+	transports: text('transports'),
+	createdAt: timestamp('createdAt')
 });

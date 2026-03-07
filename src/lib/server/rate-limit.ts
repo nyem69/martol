@@ -32,7 +32,8 @@ export interface RateLimitResult {
  */
 export async function checkRateLimit(
 	kv: KVNamespace,
-	config: RateLimitConfig
+	config: RateLimitConfig,
+	failClosed: boolean = false
 ): Promise<RateLimitResult> {
 	const kvKey = `rl:${config.key}`;
 	const now = Math.floor(Date.now() / 1000);
@@ -74,8 +75,11 @@ export async function checkRateLimit(
 
 		return { allowed: true, remaining: config.maxRequests - 1 };
 	} catch (error) {
-		// KV failure should not block auth — fail open
-		console.error('[RateLimit] KV error, allowing request:', error);
+		if (failClosed) {
+			console.error('[RateLimit] KV error, BLOCKING request (fail-closed):', error);
+			return { allowed: false, remaining: 0 };
+		}
+		console.error('[RateLimit] KV error, allowing request (fail-open):', error);
 		return { allowed: true, remaining: config.maxRequests };
 	}
 }

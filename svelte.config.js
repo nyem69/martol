@@ -31,7 +31,7 @@ const config = {
 					'https://challenges.cloudflare.com'
 				],
 				'style-src': ['self', 'unsafe-inline', 'https://cdn.jsdelivr.net'],
-				'img-src': ['self', 'data:', 'blob:', 'https:'],
+				'img-src': ['self', 'data:', 'blob:'],
 				'font-src': ['self', 'data:', 'https://cdn.jsdelivr.net'],
 				'connect-src': [
 					'self',

@@ -17,7 +17,8 @@ export async function chatWho(
 		.select({
 			userId: member.userId,
 			role: member.role,
-			name: user.name
+			name: user.name,
+			aiOptOut: member.aiOptOut
 		})
 		.from(member)
 		.innerJoin(user, eq(member.userId, user.id))
@@ -27,7 +28,8 @@ export async function chatWho(
 		user_id: m.userId,
 		name: m.name,
 		role: m.role,
-		is_agent: m.role === 'agent'
+		is_agent: m.role === 'agent',
+		ai_opt_out: m.aiOptOut ?? false
 	}));
 
 	return {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { ShieldAlert } from '@lucide/svelte';
 
@@ -11,9 +12,21 @@
 	} = $props();
 
 	let submitting = $state(false);
+	let ackBtn: HTMLButtonElement | undefined;
+	let prevFocus: HTMLElement | null = null;
+
+	$effect(() => {
+		prevFocus = document.activeElement as HTMLElement;
+		untrack(() => ackBtn?.focus());
+		return () => prevFocus?.focus();
+	});
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') handleAcknowledge();
+		if (e.key === 'Tab') {
+			e.preventDefault();
+			ackBtn?.focus();
+		}
 	}
 
 	async function handleAcknowledge() {
@@ -75,6 +88,7 @@
 
 		<!-- Acknowledge button -->
 		<button
+			bind:this={ackBtn}
 			class="w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-85"
 			style="background: var(--accent); color: var(--bg);"
 			onclick={handleAcknowledge}

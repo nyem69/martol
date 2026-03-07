@@ -28,8 +28,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	switch (event.type) {
 		case 'checkout.session.completed': {
 			const session = event.data.object as Stripe.Checkout.Session;
-			const userId = session.metadata?.martolUserId;
-			if (!userId || !session.customer || !session.subscription) break;
+			const orgId = session.metadata?.martolOrgId;
+			if (!orgId || !session.customer || !session.subscription) break;
 
 			const customerId =
 				typeof session.customer === 'string' ? session.customer : session.customer.id;
@@ -41,7 +41,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			const [existing] = await db
 				.select({ id: subscriptions.id })
 				.from(subscriptions)
-				.where(eq(subscriptions.userId, userId))
+				.where(eq(subscriptions.orgId, orgId))
 				.limit(1);
 
 			if (existing) {
@@ -57,7 +57,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			} else {
 				await db.insert(subscriptions).values({
 					id: generateId(),
-					userId,
+					orgId,
 					stripeCustomerId: customerId,
 					stripeSubscriptionId: subscriptionId,
 					plan: 'image_upload',

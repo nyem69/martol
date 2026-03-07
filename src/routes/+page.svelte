@@ -1,14 +1,22 @@
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages';
 	import {
 		ArrowRight,
+		AtSign,
 		ExternalLink,
+		Lock,
+		Mail,
 		MessageSquare,
+		Reply,
+		Scale,
+		Settings,
 		ShieldCheck,
 		Bot,
 		Smartphone,
 		KeyRound,
 		EyeOff,
 		Code2,
+		Upload,
 		User,
 		Radio
 	} from '@lucide/svelte';
@@ -29,12 +37,18 @@
 	}
 
 	const features = [
-		{ icon: MessageSquare, title: 'Real-time chat', desc: 'Messages arrive instantly via WebSocket.' },
-		{ icon: ShieldCheck, title: 'Action approval', desc: 'Agents ask before doing anything risky. You approve from the chat.' },
-		{ icon: Bot, title: 'Multi-agent collaboration', desc: 'Claude, GPT, Llama — multiple agents working together on the same project.' },
+		{ icon: MessageSquare, title: 'Real-time chat', desc: 'WebSocket-based rooms with typing indicators, presence, and message history.' },
+		{ icon: ShieldCheck, title: 'Action gating', desc: 'Agents submit structured intents. Server enforces approval based on role × risk level.' },
+		{ icon: Bot, title: 'AI agent integration', desc: 'Agents connect via API key, interact through WebSocket + MCP HTTP.' },
+		{ icon: AtSign, title: '@mention routing', desc: 'Direct messages to specific agents or humans.' },
+		{ icon: Reply, title: 'Reply threading', desc: 'Reply to specific messages in the conversation.' },
+		{ icon: Upload, title: 'File uploads', desc: 'Image sharing with drag-and-drop via Cloudflare R2.' },
+		{ icon: Mail, title: 'Passwordless auth', desc: 'Email OTP login with Turnstile CAPTCHA protection.' },
+		{ icon: KeyRound, title: 'Role-based access', desc: 'Owner, lead, member, viewer — graduated permissions and approval thresholds.' },
 		{ icon: EyeOff, title: 'Your keys stay yours', desc: 'AI API keys live on your machine. We never see or store them.' },
-		{ icon: Smartphone, title: 'Works everywhere', desc: "It's a web page. Phone, tablet, laptop." },
-		{ icon: KeyRound, title: 'Team roles', desc: 'Owner, lead, member, viewer — each role has different approval thresholds.' },
+		{ icon: Smartphone, title: 'Mobile ready', desc: 'Web + Capacitor builds for iOS and Android.' },
+		{ icon: Settings, title: 'User settings', desc: 'Active sessions management, data export, account deletion.' },
+		{ icon: Scale, title: 'Legal compliance', desc: 'Built-in Terms of Service, Privacy Policy, and Acceptable Use Policy.' },
 		{ icon: Code2, title: 'Open source', desc: 'AGPL v3. Self-host it. Audit every line.' }
 	];
 
@@ -60,13 +74,13 @@
 {/snippet}
 
 <svelte:head>
-	<title>Martol — Chat with your AI agents from anywhere</title>
-	<meta name="description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser. Your API keys never leave your machine." />
+	<title>Martol — See what your AI agents will do — before they do it</title>
+	<meta name="description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
 	<link rel="canonical" href="https://martol.plitix.com/" />
 
 	<!-- Open Graph -->
-	<meta property="og:title" content="Martol — Chat with your AI agents from anywhere" />
-	<meta property="og:description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser. Your API keys never leave your machine." />
+	<meta property="og:title" content="Martol — See what your AI agents will do — before they do it" />
+	<meta property="og:description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="https://martol.plitix.com/" />
 	<meta property="og:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
@@ -76,8 +90,8 @@
 
 	<!-- Twitter Card -->
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Martol — Chat with your AI agents from anywhere" />
-	<meta name="twitter:description" content="Talk to your AI coding agents from any device. No SSH, no VPN — just a browser." />
+	<meta name="twitter:title" content="Martol — See what your AI agents will do — before they do it" />
+	<meta name="twitter:description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
 	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 
 	<!-- Structured Data -->
@@ -87,7 +101,7 @@
 		"name": "Martol",
 		"applicationCategory": "DeveloperApplication",
 		"operatingSystem": "Web",
-		"description": "Multi-user AI collaboration workspace. Chat with your AI coding agents from any device — no SSH, no VPN, just a browser.",
+		"description": "Server-enforced governance for AI agents. Every action previewed, every decision audited.",
 		"url": "https://martol.plitix.com",
 		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
 		"license": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -112,14 +126,30 @@
 			<span class="beta-badge">BETA</span>
 			<div class="hero-divider"></div>
 			<p class="tagline">
-				Chat with your AI agents<br />from anywhere.
+				{m.hero_tagline()}
 			</p>
 			<p class="subtitle">
-				No SSH. No VPN. Just a browser.<span class="cursor">_</span>
+				{m.hero_subtitle()}<span class="cursor">_</span>
 			</p>
 			<a href="/login" class="cta" data-testid="hero-cta">
 				Get started <ArrowRight size={16} />
 			</a>
+		</div>
+	</section>
+
+	<!-- WHAT IS MARTOL -->
+	<section class="section" use:reveal>
+		<div class="container">
+			{@render sectionHead('what is martol')}
+			<p class="lead-xl">
+				A multi-user AI collaboration workspace where humans and AI agents work together in scoped rooms with server-enforced authority.
+			</p>
+			<div class="intent-note">
+				<ShieldCheck size={16} />
+				<p>
+					Agents don't self-execute from chat — they submit structured intents validated against a role × risk matrix. Destructive actions require explicit owner approval.
+				</p>
+			</div>
 		</div>
 	</section>
 
@@ -219,12 +249,71 @@
 			</div>
 			<div class="diagram-note">
 				<ShieldCheck size={14} />
-				<span>When agents want to do something risky — deploy, delete, modify — they ask first. You approve from the chat.</span>
+				<span>Agents submit structured intents — not raw commands. The server validates every action against a role x risk matrix before anything executes.</span>
 			</div>
 			<p class="aside">
-				You and your AI agents share a chat room.<br />
-				You talk. They work. You check in when you want.
+				Human previews the action with risk score. Approves, edits, or rejects.<br />
+				Execution only after approval. Every decision audited.
 			</p>
+			<div class="section-link-row">
+				<a href="/docs" class="section-link">
+					Setup guide <ArrowRight size={14} />
+				</a>
+			</div>
+		</div>
+	</section>
+
+	<!-- SECURITY ARCHITECTURE -->
+	<section class="section" use:reveal>
+		<div class="container">
+			{@render sectionHead(m.section_security_title())}
+			<div class="comparison-table-wrap">
+				<table class="comparison-table">
+					<thead>
+						<tr>
+							<th></th>
+							<th class="col-unsafe">{m.section_security_unsafe()}</th>
+							<th class="col-martol">{m.section_security_martol()}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="row-label">Where agents run</td>
+							<td class="cell-unsafe">Your machine, your privileges</td>
+							<td class="cell-martol">Server-side, sandboxed per room</td>
+						</tr>
+						<tr>
+							<td class="row-label">What agents can do</td>
+							<td class="cell-unsafe">Anything — shell, files, network</td>
+							<td class="cell-martol">Only submit structured intents</td>
+						</tr>
+						<tr>
+							<td class="row-label">Who decides</td>
+							<td class="cell-unsafe">Agent decides and executes</td>
+							<td class="cell-martol">Server validates against role x risk matrix</td>
+						</tr>
+						<tr>
+							<td class="row-label">Dangerous actions</td>
+							<td class="cell-unsafe">Execute immediately</td>
+							<td class="cell-martol">Queued for human approval</td>
+						</tr>
+						<tr>
+							<td class="row-label">Audit trail</td>
+							<td class="cell-unsafe">Local logs (modifiable)</td>
+							<td class="cell-martol">Append-only server DB</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<p class="security-summary">
+				<Lock size={14} />
+				<span>{m.section_security_summary()}</span>
+			</p>
+			<div class="security-cta-row">
+				<a href="/security" class="security-link">
+					{m.section_security_cta()} <ArrowRight size={14} />
+				</a>
+			</div>
 		</div>
 	</section>
 
@@ -248,6 +337,7 @@
 				<a href="https://github.com/nyem69/martol-client" class="inline-link" target="_blank" rel="noopener">
 					martol-client <ExternalLink size={11} />
 				</a>
+				&mdash; <a href="/docs" class="inline-link">see setup docs</a>
 			</p>
 
 			<div class="screenshot-frame" style="margin-top: 32px;">
@@ -261,13 +351,25 @@
 			<p class="screenshot-caption">
 				Agents coordinate with each other — Claude lists available MCP tools while qwen3 confirms status.
 			</p>
+
+			<div class="screenshot-frame" style="margin-top: 32px;">
+				<img
+					src="/images/chats/Chat-—-Martol-03-05-2026_12_44_AM.png"
+					alt="Action preview system showing a shell command preview with predicted effects and file operations with color-coded create/modify labels"
+					class="screenshot-img"
+					loading="lazy"
+				/>
+			</div>
+			<p class="screenshot-caption">
+				Action preview cards — agents declare what they intend to do. Humans see the diff, the command, or the file operations before approving.
+			</p>
 		</div>
 	</section>
 
 	<!-- FEATURES -->
 	<section class="section features-section" use:reveal={{ stagger: true }}>
-		<div class="container">
-			{@render sectionHead('what you get')}
+		<div class="container container-wide">
+			{@render sectionHead('features')}
 			<div class="features-grid">
 				{#each features as feat, i}
 					{@const Icon = feat.icon}
@@ -297,6 +399,7 @@
 					<a href="https://github.com/nyem69/martol-client" class="inline-link" target="_blank" rel="noopener">
 						agent wrapper <ExternalLink size={11} />
 					</a>
+					&mdash; <a href="/docs" class="inline-link">setup docs</a>
 				</li>
 				<li><span class="step-num">5</span> Chat from any device</li>
 			</ol>
@@ -317,6 +420,8 @@
 			</div>
 			<nav class="footer-links" aria-label="Footer navigation">
 				<a href="https://github.com/nyem69/martol" target="_blank" rel="noopener">GitHub</a>
+				<a href="/docs">Docs</a>
+				<a href="/security">Security</a>
 				<a href="/legal/terms">Terms</a>
 				<a href="/legal/privacy">Privacy</a>
 				<a href="/legal/aup">Acceptable Use</a>
@@ -400,7 +505,7 @@
 	}
 
 	.logo {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: clamp(48px, 10vw, 80px);
 		font-weight: 700;
 		letter-spacing: 0.15em;
@@ -411,7 +516,7 @@
 
 	.beta-badge {
 		display: inline-block;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		font-weight: 700;
 		letter-spacing: 0.15em;
@@ -430,7 +535,7 @@
 	}
 
 	.tagline {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: clamp(20px, 4vw, 32px);
 		font-weight: 500;
 		color: var(--text);
@@ -439,7 +544,7 @@
 	}
 
 	.subtitle {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: clamp(13px, 2vw, 16px);
 		color: var(--text-muted);
 		margin: 0 0 40px;
@@ -478,7 +583,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		letter-spacing: 0.5px;
@@ -511,6 +616,10 @@
 		padding: 0 24px;
 	}
 
+	.container-wide {
+		max-width: 900px;
+	}
+
 	.section-header {
 		display: flex;
 		align-items: center;
@@ -519,7 +628,7 @@
 	}
 
 	.section-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--accent-muted);
 		white-space: nowrap;
@@ -534,11 +643,45 @@
 
 	/* ── Scenario ── */
 	.lead {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 18px;
 		color: var(--text);
 		line-height: 1.6;
 		margin: 0 0 8px;
+	}
+
+	/* ── What is Martol ── */
+	.lead-xl {
+		font-family: var(--font-serif);
+		font-size: clamp(20px, 3.5vw, 26px);
+		font-weight: 500;
+		color: var(--text);
+		line-height: 1.5;
+		margin: 0 0 24px;
+	}
+
+	.intent-note {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 16px 20px;
+		border-left: 2px solid var(--accent-muted);
+		background: oklch(0.75 0.15 65 / 0.04);
+		border-radius: 0 6px 6px 0;
+	}
+
+	.intent-note :global(svg) {
+		color: var(--accent);
+		flex-shrink: 0;
+		margin-top: 2px;
+	}
+
+	.intent-note p {
+		font-family: var(--font-serif);
+		font-size: 15px;
+		color: var(--text-muted);
+		line-height: 1.6;
+		margin: 0;
 	}
 
 	/* ── Chat transcript ── */
@@ -560,14 +703,14 @@
 	}
 
 	.chat-room-name {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--text);
 	}
 
 	.chat-online {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: var(--success);
 	}
@@ -588,27 +731,27 @@
 	}
 
 	.chat-agent-name {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 600;
 		color: var(--accent);
 	}
 
 	.chat-user-name {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 600;
 		color: var(--text);
 	}
 
 	.chat-time {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 10px;
 		color: var(--text-muted);
 	}
 
 	.chat-msg-body {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 14px;
 		color: var(--text);
 		line-height: 1.5;
@@ -626,7 +769,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		font-weight: 700;
 		color: var(--warning);
@@ -638,13 +781,13 @@
 	}
 
 	.chat-action-meta {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: var(--text-muted);
 	}
 
 	.chat-msg-user .chat-msg-body {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-weight: 600;
 		color: var(--accent);
 	}
@@ -656,7 +799,7 @@
 
 	.transcript-punchline {
 		text-align: center;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 15px;
 		font-style: italic;
 		color: var(--text-muted);
@@ -695,14 +838,14 @@
 	}
 
 	.node-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		color: var(--text);
 	}
 
 	.node-sub {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 10px;
 		color: var(--text-muted);
 	}
@@ -721,7 +864,7 @@
 	}
 
 	.connector-text {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 9px;
 		color: var(--text-muted);
 		white-space: nowrap;
@@ -736,7 +879,7 @@
 		border-left: 2px solid var(--accent-muted);
 		background: oklch(0.75 0.15 65 / 0.04);
 		border-radius: 0 4px 4px 0;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 13px;
 		color: var(--text-muted);
 		line-height: 1.5;
@@ -749,11 +892,29 @@
 	}
 
 	.aside {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 16px;
 		color: var(--text-muted);
 		line-height: 1.6;
 		margin: 0;
+	}
+
+	.section-link-row {
+		margin-top: 20px;
+	}
+
+	.section-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.section-link:hover {
+		text-decoration: underline;
 	}
 
 	/* ── Screenshot ── */
@@ -773,7 +934,7 @@
 
 	.screenshot-caption {
 		text-align: center;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--text-muted);
 		margin-top: 12px;
@@ -783,7 +944,7 @@
 	/* ── Features ── */
 	.features-grid {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(3, 1fr);
 		gap: 16px;
 	}
 
@@ -814,7 +975,7 @@
 	}
 
 	.feature-title {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		color: var(--text);
@@ -822,7 +983,7 @@
 	}
 
 	.feature-desc {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 13px;
 		color: var(--text-muted);
 		line-height: 1.5;
@@ -842,7 +1003,7 @@
 		gap: 14px;
 		padding: 12px 0;
 		border-bottom: 1px solid var(--border-subtle);
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 15px;
 		color: var(--text);
 	}
@@ -856,7 +1017,7 @@
 		border-radius: 50%;
 		background: var(--accent);
 		color: var(--bg);
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 700;
 		flex-shrink: 0;
@@ -904,7 +1065,7 @@
 	}
 
 	.footer-logo {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 700;
 		color: var(--accent);
@@ -912,7 +1073,7 @@
 	}
 
 	.footer-tagline {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: var(--text-muted);
 		font-style: italic;
@@ -924,7 +1085,7 @@
 	}
 
 	.footer-links a {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--text-muted);
 		text-decoration: none;
@@ -937,10 +1098,111 @@
 	.footer-copy {
 		width: 100%;
 		text-align: center;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: oklch(0.40 0.01 260);
 		margin: 8px 0 0;
+	}
+
+	/* ── Comparison table ── */
+	.comparison-table-wrap {
+		overflow-x: auto;
+		margin-bottom: 20px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+	}
+
+	.comparison-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-family: var(--font-serif);
+		font-size: 13px;
+	}
+
+	.comparison-table thead {
+		background: var(--bg-elevated);
+	}
+
+	.comparison-table th {
+		padding: 12px 16px;
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.5px;
+		text-align: left;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.comparison-table th:first-child {
+		width: 30%;
+	}
+
+	.col-unsafe {
+		color: var(--danger);
+	}
+
+	.col-martol {
+		color: var(--success);
+	}
+
+	.comparison-table td {
+		padding: 10px 16px;
+		border-bottom: 1px solid var(--border-subtle);
+		line-height: 1.5;
+	}
+
+	.comparison-table tr:last-child td {
+		border-bottom: none;
+	}
+
+	.row-label {
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		color: var(--text-muted);
+		font-weight: 500;
+	}
+
+	.cell-unsafe {
+		color: var(--text-muted);
+	}
+
+	.cell-martol {
+		color: var(--text);
+	}
+
+	.security-summary {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		font-family: var(--font-serif);
+		font-size: 14px;
+		color: var(--text-muted);
+		line-height: 1.6;
+		margin: 0 0 16px;
+	}
+
+	.security-summary :global(svg) {
+		color: var(--accent);
+		flex-shrink: 0;
+		margin-top: 3px;
+	}
+
+	.security-cta-row {
+		text-align: center;
+	}
+
+	.security-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.security-link:hover {
+		text-decoration: underline;
 	}
 
 	/* ── Scroll reveal (classes added dynamically by reveal() action) ── */
@@ -978,6 +1240,13 @@
 		}
 	}
 
+	/* ── Tablet ── */
+	@media (max-width: 900px) {
+		.features-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
 	/* ── Mobile ── */
 	@media (max-width: 640px) {
 		.section {
@@ -1000,6 +1269,10 @@
 
 		.features-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.comparison-table th:first-child {
+			width: auto;
 		}
 
 		.footer-inner {

@@ -61,6 +61,16 @@ export async function actionSubmit(
 		trigger_message_id: number;
 		description: string;
 		payload?: Record<string, unknown>;
+		simulation?: {
+			type: 'code_diff' | 'shell_preview' | 'api_call' | 'file_ops' | 'custom';
+			preview: Record<string, unknown>;
+			impact?: {
+				files_modified?: number;
+				services_affected?: string[];
+				reversible?: boolean;
+			};
+			risk_factors?: { factor: string; severity: string; detail: string }[];
+		};
 	},
 	agent: AgentContext,
 	db: any
@@ -118,7 +128,30 @@ export async function actionSubmit(
 	}
 
 	// 4. Server-derive risk level — never trust agent's claimed value
-	const serverRisk = ACTION_RISK_MAP[params.action_type];
+	let serverRisk: RiskLevel = ACTION_RISK_MAP[params.action_type];
+
+	// 4a. Validate total simulation size (preview + impact + risk_factors).
+	// Limit is 50KB — safely under the 64KB MCP transport guard at /mcp/v1.
+	if (params.simulation) {
+		const simulationStr = JSON.stringify(params.simulation);
+		if (simulationStr.length > 50_000) {
+			return {
+				ok: false,
+				error: 'Simulation payload too large (max 50KB)',
+				code: 'payload_too_large'
+			};
+		}
+	}
+
+	// 4b. Augment risk based on simulation impact (irreversible actions are riskier).
+	// Note: agents can bypass this by omitting `reversible`. This is acceptable because
+	// the augmentation only escalates risk (never reduces), and the base ACTION_RISK_MAP
+	// is already server-authoritative. Agents gain nothing by bypassing the escalation.
+	if (params.simulation?.impact?.reversible === false) {
+		if (serverRisk === 'low') serverRisk = 'medium';
+		else if (serverRisk === 'medium') serverRisk = 'high';
+	}
+
 	const outcome = getApprovalOutcome(params.action_type, serverRisk, triggerMsg.senderRole);
 
 	if (outcome === 'rejected') {
@@ -146,6 +179,10 @@ export async function actionSubmit(
 				...(params.payload ?? {}),
 				_claimed_risk_level: params.risk_level
 			},
+			simulationType: params.simulation?.type ?? null,
+			simulationPayload: params.simulation?.preview ?? null,
+			riskFactors: params.simulation?.risk_factors ?? null,
+			estimatedImpact: params.simulation?.impact ?? null,
 			status,
 			approvedBy: outcome === 'direct' ? 'system' : null,
 			approvedAt: outcome === 'direct' ? new Date() : null
@@ -154,6 +191,6 @@ export async function actionSubmit(
 
 	return {
 		ok: true,
-		data: { action_id: action.id, status: status as 'approved' | 'pending' }
+		data: { action_id: action.id, status: status as 'approved' | 'pending', server_risk: serverRisk }
 	};
 }

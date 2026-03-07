@@ -13,6 +13,7 @@
  * Use dynamic import() inside handlers instead.
  */
 
+import { withSentry } from '@sentry/cloudflare';
 import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
 
 // Durable Object classes
@@ -32,9 +33,12 @@ const WS_ALLOWED_ORIGINS = new Set([
 const WS_ROUTE_RE = /^\/api\/rooms\/([^/]+)\/ws$/;
 
 // Combined worker: SvelteKit fetch + WebSocket upgrade + scheduled handler
-export default {
+const worker = {
 	async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {
-		// Intercept WebSocket upgrades — SvelteKit can't pass through WS responses
+		// Intercept WebSocket upgrades — SvelteKit can't pass through WS responses.
+		// NOTE: WebSocket upgrades are intercepted here before SvelteKit.
+		// The route at src/routes/api/rooms/[roomId]/ws/ was removed (ME-21)
+		// because it was dead code — this handler always processes WS upgrades first.
 		if (request.headers.get('Upgrade') === 'websocket') {
 			const url = new URL(request.url);
 			const match = url.pathname.match(WS_ROUTE_RE);
@@ -56,8 +60,8 @@ export default {
 		}
 
 		const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
-		const { pendingActions } = await import('./src/lib/server/db/schema');
-		const { eq, and, lt } = await import('drizzle-orm');
+		const { pendingActions, attachments } = await import('./src/lib/server/db/schema');
+		const { eq, and, lt, isNull } = await import('drizzle-orm');
 
 		const { db, client, connectPromise } = createHyperdriveDb(hyperdrive);
 		await connectPromise;
@@ -101,11 +105,69 @@ export default {
 			}
 		} catch (err) {
 			console.error('[Cron] Invitation purge failed:', err);
-		} finally {
-			try { await client.end(); } catch { /* already closed */ }
 		}
+
+		// Clean up orphaned attachments (uploaded but never linked to a message)
+		try {
+			const orphanCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+			const orphans = await db.select()
+				.from(attachments)
+				.where(
+					and(
+						isNull(attachments.messageId),
+						lt(attachments.createdAt, orphanCutoff)
+					)
+				)
+				.limit(100);
+
+			const r2Bucket = env.STORAGE as R2Bucket | undefined;
+			for (const orphan of orphans) {
+				try {
+					if (r2Bucket) {
+						await r2Bucket.delete(orphan.r2Key);
+					}
+					await db.delete(attachments).where(eq(attachments.id, orphan.id));
+				} catch (e) {
+					console.error('[Cron] Failed to delete orphan attachment:', orphan.id, e);
+				}
+			}
+			if (orphans.length > 0) {
+				console.log(`[Cron] Cleaned up ${orphans.length} orphaned attachments`);
+			}
+		} catch (err) {
+			console.error('[Cron] Orphan attachment cleanup failed:', err);
+		}
+
+		// TODO: Message retention — requires product decision on retention periods per plan tier.
+		// When defined, add a cron job to soft-delete messages older than the retention period
+		// and clean up associated R2 objects.
+
+		// Purge IP addresses and user agents older than 90 days from audit tables (ME-19)
+		try {
+			const { accountAudit, termsAcceptances } = await import('./src/lib/server/db/schema');
+			const ipCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+			await db.update(accountAudit)
+				.set({ ipAddress: null, userAgent: null })
+				.where(lt(accountAudit.createdAt, ipCutoff));
+			await db.update(termsAcceptances)
+				.set({ ipAddress: null, userAgent: null })
+				.where(lt(termsAcceptances.acceptedAt, ipCutoff));
+			console.log('[Cron] Purged IP/UA data older than 90 days');
+		} catch (err) {
+			console.error('[Cron] IP/UA purge failed:', err);
+		}
+
+		try { await client.end(); } catch { /* already closed */ }
 	}
 };
+
+export default withSentry(
+	(env: Record<string, unknown>) => ({
+		dsn: env.SENTRY_DSN as string,
+		tracesSampleRate: 0.1
+	}),
+	worker
+);
 
 /**
  * Handle WebSocket upgrade directly at the Worker level.
@@ -159,7 +221,8 @@ async function handleWebSocketUpgrade(
 				emailFrom: (env.EMAIL_FROM as string) || 'noreply@martol.app',
 				emailName: (env.EMAIL_NAME as string) || 'Martol'
 			},
-			env.CACHE as KVNamespace
+			env.CACHE as KVNamespace,
+			env.ENVIRONMENT as string
 		);
 
 		let userId: string;
@@ -170,13 +233,14 @@ async function handleWebSocketUpgrade(
 			let keyData: any;
 			try {
 				keyData = await auth.api.verifyApiKey({ body: { key: apiKeyHeader } });
-			} catch {
+			} catch (e) {
+				console.error('[WS] verifyApiKey threw:', e);
 				return new Response('Invalid API key', { status: 401 });
 			}
-			if (!keyData?.valid || !keyData.key?.userId) {
+			if (!keyData?.valid || !keyData.key?.referenceId) {
 				return new Response('Invalid API key', { status: 401 });
 			}
-			userId = keyData.key.userId;
+			userId = keyData.key.referenceId;
 
 			// Check revocation in KV
 			const kv = env.CACHE as KVNamespace | undefined;
@@ -228,7 +292,7 @@ async function handleWebSocketUpgrade(
 		const role = memberRecord.role;
 
 		// HMAC-sign identity payload to prevent header spoofing
-		const signingKey = (env.HMAC_SIGNING_SECRET || env.BETTER_AUTH_SECRET) as string;
+		const signingKey = env.HMAC_SIGNING_SECRET as string;
 		if (!signingKey) {
 			return new Response('Signing key unavailable', { status: 503 });
 		}

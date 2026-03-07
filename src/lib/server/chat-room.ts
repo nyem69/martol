@@ -15,7 +15,7 @@ import type {
 	ErrorCode
 } from '../types/ws';
 import { createHyperdriveDb } from './db/hyperdrive';
-import { messages as messagesTable, readCursors, pendingActions } from './db/schema';
+import { messages as messagesTable, readCursors, pendingActions, attachments, supportTickets } from './db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			this.degraded = this.flushFailures >= MAX_FLUSH_FAILURES;
 
 			// Import broadcast signing key for R6 message integrity
-			const hmacSecret = this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET;
+			const hmacSecret = this.env.HMAC_SIGNING_SECRET;
 			if (hmacSecret) {
 				this.broadcastSigningKey = await crypto.subtle.importKey(
 					'raw',
@@ -118,6 +118,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					false,
 					['sign']
 				);
+			} else {
+				console.warn('[ChatRoom] HMAC_SIGNING_SECRET not set — broadcast messages will not be signed');
 			}
 
 			// If there are unflushed messages, schedule a flush
@@ -125,7 +127,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const existing = await this.ctx.storage.getAlarm();
 				if (!existing) {
 					const delay = this.degraded
-						? Math.min(60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES), 3_600_000)
+						? Math.min(60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES), 600_000) // 10 min cap
 						: FLUSH_INTERVAL_MS;
 					await this.ctx.storage.setAlarm(Date.now() + delay);
 				}
@@ -155,7 +157,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response('Missing signed identity', { status: 401 });
 		}
 
-		const signingKey = this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET;
+		const signingKey = this.env.HMAC_SIGNING_SECRET;
 		if (!signingKey) {
 			return new Response('Signing key unavailable', { status: 503 });
 		}
@@ -246,7 +248,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		}
 		if (members.length > 0) {
-			this.safeSend(server, { type: 'roster', members });
+			await this.safeSend(server, { type: 'roster', members });
 		}
 
 		// [M5] Wrap delta sync in try/catch to prevent zombie sockets on failure
@@ -268,13 +270,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// ── Hibernation API Handlers ──────────────────────────────────────
 
 	async webSocketMessage(ws: WebSocket, rawMessage: string | ArrayBuffer): Promise<void> {
-		if (typeof rawMessage !== 'string') return;
+		if (typeof rawMessage !== 'string') {
+			await this.safeSend(ws, { type: 'error', code: 'invalid_message', message: 'Binary frames not supported' });
+			return;
+		}
 
 		let msg: ClientMessage;
 		try {
 			msg = JSON.parse(rawMessage);
 		} catch {
-			this.sendError(ws, 'invalid_message', 'Invalid JSON');
+			await this.sendError(ws, 'invalid_message', 'Invalid JSON');
 			return;
 		}
 
@@ -292,7 +297,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.handleCommand(ws, msg.name, msg.args);
 				break;
 			default:
-				this.sendError(ws, 'invalid_message', 'Unknown message type');
+				await this.sendError(ws, 'invalid_message', 'Unknown message type');
 		}
 	}
 
@@ -347,7 +352,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				// [C4] Schedule retry with exponential backoff (self-healing)
 				const backoffMs = Math.min(
 					60_000 * 2 ** (this.flushFailures - MAX_FLUSH_FAILURES),
-					3_600_000 // cap at 1 hour
+					600_000 // cap at 10 minutes
 				);
 				await this.ctx.storage.setAlarm(Date.now() + backoffMs);
 				return;
@@ -374,17 +379,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const orgId = this.extractTag(tags, 'org:');
 
 		if (!userId || !role) {
-			this.sendError(ws, 'unauthorized', 'Missing user identity');
+			await this.sendError(ws, 'unauthorized', 'Missing user identity');
 			return;
 		}
 
 		if (role === 'viewer') {
-			this.sendError(ws, 'unauthorized', 'Viewers cannot send messages');
+			await this.sendError(ws, 'unauthorized', 'Viewers cannot send messages');
 			return;
 		}
 
 		if (this.degraded) {
-			this.sendError(ws, 'degraded', 'Room is in degraded mode — messages paused');
+			await this.sendError(ws, 'degraded', 'Room is in degraded mode — messages paused');
 			return;
 		}
 
@@ -395,7 +400,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			msg.localId.length > MAX_LOCAL_ID_LENGTH ||
 			!LOCAL_ID_RE.test(msg.localId)
 		) {
-			this.sendError(
+			await this.sendError(
 				ws,
 				'invalid_message',
 				'Invalid localId (max 64 chars, alphanumeric/-/_)'
@@ -406,19 +411,19 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// Validate replyTo (untyped from JSON.parse — could be any type)
 		if (msg.replyTo !== undefined && msg.replyTo !== null) {
 			if (typeof msg.replyTo !== 'number' || !Number.isInteger(msg.replyTo) || msg.replyTo <= 0) {
-				this.sendError(ws, 'invalid_message', 'Invalid replyTo (must be a positive integer)');
+				await this.sendError(ws, 'invalid_message', 'Invalid replyTo (must be a positive integer)');
 				return;
 			}
 		}
 
 		if (!msg.body || typeof msg.body !== 'string') {
-			this.sendError(ws, 'invalid_message', 'Message body required');
+			await this.sendError(ws, 'invalid_message', 'Message body required');
 			return;
 		}
 
 		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
-			this.sendError(
+			await this.sendError(
 				ws,
 				'invalid_message',
 				`Message too large (max ${MAX_BODY_SIZE / 1024}KB)`
@@ -428,7 +433,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 		// [H1] Per-user rate limiting
 		if (this.isRateLimited(userId)) {
-			this.sendError(ws, 'rate_limited', 'Too many messages — slow down');
+			await this.sendError(ws, 'rate_limited', 'Too many messages — slow down');
 			return;
 		}
 
@@ -436,7 +441,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			this.walMessageCount >= MAX_WAL_MESSAGES ||
 			this.walByteSize + bodyBytes > MAX_WAL_BYTES
 		) {
-			this.sendError(ws, 'room_full', 'Room buffer full — try again shortly');
+			await this.sendError(ws, 'room_full', 'Room buffer full — try again shortly');
 			return;
 		}
 
@@ -505,7 +510,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	private async handleRestIngest(request: Request): Promise<Response> {
 		// Verify internal caller
 		const internalSecret = request.headers.get('X-Internal-Secret');
-		if (!internalSecret || internalSecret !== (this.env.HMAC_SIGNING_SECRET || this.env.BETTER_AUTH_SECRET)) {
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
 			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
 		}
 
@@ -711,6 +716,31 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				await this.broadcast({ type: 'id_map', mappings });
 			}
 
+			// Backfill messageId on attachments for r2: references in message bodies
+			const r2Re = /!\[[^\]]*\]\(r2:([^)]+)\)/g;
+			for (const { stored } of toFlush) {
+				if (!stored.dbId) continue;
+				const keys: string[] = [];
+				let match: RegExpExecArray | null;
+				while ((match = r2Re.exec(stored.body)) !== null) {
+					keys.push(match[1]);
+				}
+				r2Re.lastIndex = 0;
+				if (keys.length > 0) {
+					for (const key of keys) {
+						await db
+							.update(attachments)
+							.set({ messageId: stored.dbId })
+							.where(and(
+								eq(attachments.r2Key, key),
+								eq(attachments.orgId, orgId),
+								eq(attachments.uploadedBy, stored.senderId)
+							))
+							.catch((err: unknown) => console.error('[ChatRoom] Attachment backfill failed:', err));
+					}
+				}
+			}
+
 			await this.pruneOldEntries();
 
 			// Piggyback read cursor flush on same connection
@@ -736,6 +766,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			limit: 200
 		});
 
+		// [ME-11] Detect WAL gap — client's cursor is behind pruned entries
+		if (entries.size === 0 && lastKnownSeqId > 0 && this.walMessageCount > 0) {
+			await this.safeSend(ws, {
+				type: 'error',
+				code: 'resync_required',
+				message: 'Message history gap detected. Please resync.'
+			});
+			return;
+		}
+
 		if (entries.size === 0) return;
 
 		const history: ServerMessagePayload[] = [];
@@ -753,7 +793,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		}
 
-		this.safeSend(ws, { type: 'history', messages: history });
+		await this.safeSend(ws, { type: 'history', messages: history });
 	}
 
 	// ── Typing ────────────────────────────────────────────────────────
@@ -838,11 +878,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	private async handleCommand(ws: WebSocket, name: string, args: string): Promise<void> {
 		// Validate command name and args
 		if (typeof name !== 'string' || name.length === 0 || name.length > 32 || !/^[a-z]+$/.test(name)) {
-			this.sendError(ws, 'invalid_message', 'Invalid command name');
+			await this.sendError(ws, 'invalid_message', 'Invalid command name');
 			return;
 		}
 		if (typeof args !== 'string' || args.length > 512) {
-			this.sendError(ws, 'invalid_message', 'Command args too long (max 512 chars)');
+			await this.sendError(ws, 'invalid_message', 'Command args too long (max 512 chars)');
 			return;
 		}
 
@@ -853,28 +893,75 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const orgId = this.extractTag(tags, 'org:');
 
 		if (!userId || !role) {
-			this.sendError(ws, 'unauthorized', 'Missing user identity');
+			await this.sendError(ws, 'unauthorized', 'Missing user identity');
 			return;
 		}
 
 		switch (name) {
 			case 'clear':
 				if (role !== 'owner') {
-					this.sendError(ws, 'unauthorized', 'Only owner can clear messages');
+					await this.sendError(ws, 'unauthorized', 'Only owner can clear messages');
 					return;
 				}
 				await this.handleClearRoom(orgId, userName);
 				break;
 
+			case 'repair': {
+				if (role !== 'owner') {
+					await this.sendError(ws, 'unauthorized', 'Only owner can repair rooms');
+					return;
+				}
+				const dropWal = args.trim() === 'drop';
+				this.flushFailures = 0;
+				this.degraded = false;
+				await this.ctx.storage.put('meta:flushFailures', 0);
+
+				let detail = 'degraded mode cleared, flush scheduled';
+				if (dropWal && this.unflushedIds.length > 0) {
+					// Drop unflushed WAL entries (messages lost but room unblocked)
+					const keys = this.unflushedIds.map(storageKey);
+					for (let i = 0; i < keys.length; i += 128) {
+						await this.ctx.storage.delete(keys.slice(i, i + 128));
+					}
+					console.log('[ChatRoom] Dropped %d unflushed WAL entries', this.unflushedIds.length);
+					this.unflushedIds = [];
+					this.walMessageCount = 0;
+					this.walByteSize = 0;
+					await this.ctx.storage.put('meta:unflushedIds', []);
+					await this.ctx.storage.put('meta:walMessageCount', 0);
+					await this.ctx.storage.put('meta:walByteSize', 0);
+					await this.ctx.storage.deleteAlarm();
+					detail = `degraded mode cleared, ${keys.length} unflushed messages dropped`;
+				} else {
+					// Schedule an immediate flush attempt
+					await this.ctx.storage.setAlarm(Date.now() + 100);
+				}
+
+				await this.broadcast({
+					type: 'message',
+					message: {
+						localId: '',
+						serverSeqId: 0,
+						senderId: 'system',
+						senderName: 'System',
+						senderRole: 'system',
+						body: `Room repaired by ${userName} — ${detail}.`,
+						timestamp: new Date().toISOString()
+					}
+				});
+				console.log('[ChatRoom] Repair by %s: %s (unflushed: %d)', userName, detail, this.unflushedIds.length);
+				break;
+			}
+
 			case 'approve':
 			case 'reject': {
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', `Only owner or lead can ${name} actions`);
+					await this.sendError(ws, 'unauthorized', `Only owner or lead can ${name} actions`);
 					return;
 				}
 				const actionId = parseInt(args.trim(), 10);
 				if (isNaN(actionId) || actionId <= 0) {
-					this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
+					await this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
 					return;
 				}
 				await this.handleActionApproval(ws, orgId, userId, role, actionId, name);
@@ -883,7 +970,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 			case 'actions': {
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', 'Only owner or lead can list actions');
+					await this.sendError(ws, 'unauthorized', 'Only owner or lead can list actions');
 					return;
 				}
 				await this.handleListActions(ws, orgId);
@@ -892,7 +979,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 			case 'continue':
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', 'Only owner or lead can resume');
+					await this.sendError(ws, 'unauthorized', 'Only owner or lead can resume');
 					return;
 				}
 				// Loop guard resume — broadcast a system message
@@ -913,12 +1000,12 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			case 'whois': {
 				// Restrict to owner/lead — members don't need to resolve user details
 				if (role !== 'owner' && role !== 'lead') {
-					this.sendError(ws, 'unauthorized', 'Only owner or lead can use /whois');
+					await this.sendError(ws, 'unauthorized', 'Only owner or lead can use /whois');
 					return;
 				}
 				const target = args.trim();
 				if (!target) {
-					this.sendError(ws, 'invalid_message', 'Usage: /whois <name>');
+					await this.sendError(ws, 'invalid_message', 'Usage: /whois <name>');
 					return;
 				}
 				// Find online user matching the name
@@ -929,7 +1016,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					const sName = this.extractTag(sTags, 'name:');
 					if (sName.toLowerCase() === target.toLowerCase()) {
 						const sRole = this.extractTag(sTags, 'role:');
-						this.safeSend(ws, {
+						await this.safeSend(ws, {
 							type: 'message',
 							message: {
 								localId: `sys-${Date.now()}`,
@@ -946,7 +1033,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					}
 				}
 				if (!found) {
-					this.safeSend(ws, {
+					await this.safeSend(ws, {
 						type: 'message',
 						message: {
 							localId: `sys-${Date.now()}`,
@@ -962,8 +1049,44 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				break;
 			}
 
+			case 'ticket': {
+				const ticketTitle = args.trim();
+				if (!ticketTitle || ticketTitle.length < 3) {
+					await this.sendError(ws, 'invalid_message', 'Usage: /ticket <title> (min 3 chars)');
+					return;
+				}
+				try {
+					const ticketId = crypto.randomUUID().replace(/-/g, '').slice(0, 21);
+					await this.withDb(async (db) => {
+						await db.insert(supportTickets).values({
+							id: ticketId,
+							userId,
+							title: ticketTitle.slice(0, 200),
+							description: ticketTitle,
+							category: 'issue' as const
+						});
+					});
+					await this.broadcast({
+						type: 'message',
+						message: {
+							localId: `sys-${Date.now()}`,
+							serverSeqId: 0,
+							senderId: 'system',
+							senderRole: 'system',
+							senderName: 'System',
+							body: `${userName} created ticket: ${ticketTitle} → /support/${ticketId}`,
+							timestamp: new Date().toISOString()
+						}
+					});
+				} catch (e) {
+					console.error('[ChatRoom] Ticket creation failed:', e);
+					await this.sendError(ws, 'invalid_message', 'Failed to create ticket');
+				}
+				break;
+			}
+
 			default:
-				this.sendError(ws, 'invalid_message', `Unknown command: /${name}`);
+				await this.sendError(ws, 'invalid_message', `Unknown command: /${name}`);
 		}
 	}
 
@@ -981,27 +1104,34 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					.select({
 						id: pendingActions.id,
 						status: pendingActions.status,
-						riskLevel: pendingActions.riskLevel
+						riskLevel: pendingActions.riskLevel,
+						agentUserId: pendingActions.agentUserId
 					})
 					.from(pendingActions)
 					.where(and(eq(pendingActions.id, actionId), eq(pendingActions.orgId, orgId)))
 					.limit(1);
 
 				if (!existing) {
-					this.sendError(ws, 'invalid_message', `Action #${actionId} not found`);
+					await this.sendError(ws, 'invalid_message', `Action #${actionId} not found`);
 					return;
 				}
 				if (existing.status !== 'pending') {
-					this.sendError(ws, 'invalid_message', `Action #${actionId} already ${existing.status}`);
+					await this.sendError(ws, 'invalid_message', `Action #${actionId} already ${existing.status}`);
+					return;
+				}
+				// [S1] Block agent self-approval/rejection
+				if (existing.agentUserId === userId) {
+					await this.sendError(ws, 'unauthorized', 'Cannot approve/reject your own action');
 					return;
 				}
 				if (action === 'approve' && role === 'lead' && existing.riskLevel === 'high') {
-					this.sendError(ws, 'unauthorized', 'Only owner can approve high-risk actions');
+					await this.sendError(ws, 'unauthorized', 'Only owner can approve high-risk actions');
 					return;
 				}
 
+				// [S2] Atomic update — status guard in WHERE prevents TOCTOU race
 				const newStatus = action === 'approve' ? 'approved' : 'rejected';
-				await db
+				const [updated] = await db
 					.update(pendingActions)
 					.set({
 						status: newStatus,
@@ -1009,7 +1139,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							? { approvedBy: userId, approvedAt: new Date() }
 							: {})
 					})
-					.where(eq(pendingActions.id, actionId));
+					.where(and(
+						eq(pendingActions.id, actionId),
+						eq(pendingActions.orgId, orgId),
+						eq(pendingActions.status, 'pending')
+					))
+					.returning({ id: pendingActions.id });
+
+				if (!updated) {
+					await this.sendError(ws, 'invalid_message', `Action #${actionId} is no longer pending`);
+					return;
+				}
 
 				// [I6] System messages use serverSeqId: 0 — ephemeral, not persisted
 				// through WAL. Important status changes are queryable via /api/actions.
@@ -1028,7 +1168,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		} catch (err) {
 			console.error('[ChatRoom] Action approval failed:', err);
-			this.sendError(ws, 'internal', 'Failed to process action');
+			await this.sendError(ws, 'internal', 'Failed to process action');
 		}
 	}
 
@@ -1050,7 +1190,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					.limit(20);
 
 				if (actions.length === 0) {
-					this.safeSend(ws, {
+					await this.safeSend(ws, {
 						type: 'message',
 						message: {
 							localId: `sys-${Date.now()}`,
@@ -1068,7 +1208,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const lines = actions.map(
 					(a: typeof actions[number]) => `#${a.id} [${a.riskLevel}] ${a.actionType}: ${a.description}`
 				);
-				this.safeSend(ws, {
+				await this.safeSend(ws, {
 					type: 'message',
 					message: {
 						localId: `sys-${Date.now()}`,
@@ -1083,7 +1223,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			});
 		} catch (err) {
 			console.error('[ChatRoom] List actions failed:', err);
-			this.sendError(ws, 'internal', 'Failed to list actions');
+			await this.sendError(ws, 'internal', 'Failed to list actions');
 		}
 	}
 
@@ -1169,18 +1309,20 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// ── Helpers ───────────────────────────────────────────────────────
 
+	/** HMAC-sign a JSON string if signing key is available */
+	private async signJson(json: string): Promise<string> {
+		if (!this.broadcastSigningKey) return json;
+		const sig = await crypto.subtle.sign(
+			'HMAC',
+			this.broadcastSigningKey,
+			new TextEncoder().encode(json)
+		);
+		const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
+		return json.slice(0, -1) + ',"_hmac":"' + hmac + '"}';
+	}
+
 	private async broadcast(msg: ServerMessage, exclude?: WebSocket): Promise<void> {
-		let json = JSON.stringify(msg);
-		if (this.broadcastSigningKey) {
-			const sig = await crypto.subtle.sign(
-				'HMAC',
-				this.broadcastSigningKey,
-				new TextEncoder().encode(json)
-			);
-			const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
-			// Append _hmac via string concat to preserve exact signed bytes
-			json = json.slice(0, -1) + ',"_hmac":"' + hmac + '"}';
-		}
+		const json = await this.signJson(JSON.stringify(msg));
 		const sockets = this.ctx.getWebSockets();
 		for (const ws of sockets) {
 			if (ws === exclude) continue;
@@ -1192,16 +1334,17 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		}
 	}
 
-	private safeSend(ws: WebSocket, msg: ServerMessage): void {
+	private async safeSend(ws: WebSocket, msg: ServerMessage): Promise<void> {
 		try {
-			ws.send(JSON.stringify(msg));
+			const json = await this.signJson(JSON.stringify(msg));
+			ws.send(json);
 		} catch {
 			// Dead socket
 		}
 	}
 
-	private sendError(ws: WebSocket, code: ErrorCode, message: string): void {
-		this.safeSend(ws, { type: 'error', code, message });
+	private async sendError(ws: WebSocket, code: ErrorCode, message: string): Promise<void> {
+		await this.safeSend(ws, { type: 'error', code, message });
 	}
 
 	// [H8] Decode URI-encoded tag values

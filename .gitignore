@@ -9,7 +9,8 @@ dist
 ios/
 android/
 .wrangler/
-drizzle/meta/
+
+
 *.local
 .vercel
 .output
@@ -19,3 +20,4 @@ docs/prompt
 .obsidian/
 .playwright-mcp/
 .worktrees/
+_data

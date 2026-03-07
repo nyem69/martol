@@ -8,6 +8,11 @@ import { chatJoin } from '$lib/server/mcp/tools/chat-join';
 import { chatWho } from '$lib/server/mcp/tools/chat-who';
 import { actionSubmit } from '$lib/server/mcp/tools/action-submit';
 import { actionStatus } from '$lib/server/mcp/tools/action-status';
+import { actionConfirm } from '$lib/server/mcp/tools/action-confirm';
+import { ticketList } from '$lib/server/mcp/tools/ticket-list';
+import { ticketRead } from '$lib/server/mcp/tools/ticket-read';
+import { ticketComment } from '$lib/server/mcp/tools/ticket-comment';
+import { ticketUpdate } from '$lib/server/mcp/tools/ticket-update';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.auth || !locals.db) {
@@ -78,6 +83,21 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				break;
 			case 'action_status':
 				result = await actionStatus(req.params, agent, locals.db);
+				break;
+			case 'action_confirm':
+				result = await actionConfirm(req.params, agent, locals.db);
+				break;
+			case 'ticket_list':
+				result = await ticketList(req.params, agent, locals.db);
+				break;
+			case 'ticket_read':
+				result = await ticketRead(req.params, agent, locals.db);
+				break;
+			case 'ticket_comment':
+				result = await ticketComment(req.params, agent, locals.db);
+				break;
+			case 'ticket_update':
+				result = await ticketUpdate(req.params, agent, locals.db);
 				break;
 			default: {
 				const _exhaustive: never = req;

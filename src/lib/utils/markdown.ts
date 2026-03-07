@@ -6,27 +6,30 @@
  * Only runs client-side (chat route has ssr = false).
  */
 
-import { marked, type Tokens } from 'marked';
+import { marked } from 'marked';
 import DOMPurify, { type Config } from 'dompurify';
 
-function escapeAttr(s: string): string {
-	return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** Escape HTML special chars for safe attribute interpolation */
+function esc(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const renderer = new marked.Renderer();
-const originalImage = renderer.image.bind(renderer);
-renderer.image = function (token: Tokens.Image) {
-	if (token.href.startsWith('r2:')) {
-		const r2Key = token.href.slice(3);
-		const src = `/api/upload?key=${encodeURIComponent(r2Key)}`;
-		const alt = escapeAttr(token.text || '');
-		const title = escapeAttr(token.title || '');
-		return `<img src="${src}" alt="${alt}" title="${title}" class="chat-img-thumb" loading="lazy" />`;
+// Custom renderer: rewrite r2: image URLs to /api/upload?key=...
+const renderer: import('marked').RendererObject = {
+	image({ href, title, text }) {
+		const safeAlt = esc(text || '');
+		const safeTitle = title ? ` title="${esc(title)}"` : '';
+		if (href.startsWith('r2:')) {
+			const key = href.slice(3);
+			return `<img src="/api/upload?key=${encodeURIComponent(key)}" alt="${safeAlt}"${safeTitle} loading="lazy" class="r2-image cursor-pointer">`;
+		}
+		// External images — DOMPurify will validate src
+		return `<img src="${esc(href)}" alt="${safeAlt}"${safeTitle} loading="lazy">`;
 	}
-	return originalImage(token);
 };
 
-marked.setOptions({ async: false, gfm: true, breaks: true, renderer });
+marked.use({ renderer });
+marked.setOptions({ async: false, gfm: true, breaks: true });
 
 // Restrict to tags needed for chat markdown — no <style>, <form>, <svg>, etc.
 const PURIFY_CONFIG: Config = {
@@ -35,13 +38,14 @@ const PURIFY_CONFIG: Config = {
 		'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'img'
 	],
-	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'loading'],
+	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'loading', 'class'],
 	ALLOW_DATA_ATTR: false
 };
 
 // Scoped DOMPurify instance — prevents hook from affecting other DOMPurify consumers
 const purify = DOMPurify();
 
+// Validate attributes after sanitization
 purify.addHook('afterSanitizeAttributes', (node) => {
 	// Force external links to open in new tab with noopener
 	if (node.tagName === 'A') {
@@ -52,11 +56,11 @@ purify.addHook('afterSanitizeAttributes', (node) => {
 			node.removeAttribute('href');
 		}
 	}
-	// Re-apply thumbnail class on R2 images (class attr is not in allowlist to prevent UI spoofing)
+	// IMG src: only allow /api/upload?key= and https:// — block javascript:, data:, etc.
 	if (node.tagName === 'IMG') {
 		const src = node.getAttribute('src') || '';
-		if (src.startsWith('/api/upload?key=')) {
-			node.setAttribute('class', 'chat-img-thumb');
+		if (!src.startsWith('/api/upload?key=') && !src.startsWith('https://')) {
+			node.removeAttribute('src');
 		}
 	}
 });

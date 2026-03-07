@@ -10,9 +10,9 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
-import { attachments, subscriptions } from '$lib/server/db/schema';
-import { eq, and, count, sql } from 'drizzle-orm';
-import { FREE_UPLOAD_LIMIT } from '$lib/server/config';
+import { attachments } from '$lib/server/db/schema';
+import { eq, and } from 'drizzle-orm';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = new Set([
@@ -32,30 +32,36 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 	'image/jpeg': [[0xFF, 0xD8, 0xFF]],
 	'image/png': [[0x89, 0x50, 0x4E, 0x47]],
 	'image/gif': [[0x47, 0x49, 0x46, 0x38]],
+	// WebP: RIFF header (bytes 0-3) + WEBP signature (bytes 8-11)
 	'image/webp': [[0x52, 0x49, 0x46, 0x46]],
 	'application/pdf': [[0x25, 0x50, 0x44, 0x46]]
 };
 
+// Patterns that indicate HTML/script injection in text/plain files
+const DANGEROUS_TEXT_PATTERNS = /(<script|<html|<svg|<iframe|<object|<embed|<style|<link|<meta|<base|javascript:|on\w+\s*=)/i;
+
 function validateMagicBytes(buffer: ArrayBuffer, claimedType: string): boolean {
-	const sigs = MAGIC_BYTES[claimedType];
-	if (!sigs) {
-		// text/plain: reject files that look like markup (SVG bypass prevention)
-		if (claimedType === 'text/plain') {
-			const head = new TextDecoder().decode(new Uint8Array(buffer).slice(0, 32)).trimStart();
-			if (head.startsWith('<')) return false;
-		}
+	const bytes = new Uint8Array(buffer);
+
+	// text/plain: scan full content for HTML injection markers
+	if (claimedType === 'text/plain') {
+		const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+		return !DANGEROUS_TEXT_PATTERNS.test(text);
+	}
+
+	// WebP: also verify WEBP signature at bytes 8-11
+	if (claimedType === 'image/webp') {
+		if (bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46) return false;
+		if (bytes[8] !== 0x57 || bytes[9] !== 0x45 || bytes[10] !== 0x42 || bytes[11] !== 0x50) return false;
 		return true;
 	}
-	const bytes = new Uint8Array(buffer);
+
+	const sigs = MAGIC_BYTES[claimedType];
+	if (!sigs) return true;
 	return sigs.some((sig) => sig.every((byte, i) => bytes[i] === byte));
 }
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
-	// Feature flag: uploads disabled unless ENABLE_UPLOADS=true
-	if (platform?.env?.ENABLE_UPLOADS !== 'true') {
-		error(403, 'Image uploads are currently disabled');
-	}
-
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
 	if (!locals.db) error(503, 'Database unavailable');
 
@@ -76,31 +82,16 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!memberRecord) error(403, 'Not a member of this organization');
 	if (memberRecord.role === 'viewer') error(403, 'Viewers cannot upload files');
 
-	// Quota enforcement (defense in depth)
-	const [sub] = await locals.db
-		.select({
-			plan: subscriptions.plan,
-			status: subscriptions.status,
-			currentPeriodEnd: subscriptions.currentPeriodEnd
-		})
-		.from(subscriptions)
-		.where(eq(subscriptions.userId, locals.user.id))
-		.limit(1);
+	// Feature gate: check plan allows uploads
+	const orgLimits = await checkOrgLimits(locals.db, activeOrgId);
+	if (!orgLimits.limits.uploadsEnabled) {
+		error(403, 'File uploads require a Pro plan.');
+	}
 
-	const isSubscribed =
-		sub?.plan === 'image_upload' &&
-		sub.status === 'active' &&
-		(!sub.currentPeriodEnd || sub.currentPeriodEnd > new Date());
-
-	// Early quota gate (non-atomic, for fast rejection before file parsing)
-	if (!isSubscribed) {
-		const [result] = await locals.db
-			.select({ total: count() })
-			.from(attachments)
-			.where(eq(attachments.uploadedBy, locals.user.id));
-		if ((result?.total ?? 0) >= FREE_UPLOAD_LIMIT) {
-			error(402, 'Upload quota exceeded — upgrade to continue uploading');
-		}
+	// Early reject oversized requests before buffering the full body
+	const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+	if (contentLength > MAX_FILE_SIZE + 4096) {
+		error(413, 'Request too large');
 	}
 
 	const formData = await request.formData();
@@ -114,15 +105,32 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		error(415, 'File content does not match declared type');
 	}
 
+	// Image scanning via Workers AI (guarded by env var)
+	const ai = platform?.env?.AI;
+	const scanEnabled = platform?.env?.ENABLE_IMAGE_SCANNING === 'true';
+	if (ai && scanEnabled && file.type.startsWith('image/')) {
+		const { scanImage } = await import('$lib/server/image-scan');
+		const scanResult = await scanImage(ai, buffer, file.type);
+		if (!scanResult.safe) {
+			error(422, `Image blocked: ${scanResult.reason || 'unsafe content detected'}`);
+		}
+	}
+
 	// Sanitize filename
 	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128) || 'upload';
 	const timestamp = Date.now();
 	const r2Key = `${activeOrgId}/${timestamp}-${safeName}`;
 
+	// Images served inline; non-images forced to download
+	const isImage = file.type.startsWith('image/');
+	const disposition = isImage
+		? `inline; filename="${safeName}"`
+		: `attachment; filename="${safeName}"`;
+
 	await r2.put(r2Key, buffer, {
 		httpMetadata: {
 			contentType: file.type,
-			contentDisposition: `attachment; filename="${safeName}"`
+			contentDisposition: disposition
 		},
 		customMetadata: {
 			uploadedBy: locals.user.id,
@@ -130,36 +138,21 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	});
 
-	// Atomic quota-enforced insert: only succeeds if count < limit (prevents race condition)
-	let inserted: { id: number }[];
+	// Record in attachments table (message_id backfilled when message is persisted)
+	// Compensate on DB failure: delete the R2 object to prevent orphans
 	try {
-		if (isSubscribed) {
-			inserted = await locals.db.insert(attachments).values({
-				orgId: activeOrgId,
-				uploadedBy: locals.user.id,
-				filename: safeName,
-				r2Key: r2Key,
-				contentType: file.type,
-				sizeBytes: file.size
-			}).returning({ id: attachments.id });
-		} else {
-			inserted = await locals.db.execute(sql`
-				INSERT INTO attachments (org_id, uploaded_by, filename, r2_key, content_type, size_bytes)
-				SELECT ${activeOrgId}, ${locals.user.id}, ${safeName}, ${r2Key}, ${file.type}, ${file.size}
-				WHERE (SELECT count(*) FROM attachments WHERE uploaded_by = ${locals.user.id}) < ${FREE_UPLOAD_LIMIT}
-				RETURNING id
-			`);
-		}
+		await locals.db.insert(attachments).values({
+			orgId: activeOrgId,
+			uploadedBy: locals.user.id,
+			filename: safeName,
+			r2Key,
+			contentType: file.type,
+			sizeBytes: file.size
+		});
 	} catch (dbErr) {
-		// DB failed after R2 write — clean up orphaned R2 object
-		await r2.delete(r2Key).catch(() => {});
-		throw dbErr;
-	}
-
-	if (!inserted.length) {
-		// Atomic check failed — clean up R2 object
-		await r2.delete(r2Key).catch(() => {});
-		error(402, 'Upload quota exceeded — upgrade to continue uploading');
+		await r2.delete(r2Key).catch(() => {}); // best-effort R2 rollback
+		console.error('[Upload] DB insert failed, R2 object deleted:', dbErr);
+		error(500, 'Failed to record upload');
 	}
 
 	return json({
@@ -217,12 +210,22 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	const object = await r2.get(key);
 	if (!object) error(404, 'File not found');
 
+	// Re-validate stored content type against allowlist — never trust R2 metadata blindly
+	const storedType = object.httpMetadata?.contentType || 'application/octet-stream';
+	const contentType = ALLOWED_TYPES.has(storedType) ? storedType : 'application/octet-stream';
+
+	// Images served inline for <img> rendering; non-images forced to download
+	const isImage = contentType.startsWith('image/');
+	const disposition = isImage
+		? (object.httpMetadata?.contentDisposition?.replace('attachment', 'inline') || 'inline')
+		: (object.httpMetadata?.contentDisposition || 'attachment');
+
 	const response = new Response(object.body as ReadableStream, {
 		headers: {
-			'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
-			'Content-Disposition': object.httpMetadata?.contentDisposition || 'attachment',
+			'Content-Type': contentType,
+			'Content-Disposition': disposition,
 			'X-Content-Type-Options': 'nosniff',
-			'Cache-Control': 'private, max-age=86400, no-transform'
+			'Cache-Control': 'private, max-age=86400, immutable'
 		}
 	});
 

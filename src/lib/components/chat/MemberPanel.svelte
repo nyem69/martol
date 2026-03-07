@@ -118,9 +118,15 @@
 	let registeredAgents = $state<Array<{agentUserId: string, name: string, keyStart: string | null, createdAt: string | null}>>([]);
 	let newAgentName = $state('');
 	let generatedKey = $state<string | null>(null);
+	let generatedAgentName = $state('');
 	let agentLoading = $state(false);
 	let agentError = $state('');
 	let agentsFetched = $state(false);
+
+	// ── Confirm dialog state ──
+	let confirmTarget = $state<{ agentUserId: string; name: string } | null>(null);
+	let confirmBtn = $state<HTMLButtonElement | undefined>();
+	let confirmPrevFocus: HTMLElement | null = null;
 
 	const canManageAgents = $derived(userRole === 'owner' || userRole === 'lead');
 
@@ -149,6 +155,7 @@
 				return;
 			}
 			generatedKey = data.data?.key ?? null;
+			generatedAgentName = newAgentName;
 			newAgentName = '';
 			await fetchAgents();
 		} catch {
@@ -158,15 +165,34 @@
 		}
 	}
 
-	async function revokeAgent(agentUserId: string) {
-		if (!confirm(m.agent_revoke_confirm())) return;
+	function promptRevoke(agentUserId: string, name: string) {
+		confirmPrevFocus = document.activeElement as HTMLElement;
+		confirmTarget = { agentUserId, name };
+		// Focus confirm button after render
+		requestAnimationFrame(() => confirmBtn?.focus());
+	}
+
+	function cancelRevoke() {
+		confirmTarget = null;
+		confirmPrevFocus?.focus();
+	}
+
+	async function executeRevoke() {
+		if (!confirmTarget) return;
+		const { agentUserId } = confirmTarget;
+		confirmTarget = null;
+		confirmPrevFocus?.focus();
 		try {
 			const res = await fetch(`/api/agents/${agentUserId}`, { method: 'DELETE' });
-			const data: { ok?: boolean } = await res.json();
+			const data: { ok?: boolean; message?: string } = await res.json();
 			if (data.ok) {
 				registeredAgents = registeredAgents.filter((a) => a.agentUserId !== agentUserId);
+			} else {
+				agentError = data.message || 'Failed to revoke agent';
 			}
-		} catch { /* silent */ }
+		} catch (e) {
+			agentError = 'Network error revoking agent';
+		}
 	}
 
 	// Fetch agents when agentSetup section opens
@@ -433,7 +459,7 @@
 							{#if inviteStatus}
 								<div
 									class="mt-2 rounded px-2 py-1 text-[10px]"
-									style="background: color-mix(in oklch, var({inviteStatus.type === 'success' ? '--success' : '--error'}) 15%, transparent); color: var({inviteStatus.type === 'success' ? '--success' : '--error'});"
+									style="background: color-mix(in oklch, var({inviteStatus.type === 'success' ? '--success' : '--danger'}) 15%, transparent); color: var({inviteStatus.type === 'success' ? '--success' : '--danger'});"
 								>
 									{inviteStatus.message}
 								</div>
@@ -451,7 +477,7 @@
 												<!-- Status dot -->
 												<span
 													class="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-													style="background: var({inv.status === 'accepted' ? '--success' : inv.status === 'pending' ? '--warning' : '--error'});"
+													style="background: var({inv.status === 'accepted' ? '--success' : inv.status === 'pending' ? '--warning' : '--danger'});"
 													aria-hidden="true"
 												></span>
 												<div class="flex min-w-0 flex-1 flex-col">
@@ -615,7 +641,7 @@
 						</div>
 
 						<!-- Features -->
-						<div>
+						<div class="mb-3">
 							<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
 								{m.guide_features()}
 							</h4>
@@ -630,6 +656,25 @@
 								</div>
 							{/each}
 						</div>
+
+						<!-- Documentation link -->
+						<a
+							href="/docs"
+							target="_blank"
+							class="flex items-center gap-1.5 text-[11px] font-medium"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={12} />
+							{m.guide_documentation()}
+						</a>
+						<a
+							href="/support"
+							class="flex items-center gap-1 text-[11px] hover:underline"
+							style="color: var(--accent);"
+						>
+							<ExternalLink size={12} />
+							{m.support_title()}
+						</a>
 					</div>
 				</div>
 			</div>
@@ -717,13 +762,18 @@
 								</div>
 
 								{#if agentError}
-									<div class="mb-2 rounded px-2 py-1 text-[10px]" style="background: color-mix(in oklch, var(--error) 15%, transparent); color: var(--error);">
+									<div class="mb-2 rounded px-2 py-1 text-[10px]" style="background: color-mix(in oklch, var(--danger) 15%, transparent); color: var(--danger);">
 										{agentError}
 									</div>
 								{/if}
 
 								{#if generatedKey}
 									<div class="mb-2 rounded p-2" style="background: color-mix(in oklch, var(--success) 10%, transparent); border: 1px solid color-mix(in oklch, var(--success) 30%, transparent);">
+										{#if generatedAgentName}
+											<div class="mb-1 text-[11px] font-bold" style="color: var(--text);">
+												{generatedAgentName}
+											</div>
+										{/if}
 										<div class="mb-1 text-[10px] font-semibold" style="color: var(--success);">
 											{m.agent_key_warning()}
 										</div>
@@ -781,8 +831,8 @@
 													{#if canManageAgents}
 														<button
 															class="rounded p-0.5 transition-colors hover:opacity-80"
-															style="color: var(--error);"
-															onclick={() => revokeAgent(agent.agentUserId)}
+															style="color: var(--danger);"
+															onclick={() => promptRevoke(agent.agentUserId, agent.name)}
 															aria-label={m.agent_revoke()}
 															data-testid="agent-revoke-btn"
 														>
@@ -906,7 +956,7 @@
 	>
 		<button
 			class="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
-			style="background: color-mix(in oklch, var(--error) 12%, transparent); color: var(--error); font-family: var(--font-mono);"
+			style="background: color-mix(in oklch, var(--danger) 12%, transparent); color: var(--danger); font-family: var(--font-mono);"
 			onclick={handleLogout}
 			disabled={loggingOut}
 			data-testid="logout-btn"
@@ -920,6 +970,51 @@
 		</button>
 	</div>
 </aside>
+
+<!-- ═══ CONFIRM REVOKE DIALOG ═══ -->
+{#if confirmTarget}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+		<div
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="confirm-revoke-title"
+			tabindex="-1"
+			class="mx-4 w-full max-w-sm rounded-lg p-5 shadow-xl"
+			style="background: var(--bg-elevated); border: 1px solid var(--border);"
+			onkeydown={(e) => {
+				if (e.key === 'Escape') cancelRevoke();
+			}}
+		>
+			<h3
+				id="confirm-revoke-title"
+				class="mb-1 text-sm font-bold"
+				style="color: var(--text);"
+			>
+				{m.agent_revoke()} — {confirmTarget.name}
+			</h3>
+			<p class="mb-5 text-xs" style="color: var(--text-muted);">
+				{m.agent_revoke_confirm()}
+			</p>
+			<div class="flex justify-end gap-2">
+				<button
+					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
+					style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); font-family: var(--font-mono);"
+					onclick={cancelRevoke}
+				>
+					{m.cancel()}
+				</button>
+				<button
+					bind:this={confirmBtn}
+					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
+					style="background: var(--danger); color: #fff; font-family: var(--font-mono);"
+					onclick={executeRevoke}
+				>
+					{m.agent_revoke()}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	/* Panel width: full on small phones, fixed on larger screens */
