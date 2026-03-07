@@ -156,10 +156,11 @@ export function createAuth(
 			}),
 
 			// Passkey (WebAuthn) authentication
+			// origin omitted: falls back to request Origin header,
+			// supporting multi-origin access (web, Capacitor, etc.)
 			passkey({
 				rpID: new URL(baseURL).hostname,
-				rpName: 'Martol',
-				origin: baseURL
+				rpName: 'Martol'
 			})
 		],
 

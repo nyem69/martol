@@ -169,10 +169,11 @@ export const passkey = pgTable('passkey', {
 	userId: text('userId')
 		.notNull()
 		.references(() => user.id),
-	webauthnUserID: text('webauthnUserID').notNull(),
+	credentialID: text('credentialID').notNull(),
 	counter: integer('counter').notNull(),
 	deviceType: text('deviceType').notNull(),
 	backedUp: boolean('backedUp').notNull(),
 	transports: text('transports'),
-	createdAt: timestamp('createdAt')
+	createdAt: timestamp('createdAt'),
+	aaguid: text('aaguid')
 });
