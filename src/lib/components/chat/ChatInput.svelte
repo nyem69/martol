@@ -222,11 +222,12 @@
 			const atIdx = textBeforeCursor.lastIndexOf('@');
 			if (atIdx !== -1 && (atIdx === 0 || textBeforeCursor[atIdx - 1] === ' ')) {
 				const query = textBeforeCursor.slice(atIdx + 1).toLowerCase();
+				const allEntry = 'all'.startsWith(query) ? [{ id: 'all', name: 'all' }] : [];
 				const matches = [...onlineUsers.entries()]
 					.filter(([_, u]) => u.name.toLowerCase().startsWith(query))
-					.map(([id, u]) => ({ id, name: u.name }))
-					.slice(0, 8);
-				mentionMatches = matches;
+					.map(([id, u]) => ({ id, name: u.name }));
+				const combined = [...allEntry, ...matches].slice(0, 8);
+				mentionMatches = combined;
 				mentionIndex = 0;
 				mentionStart = atIdx;
 				showMentionPopup = matches.length > 0;

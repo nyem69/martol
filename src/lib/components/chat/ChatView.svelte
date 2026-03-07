@@ -191,7 +191,7 @@
 </script>
 
 <main class="h-dvh overflow-hidden" aria-label="Chat room: {roomName}">
-	<div class="mx-auto flex h-full max-w-5xl flex-col overflow-hidden">
+	<div class="flex h-full flex-col overflow-hidden">
 		<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
 		<ChatHeader
 			{roomName}

@@ -505,7 +505,7 @@
 	}
 
 	.logo {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: clamp(48px, 10vw, 80px);
 		font-weight: 700;
 		letter-spacing: 0.15em;
@@ -516,7 +516,7 @@
 
 	.beta-badge {
 		display: inline-block;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		font-weight: 700;
 		letter-spacing: 0.15em;
@@ -535,7 +535,7 @@
 	}
 
 	.tagline {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: clamp(20px, 4vw, 32px);
 		font-weight: 500;
 		color: var(--text);
@@ -544,7 +544,7 @@
 	}
 
 	.subtitle {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: clamp(13px, 2vw, 16px);
 		color: var(--text-muted);
 		margin: 0 0 40px;
@@ -583,7 +583,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		letter-spacing: 0.5px;
@@ -628,7 +628,7 @@
 	}
 
 	.section-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--accent-muted);
 		white-space: nowrap;
@@ -643,7 +643,7 @@
 
 	/* ── Scenario ── */
 	.lead {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 18px;
 		color: var(--text);
 		line-height: 1.6;
@@ -652,7 +652,7 @@
 
 	/* ── What is Martol ── */
 	.lead-xl {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: clamp(20px, 3.5vw, 26px);
 		font-weight: 500;
 		color: var(--text);
@@ -677,7 +677,7 @@
 	}
 
 	.intent-note p {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 15px;
 		color: var(--text-muted);
 		line-height: 1.6;
@@ -703,14 +703,14 @@
 	}
 
 	.chat-room-name {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--text);
 	}
 
 	.chat-online {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: var(--success);
 	}
@@ -731,27 +731,27 @@
 	}
 
 	.chat-agent-name {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 600;
 		color: var(--accent);
 	}
 
 	.chat-user-name {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 600;
 		color: var(--text);
 	}
 
 	.chat-time {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 10px;
 		color: var(--text-muted);
 	}
 
 	.chat-msg-body {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 14px;
 		color: var(--text);
 		line-height: 1.5;
@@ -769,7 +769,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		font-weight: 700;
 		color: var(--warning);
@@ -781,13 +781,13 @@
 	}
 
 	.chat-action-meta {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: var(--text-muted);
 	}
 
 	.chat-msg-user .chat-msg-body {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-weight: 600;
 		color: var(--accent);
 	}
@@ -799,7 +799,7 @@
 
 	.transcript-punchline {
 		text-align: center;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 15px;
 		font-style: italic;
 		color: var(--text-muted);
@@ -838,14 +838,14 @@
 	}
 
 	.node-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		color: var(--text);
 	}
 
 	.node-sub {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 10px;
 		color: var(--text-muted);
 	}
@@ -864,7 +864,7 @@
 	}
 
 	.connector-text {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 9px;
 		color: var(--text-muted);
 		white-space: nowrap;
@@ -879,7 +879,7 @@
 		border-left: 2px solid var(--accent-muted);
 		background: oklch(0.75 0.15 65 / 0.04);
 		border-radius: 0 4px 4px 0;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 13px;
 		color: var(--text-muted);
 		line-height: 1.5;
@@ -892,7 +892,7 @@
 	}
 
 	.aside {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 16px;
 		color: var(--text-muted);
 		line-height: 1.6;
@@ -907,7 +907,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 13px;
 		color: var(--accent);
 		text-decoration: none;
@@ -934,7 +934,7 @@
 
 	.screenshot-caption {
 		text-align: center;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--text-muted);
 		margin-top: 12px;
@@ -975,7 +975,7 @@
 	}
 
 	.feature-title {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		color: var(--text);
@@ -983,7 +983,7 @@
 	}
 
 	.feature-desc {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 13px;
 		color: var(--text-muted);
 		line-height: 1.5;
@@ -1003,7 +1003,7 @@
 		gap: 14px;
 		padding: 12px 0;
 		border-bottom: 1px solid var(--border-subtle);
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 15px;
 		color: var(--text);
 	}
@@ -1017,7 +1017,7 @@
 		border-radius: 50%;
 		background: var(--accent);
 		color: var(--bg);
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 700;
 		flex-shrink: 0;
@@ -1065,7 +1065,7 @@
 	}
 
 	.footer-logo {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 700;
 		color: var(--accent);
@@ -1073,7 +1073,7 @@
 	}
 
 	.footer-tagline {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: var(--text-muted);
 		font-style: italic;
@@ -1085,7 +1085,7 @@
 	}
 
 	.footer-links a {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--text-muted);
 		text-decoration: none;
@@ -1098,7 +1098,7 @@
 	.footer-copy {
 		width: 100%;
 		text-align: center;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 11px;
 		color: oklch(0.40 0.01 260);
 		margin: 8px 0 0;
@@ -1115,7 +1115,7 @@
 	.comparison-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 13px;
 	}
 
@@ -1125,7 +1125,7 @@
 
 	.comparison-table th {
 		padding: 12px 16px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 600;
 		letter-spacing: 0.5px;
@@ -1156,7 +1156,7 @@
 	}
 
 	.row-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--text-muted);
 		font-weight: 500;
@@ -1174,7 +1174,7 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 8px;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 14px;
 		color: var(--text-muted);
 		line-height: 1.6;
@@ -1195,7 +1195,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 13px;
 		color: var(--accent);
 		text-decoration: none;

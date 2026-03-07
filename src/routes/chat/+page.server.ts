@@ -146,6 +146,31 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
+	// Auto-accept any pending invitations for this user
+	if (locals.user.email) {
+		const pendingInvites = await db
+			.select({ id: invitation.id })
+			.from(invitation)
+			.where(
+				and(
+					sql`LOWER(${invitation.email}) = LOWER(${locals.user.email})`,
+					eq(invitation.status, 'pending'),
+					gt(invitation.expiresAt, new Date())
+				)
+			);
+
+		for (const inv of pendingInvites) {
+			try {
+				await locals.auth!.api.acceptInvitation({
+					body: { invitationId: inv.id },
+					headers: event.request.headers
+				});
+			} catch {
+				// Invitation may have been revoked or already accepted
+			}
+		}
+	}
+
 	// Load all rooms the user belongs to (for room switcher)
 	const userRooms = await db
 		.select({ id: organization.id, name: organization.name })
