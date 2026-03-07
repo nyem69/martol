@@ -358,7 +358,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				return;
 			}
 
-			const pgCode = (err as { code?: string })?.code;
+			const pgCode =
+				(err as { code?: string })?.code ||
+				(err as { cause?: { code?: string } })?.cause?.code;
 			console.error(
 				`[ChatRoom] Flush failed (attempt ${this.flushFailures}, unflushed: ${this.unflushedIds.length}${pgCode ? `, pg: ${pgCode}` : ''})`,
 				err
@@ -679,13 +681,15 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		await connectPromise;
 
 		try {
-			// [C6] Individual inserts in a transaction for guaranteed ID correlation
+			// [C6] Individual inserts — no wrapping transaction so one poison
+			// message (bad FK, constraint violation) doesn't block the entire batch.
 			const mappings: Array<{ localId: string; dbId: number }> = [];
 			const updates: Record<string, StoredMessage> = {};
+			const failed: number[] = [];
 
-			await db.transaction(async (tx) => {
-				for (const { seqId, stored } of toFlush) {
-					const [inserted] = await tx
+			for (const { seqId, stored } of toFlush) {
+				try {
+					const [inserted] = await db
 						.insert(messagesTable)
 						.values({
 							orgId,
@@ -707,8 +711,27 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					stored.dbId = inserted.id;
 					updates[storageKey(seqId)] = stored;
 					mappings.push({ localId: stored.localId, dbId: inserted.id });
+				} catch (insertErr) {
+					// Drizzle wraps PG errors: code may be on err.code or err.cause.code
+					const pgCode =
+						(insertErr as { code?: string })?.code ||
+						(insertErr as { cause?: { code?: string } })?.cause?.code;
+					// Constraint violations (23xxx) are permanent — mark as flushed to skip.
+					// Transient errors (connection, timeout) should be retried.
+					if (pgCode && pgCode.startsWith('23')) {
+						console.error(
+							`[ChatRoom] Skipping poison message seq=${seqId} (pg: ${pgCode}, sender: ${stored.senderId})`,
+							insertErr
+						);
+						stored.flushed = true; // Mark as flushed so it's not retried forever
+						updates[storageKey(seqId)] = stored;
+						failed.push(seqId);
+					} else {
+						// Transient error — rethrow to trigger retry/degraded logic
+						throw insertErr;
+					}
 				}
-			});
+			}
 
 			await this.ctx.storage.put(updates);
 
@@ -927,7 +950,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					for (let i = 0; i < keys.length; i += 128) {
 						await this.ctx.storage.delete(keys.slice(i, i + 128));
 					}
-					console.log('[ChatRoom] Dropped %d unflushed WAL entries', this.unflushedIds.length);
+					console.log(`[ChatRoom] Dropped ${this.unflushedIds.length} unflushed WAL entries`);
 					this.unflushedIds = [];
 					this.walMessageCount = 0;
 					this.walByteSize = 0;
@@ -953,7 +976,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 						timestamp: new Date().toISOString()
 					}
 				});
-				console.log('[ChatRoom] Repair by %s: %s (unflushed: %d)', userName, detail, this.unflushedIds.length);
+				console.log(`[ChatRoom] Repair by ${userName}: ${detail} (unflushed: ${this.unflushedIds.length})`);
 				break;
 			}
 
