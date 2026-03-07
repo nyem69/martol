@@ -7,7 +7,7 @@
 
 import { redirect, error } from '@sveltejs/kit';
 import { user, member } from '$lib/server/db/auth-schema';
-import { usernameHistory } from '$lib/server/db/schema';
+import { usernameHistory, accountAudit } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
 import type { PageServerLoad } from './$types';
@@ -41,6 +41,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.from(usernameHistory)
 		.where(eq(usernameHistory.userId, locals.user.id))
 		.orderBy(desc(usernameHistory.changedAt))
+		.limit(1);
+
+	// Get last email change for cooldown check
+	const [lastEmailChange] = await db
+		.select({
+			changedAt: accountAudit.createdAt
+		})
+		.from(accountAudit)
+		.where(and(eq(accountAudit.userId, locals.user.id), eq(accountAudit.action, 'email_change')))
+		.orderBy(desc(accountAudit.createdAt))
 		.limit(1);
 
 	// Mask email: show first 2 chars + domain
@@ -88,6 +98,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			createdAt: userData.createdAt.toISOString()
 		},
 		lastUsernameChange: lastChange?.changedAt?.toISOString() ?? null,
+		lastEmailChange: lastEmailChange?.changedAt?.toISOString() ?? null,
 		billing,
 		isOwnerOrLead
 	};

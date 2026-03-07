@@ -10,7 +10,7 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { accountAudit } from '$lib/server/db/schema';
 import { user } from '$lib/server/db/auth-schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, or, desc } from 'drizzle-orm';
 import { sendEmail, emailChangeConfirmTemplate, emailChangeRevertTemplate } from '$lib/server/email';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,6 +42,44 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	const userId = locals.user.id;
 	const oldEmail = locals.user.email;
+	const db = locals.db;
+
+	// Cooldown: 30 days between email changes
+	const [lastChange] = await db
+		.select({ createdAt: accountAudit.createdAt })
+		.from(accountAudit)
+		.where(and(eq(accountAudit.userId, userId), eq(accountAudit.action, 'email_change')))
+		.orderBy(desc(accountAudit.createdAt))
+		.limit(1);
+
+	if (lastChange) {
+		const daysSince = (Date.now() - lastChange.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+		if (daysSince < 30) {
+			const daysLeft = Math.ceil(30 - daysSince);
+			error(429, `You can only change your email once every 30 days. Try again in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`);
+		}
+	}
+
+	// Prevent reuse of any previous email
+	const previousEmails = await db
+		.select({ oldValue: accountAudit.oldValue, newValue: accountAudit.newValue })
+		.from(accountAudit)
+		.where(
+			and(
+				eq(accountAudit.userId, userId),
+				or(eq(accountAudit.action, 'email_change'), eq(accountAudit.action, 'email_revert'))
+			)
+		);
+
+	const usedEmails = new Set<string>();
+	for (const r of previousEmails) {
+		if (r.oldValue) usedEmails.add(r.oldValue.toLowerCase());
+		if (r.newValue) usedEmails.add(r.newValue.toLowerCase());
+	}
+
+	if (usedEmails.has(newEmail)) {
+		error(400, 'This email address has been used before and cannot be reused.');
+	}
 
 	// Check for existing pending change
 	const existing = await kv.get(`email-change:${userId}`);

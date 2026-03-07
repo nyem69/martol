@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, Mail, BookOpen, LifeBuoy } from '@lucide/svelte';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, BookOpen, LifeBuoy } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
 
 	let { data } = $props();
@@ -77,6 +77,18 @@
 	let emailChanging = $state(false);
 	let emailMsg = $state('');
 	let emailError = $state('');
+
+	// Email change cooldown (30 days)
+	const EMAIL_COOLDOWN_DAYS = 30;
+	// svelte-ignore state_referenced_locally
+	const lastEmailChangeDate = data.lastEmailChange ? new Date(data.lastEmailChange) : null;
+	const emailCooldownEnd = lastEmailChangeDate
+		? new Date(lastEmailChangeDate.getTime() + EMAIL_COOLDOWN_DAYS * 24 * 60 * 60 * 1000)
+		: null;
+	const isEmailOnCooldown = $derived(emailCooldownEnd ? new Date() < emailCooldownEnd : false);
+	const emailCooldownDaysLeft = $derived(
+		emailCooldownEnd ? Math.max(0, Math.ceil((emailCooldownEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000))) : 0
+	);
 
 	// Check URL params for email change redirect result
 	$effect(() => {
@@ -542,21 +554,11 @@
 				>
 					{m.settings_email()}
 				</span>
-				<div class="flex items-center gap-2">
-					<div
-						class="flex-1 rounded-md px-3 py-2 text-sm"
-						style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
-					>
-						{profile.email}
-					</div>
-					<button
-						onclick={() => (showEmailChange = !showEmailChange)}
-						data-testid="toggle-email-change"
-						class="shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
-						style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
-					>
-						<Mail size={14} />
-					</button>
+				<div
+					class="rounded-md px-3 py-2 text-sm"
+					style="background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono);"
+				>
+					{profile.email}
 				</div>
 
 				{#if emailMsg}
@@ -580,7 +582,20 @@
 					</div>
 				{/if}
 
-				{#if showEmailChange}
+				{#if isEmailOnCooldown}
+					<p class="mt-2 text-xs" style="color: var(--text-muted); opacity: 0.6;">
+						Email change available in {emailCooldownDaysLeft} day{emailCooldownDaysLeft === 1 ? '' : 's'}
+					</p>
+				{:else if !showEmailChange}
+					<button
+						onclick={() => (showEmailChange = true)}
+						data-testid="toggle-email-change"
+						class="mt-2 text-xs transition-opacity hover:opacity-80"
+						style="color: var(--text-muted);"
+					>
+						Change email address
+					</button>
+				{:else}
 					<div class="mt-3 space-y-2">
 						<label
 							for="new-email"
@@ -599,18 +614,30 @@
 							class="w-full rounded-md px-3 py-2.5 text-sm"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						/>
-						<button
-							onclick={handleEmailChange}
-							disabled={!newEmail.trim() || emailChanging}
-							data-testid="submit-email-change"
-							class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-							style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
-						>
-							{#if emailChanging}
-								<Loader size={14} class="animate-spin" />
-							{/if}
-							{m.settings_email_change_submit()}
-						</button>
+						<p class="text-[11px]" style="color: var(--text-muted);">
+							A confirmation link will be sent to your current email first, then to the new address.
+						</p>
+						<div class="flex items-center gap-2">
+							<button
+								onclick={handleEmailChange}
+								disabled={!newEmail.trim() || emailChanging}
+								data-testid="submit-email-change"
+								class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+								style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
+							>
+								{#if emailChanging}
+									<Loader size={14} class="animate-spin" />
+								{/if}
+								{m.settings_email_change_submit()}
+							</button>
+							<button
+								onclick={() => { showEmailChange = false; newEmail = ''; }}
+								class="text-xs transition-opacity hover:opacity-80"
+								style="color: var(--text-muted);"
+							>
+								Cancel
+							</button>
+						</div>
 					</div>
 				{/if}
 			</div>
