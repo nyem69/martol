@@ -140,7 +140,11 @@ export function createAuth(
 			}),
 
 			// Agent authentication via API keys
-			apiKey(),
+			// Disable rate limiting — keys are verified on every WebSocket reconnect,
+			// not as an API gateway. Default limit (10/day) causes false 401s.
+			apiKey({
+				rateLimit: { enabled: false }
+			}),
 
 			// Two-factor authentication (TOTP + backup codes)
 			twoFactor({
