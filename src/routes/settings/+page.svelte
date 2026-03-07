@@ -1118,7 +1118,7 @@
 
 		<!-- ═══ FOOTER LINKS ═══ -->
 		<div
-			class="mt-6 flex items-center justify-center gap-6 text-xs"
+			class="mt-6 mb-8 flex items-center justify-center gap-6 text-xs"
 			style="color: var(--text-muted);"
 		>
 			<a
