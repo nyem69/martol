@@ -117,7 +117,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	// Sanitize filename
-	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128);
+	const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 128) || 'upload';
 	const timestamp = Date.now();
 	const r2Key = `${activeOrgId}/${timestamp}-${safeName}`;
 
@@ -185,6 +185,28 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		.limit(1);
 	if (!memberRecord) error(403, 'Not a member of this organization');
 
+	// Verify attachment exists in DB for this org (prevents cross-org key guessing)
+	const [attachment] = await locals.db
+		.select({ id: attachments.id })
+		.from(attachments)
+		.where(and(eq(attachments.r2Key, key), eq(attachments.orgId, orgId)))
+		.limit(1);
+	if (!attachment) error(404, 'File not found');
+
+	// SECURITY NOTE: Auth + membership + DB validation run ABOVE this line.
+	// Cache lookup is safe here — it only returns previously-authenticated responses
+	// keyed by org-scoped R2 key. Unauthenticated requests never reach this point.
+	//
+	// Caching image responses enables CSAM scanning (Caching > Configuration in dashboard).
+	// private directive: Workers Cache API ignores it for cache.put(), but prevents CDN bypass.
+	const cache = platform?.caches?.default;
+	const cacheKey = new Request(`${url.origin}/api/upload?key=${key}`, { method: 'GET' });
+
+	if (cache) {
+		const cached = await cache.match(cacheKey);
+		if (cached) return cached;
+	}
+
 	const object = await r2.get(key);
 	if (!object) error(404, 'File not found');
 
@@ -198,7 +220,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		? (object.httpMetadata?.contentDisposition?.replace('attachment', 'inline') || 'inline')
 		: (object.httpMetadata?.contentDisposition || 'attachment');
 
-	return new Response(object.body as ReadableStream, {
+	const response = new Response(object.body as ReadableStream, {
 		headers: {
 			'Content-Type': contentType,
 			'Content-Disposition': disposition,
@@ -206,4 +228,12 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 			'Cache-Control': 'private, max-age=86400, immutable'
 		}
 	});
+
+	// Put into edge cache for CSAM scanning and performance.
+	// waitUntil keeps the worker alive for the async cache write without blocking the response.
+	if (cache) {
+		platform?.context?.waitUntil(cache.put(cacheKey, response.clone()));
+	}
+
+	return response;
 };

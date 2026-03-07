@@ -57,8 +57,9 @@ UpgradeModal → "Subscribe $5/month" button
   → redirect to Stripe hosted page
   → user pays → Stripe webhook fires
   → POST /api/webhooks/stripe handles:
-      checkout.session.completed → create subscription record
-      invoice.payment_succeeded → update currentPeriodEnd
+      checkout.session.completed    → create/update subscription record
+      invoice.paid                  → update currentPeriodEnd (renew)
+      customer.subscription.updated → sync status (active/past_due/canceled)
       customer.subscription.deleted → set status canceled
   → user returns via success_url → quota check passes
 ```
@@ -87,7 +88,7 @@ CREATE INDEX idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_
 ### Existing table changes: `attachments`
 
 Add `uploaded_by TEXT NOT NULL` column (for per-user quota counting).
-Make `message_id` nullable (upload happens before message send).
+Remove `message_id` column (unused — images are embedded in message body as `r2:` markers).
 
 ## API Routes
 
@@ -99,6 +100,35 @@ Make `message_id` nullable (upload happens before message send).
 | `/api/checkout` | POST | Create Stripe Checkout session |
 | `/api/webhooks/stripe` | POST | Handle Stripe webhook events |
 | `/api/billing/portal` | GET | Return Stripe Customer Portal URL |
+
+## Quota Behavior Details
+
+### Free tier (default)
+- 5 lifetime uploads per user (`FREE_UPLOAD_LIMIT` in `src/lib/server/config.ts`)
+- Quota is global (across all rooms)
+- Enforced at two layers: client pre-check (`GET /api/upload/quota`) and server atomic INSERT...SELECT
+
+### Subscribed (`plan: 'image_upload'`, `status: 'active'`)
+- Unlimited uploads
+- `GET /api/upload/quota` returns `{ limit: -1, canUpload: true, plan: 'image_upload' }`
+
+### After cancellation (`status: 'canceled'` or `past_due`)
+- Existing uploads remain accessible (images in messages still load)
+- New uploads blocked if lifetime count >= 5
+- `GET /api/upload/quota` returns `{ canUpload: false, canceled: true }` — UI shows "Subscription expired" instead of "Upload limit reached"
+- User can resubscribe via the same UpgradeModal
+
+### Rate limiting
+- 30 uploads per user per hour (enforced in `hooks.server.ts` via KV rate limiter)
+- Returns HTTP 429 when exceeded
+
+### Error codes
+| Status | Meaning |
+|--------|---------|
+| 402 | Quota exceeded (free tier) or subscription expired |
+| 413 | File too large (> 10 MB) |
+| 415 | File type not allowed or magic bytes mismatch |
+| 429 | Rate limit exceeded |
 
 ## UI Components
 

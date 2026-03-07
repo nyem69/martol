@@ -20,11 +20,10 @@
 	} = $props();
 
 	let now = $state(Date.now());
-	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
-	const htmlBody = $derived(renderMarkdown(message.body));
-
 	let lightboxSrc = $state<string | null>(null);
 	let lightboxAlt = $state('');
+	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
+	const htmlBody = $derived(renderMarkdown(message.body));
 
 	$effect(() => {
 		const interval = setInterval(() => {
@@ -69,6 +68,7 @@
 	data-dbid={message.dbId ?? undefined}
 >
 	<!-- Bubble -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
 		style="background: {message.isOwn

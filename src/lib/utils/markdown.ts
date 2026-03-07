@@ -47,6 +47,7 @@ const purify = DOMPurify();
 
 // Validate attributes after sanitization
 purify.addHook('afterSanitizeAttributes', (node) => {
+	// Force external links to open in new tab with noopener
 	if (node.tagName === 'A') {
 		node.setAttribute('rel', 'noopener noreferrer');
 		node.setAttribute('target', '_blank');

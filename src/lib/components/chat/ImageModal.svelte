@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
 	import { X } from '@lucide/svelte';
+	import { trapFocus } from '$lib/utils/focus-trap';
 
 	let {
 		src,
@@ -13,6 +14,7 @@
 		onClose: () => void;
 	} = $props();
 
+	let dialogEl: HTMLDivElement | undefined = $state();
 	let closeBtn: HTMLButtonElement | undefined;
 	let prevFocus: HTMLElement | null = null;
 
@@ -36,6 +38,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div
+	bind:this={dialogEl}
 	class="fixed inset-0 z-50 flex items-center justify-center p-4"
 	style="background: rgba(0, 0, 0, 0.85);"
 	role="dialog"
@@ -46,7 +49,7 @@
 	<button
 		class="absolute inset-0 cursor-default border-none bg-transparent"
 		onclick={onClose}
-		aria-label={m.chat_close()}
+		aria-label={m.image_close()}
 		tabindex="-1"
 	></button>
 
@@ -55,7 +58,7 @@
 		class="absolute top-4 right-4 z-10 cursor-pointer rounded-full p-2 transition-opacity hover:opacity-70"
 		style="background: var(--bg-elevated); color: var(--text);"
 		onclick={onClose}
-		aria-label={m.chat_close()}
+		aria-label={m.image_close()}
 	>
 		<X size={20} />
 	</button>

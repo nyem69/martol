@@ -78,6 +78,10 @@ STRIPE_PRO_PRICE_ID = ""
 # HMAC_SIGNING_SECRET
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
+# STRIPE_PRICE_ID
+
+# CSAM scanning: enable in Cloudflare dashboard → Caching > Configuration > CSAM Scanning Tool
+# Image responses are cached via Workers Cache API so they flow through the scanning pipeline.
 
 [ai]
 binding = "AI"

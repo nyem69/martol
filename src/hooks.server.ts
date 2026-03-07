@@ -558,6 +558,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	// ── Upload rate limit: 30 per user per hour ──
+	if (isUpload && event.locals.user) {
+		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
+		if (kv) {
+			const uploadLimit = await checkRateLimit(kv, {
+				key: `upload-user:${event.locals.user.id}`,
+				maxRequests: 30,
+				windowSeconds: 3600
+			});
+			if (!uploadLimit.allowed) {
+				return new Response(
+					JSON.stringify({ message: 'Too many uploads. Try again later.' }),
+					{ status: 429, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
+		}
+	}
+
 	// Process the request — ensure Hyperdrive client is closed after
 	try {
 		const response = await resolve(event);

@@ -12,6 +12,7 @@
 	import ReportModal from './ReportModal.svelte';
 	import OnlineBar from './OnlineBar.svelte';
 	import UsernamePrompt from './UsernamePrompt.svelte';
+	import UpgradeModal from './UpgradeModal.svelte';
 
 	let { data }: { data: any } = $props();
 
@@ -48,6 +49,10 @@
 	let actionsInFlight = $state(new Set<number>());
 	let loadingHistory = $state(false);
 	let hasMoreHistory = $state(initialMessages.length >= 50);
+	let uploading = $state(false);
+	let uploadFilename = $state('');
+	let showUpgradeModal = $state(false);
+	let upgradeWasCanceled = $state(false);
 
 	// [I11] All members see action cards; only owner/lead get approve/reject buttons
 	const canApproveActions = userRole === 'owner' || userRole === 'lead';
@@ -171,6 +176,68 @@
 		reportTarget = { messageId, messageBody };
 	}
 
+	const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+	const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+	async function handleUploadImage(file: File) {
+		if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+			store.error = m.upload_error_type();
+			return;
+		}
+		if (file.size > MAX_FILE_SIZE) {
+			store.error = m.upload_error_size();
+			return;
+		}
+
+		// Check quota before uploading
+		try {
+			const quotaRes = await fetch('/api/upload/quota');
+			if (quotaRes.ok) {
+				const quota = (await quotaRes.json()) as { canUpload: boolean; canceled?: boolean };
+				if (!quota.canUpload) {
+					upgradeWasCanceled = quota.canceled ?? false;
+					showUpgradeModal = true;
+					return;
+				}
+			}
+		} catch {
+			// Non-critical — server will enforce quota anyway
+		}
+
+		uploadFilename = file.name;
+		uploading = true;
+
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+
+			const res = await fetch('/api/upload', { method: 'POST', body: formData });
+
+			if (res.status === 402) {
+				uploading = false;
+				uploadFilename = '';
+				showUpgradeModal = true;
+				return;
+			}
+			if (!res.ok) {
+				let errMsg = 'Upload failed';
+				try { const d = (await res.json()) as { message?: string }; errMsg = d?.message || errMsg; } catch {}
+				store.error = errMsg;
+				return;
+			}
+
+			const data = (await res.json()) as { filename: string; key: string };
+
+			// Send as message with r2: image marker
+			store.sendMessage(`![${data.filename}](r2:${data.key})`);
+		} catch {
+			store.error = 'Upload failed';
+		} finally {
+			uploading = false;
+			uploadFilename = '';
+		}
+	}
+
 	onMount(() => {
 		store.connect();
 		loadRecentActions();
@@ -288,4 +355,8 @@
 		messageBody={reportTarget.messageBody}
 		onClose={() => (reportTarget = null)}
 	/>
+{/if}
+
+{#if showUpgradeModal}
+	<UpgradeModal wasCanceled={upgradeWasCanceled} onClose={() => (showUpgradeModal = false)} />
 {/if}
