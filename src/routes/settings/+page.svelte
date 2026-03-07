@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, Mail } from '@lucide/svelte';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, Mail, BookOpen, LifeBuoy } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
 
 	let { data } = $props();
@@ -393,7 +393,7 @@
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-<div class="flex min-h-dvh justify-center px-4 py-8 overflow-y-auto h-dvh" style="background: var(--bg);">
+<div class="flex min-h-dvh justify-center px-4 py-8 pb-16 overflow-y-auto h-dvh" style="background: var(--bg);">
 	<div class="w-full max-w-lg">
 		<!-- Back to chat -->
 		<button
@@ -439,7 +439,7 @@
 				</span>
 				<div
 					class="rounded-md px-3 py-2 text-sm"
-					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+					style="background: var(--bg); border: 1px solid var(--border); color: {isOnCooldown ? 'var(--text-muted)' : 'var(--text)'}; font-family: var(--font-mono); opacity: {isOnCooldown ? '0.6' : '1'};"
 				>
 					{currentUsername || '—'}
 				</div>
@@ -448,75 +448,75 @@
 			<!-- Cooldown warning -->
 			{#if isOnCooldown}
 				<div
-					class="mb-4 rounded-md px-3 py-2 text-xs"
+					class="rounded-md px-3 py-2 text-xs"
 					style="background: color-mix(in oklch, var(--accent) 10%, transparent); border: 1px solid color-mix(in oklch, var(--accent) 25%, transparent); color: var(--accent);"
 				>
 					{m.settings_username_cooldown()} — {cooldownDaysLeft} day{cooldownDaysLeft === 1 ? '' : 's'} remaining
 				</div>
-			{/if}
-
-			<!-- New username input -->
-			<div class="mb-3">
-				<label
-					for="new-username"
-					class="mb-1 block text-xs"
-					style="color: var(--text-muted);"
-				>
-					{m.settings_username_new()}
-				</label>
-				<input
-					id="new-username"
-					type="text"
-					bind:value={newUsername}
-					placeholder="my_username"
-					maxlength="32"
-					disabled={isOnCooldown || saving}
-					data-testid="new-username-input"
-					class="w-full rounded-md px-3 py-2.5 text-sm"
-					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
-				/>
-				<p class="mt-1 text-[11px]" style="color: var(--text-muted);">
-					{m.settings_username_rules()}
-				</p>
-			</div>
-
-			<!-- Error / success -->
-			{#if errorMsg}
-				<div
-					class="mb-3 rounded-md px-3 py-2 text-xs"
-					style="background: color-mix(in oklch, var(--danger) 10%, transparent); color: var(--danger);"
-					role="alert"
-				>
-					{errorMsg}
+			{:else}
+				<!-- New username input (hidden during cooldown) -->
+				<div class="mb-3">
+					<label
+						for="new-username"
+						class="mb-1 block text-xs"
+						style="color: var(--text-muted);"
+					>
+						{m.settings_username_new()}
+					</label>
+					<input
+						id="new-username"
+						type="text"
+						bind:value={newUsername}
+						placeholder="my_username"
+						maxlength="32"
+						disabled={saving}
+						data-testid="new-username-input"
+						class="w-full rounded-md px-3 py-2.5 text-sm"
+						style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+					/>
+					<p class="mt-1 text-[11px]" style="color: var(--text-muted);">
+						{m.settings_username_rules()}
+					</p>
 				</div>
-			{/if}
 
-			{#if successMsg}
-				<div
-					class="mb-3 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
-					style="background: color-mix(in oklch, var(--success) 10%, transparent); color: var(--success);"
-					role="status"
-				>
-					<Check size={14} />
-					{successMsg}
-				</div>
-			{/if}
-
-			<!-- Save button -->
-			<button
-				onclick={handleSaveUsername}
-				disabled={!canSave}
-				data-testid="save-username-btn"
-				class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-				style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
-			>
-				{#if saving}
-					<Loader size={14} class="animate-spin" />
-					{m.settings_username_saving()}
-				{:else}
-					{m.settings_username_save()}
+				<!-- Error / success -->
+				{#if errorMsg}
+					<div
+						class="mb-3 rounded-md px-3 py-2 text-xs"
+						style="background: color-mix(in oklch, var(--danger) 10%, transparent); color: var(--danger);"
+						role="alert"
+					>
+						{errorMsg}
+					</div>
 				{/if}
-			</button>
+
+				{#if successMsg}
+					<div
+						class="mb-3 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
+						style="background: color-mix(in oklch, var(--success) 10%, transparent); color: var(--success);"
+						role="status"
+					>
+						<Check size={14} />
+						{successMsg}
+					</div>
+				{/if}
+
+				<!-- Save button -->
+				<button
+					onclick={handleSaveUsername}
+					disabled={!canSave}
+					data-testid="save-username-btn"
+					class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+					style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px; font-family: var(--font-mono);"
+				>
+					{#if saving}
+						<Loader size={14} class="animate-spin" />
+						{m.settings_username_saving()}
+					{:else}
+						{m.settings_username_save()}
+					{/if}
+				</button>
+			{/if}
 		</section>
 
 		<!-- ═══ ACCOUNT INFO SECTION ═══ -->
@@ -1088,5 +1088,28 @@
 				</div>
 			{/if}
 		</section>
+
+		<!-- ═══ FOOTER LINKS ═══ -->
+		<div
+			class="mt-6 flex items-center justify-center gap-6 text-xs"
+			style="color: var(--text-muted);"
+		>
+			<a
+				href="/docs"
+				class="inline-flex items-center gap-1.5 transition-opacity hover:opacity-80"
+				style="color: var(--text-muted);"
+			>
+				<BookOpen size={14} />
+				Guide
+			</a>
+			<a
+				href="/support"
+				class="inline-flex items-center gap-1.5 transition-opacity hover:opacity-80"
+				style="color: var(--text-muted);"
+			>
+				<LifeBuoy size={14} />
+				Support
+			</a>
+		</div>
 	</div>
 </div>
