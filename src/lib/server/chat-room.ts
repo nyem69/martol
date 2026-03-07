@@ -959,10 +959,41 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					await this.sendError(ws, 'unauthorized', `Only owner or lead can ${name} actions`);
 					return;
 				}
-				const actionId = parseInt(args.trim(), 10);
-				if (isNaN(actionId) || actionId <= 0) {
-					await this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
-					return;
+				const argTrimmed = args.trim();
+				let actionId: number;
+				if (argTrimmed === '') {
+					// No ID given — find the most recent pending action in this room
+					const latest = await this.withDb(async (db) => {
+						const [row] = await db
+							.select({ id: pendingActions.id })
+							.from(pendingActions)
+							.where(and(eq(pendingActions.orgId, orgId), eq(pendingActions.status, 'pending')))
+							.orderBy(desc(pendingActions.id))
+							.limit(1);
+						return row;
+					});
+					if (!latest) {
+						await this.safeSend(ws, {
+							type: 'message',
+							message: {
+								localId: `sys-${Date.now()}`,
+								serverSeqId: 0,
+								senderId: 'system',
+								senderName: 'System',
+								senderRole: 'system',
+								body: `No pending actions to ${name}.`,
+								timestamp: new Date().toISOString()
+							}
+						});
+						return;
+					}
+					actionId = latest.id;
+				} else {
+					actionId = parseInt(argTrimmed, 10);
+					if (isNaN(actionId) || actionId <= 0) {
+						await this.sendError(ws, 'invalid_message', 'Usage: /' + name + ' <action_id>');
+						return;
+					}
 				}
 				await this.handleActionApproval(ws, orgId, userId, role, actionId, name);
 				break;
