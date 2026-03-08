@@ -174,6 +174,7 @@
 							<input
 								type="text"
 								bind:value={renameValue}
+								aria-label={m.chat_room_name_placeholder()}
 								class="create-room-input flex-1"
 								data-testid="rename-room-input"
 								autofocus
@@ -242,6 +243,7 @@
 								type="text"
 								bind:value={newRoomName}
 								placeholder={m.chat_room_name_placeholder()}
+								aria-label={m.chat_room_name_placeholder()}
 								class="create-room-input flex-1"
 								data-testid="create-room-input"
 								autofocus

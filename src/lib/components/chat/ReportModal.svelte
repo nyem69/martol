@@ -138,6 +138,7 @@
 		{:else}
 			<!-- Reason radio buttons -->
 			<fieldset class="mb-4 space-y-2">
+				<legend class="sr-only">{m.report_title()}</legend>
 				{#each reasons as r (r.value)}
 					<label
 						class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors"
@@ -164,6 +165,7 @@
 				style="background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border);"
 				rows="3"
 				placeholder={m.report_details_placeholder()}
+				aria-label={m.report_details_placeholder()}
 				bind:value={details}
 				data-testid="report-details"
 			></textarea>

@@ -815,6 +815,7 @@
 					type="text"
 					bind:value={passkeyName}
 					placeholder={m.passkey_name_placeholder()}
+					aria-label={m.passkey_name_placeholder()}
 					disabled={registering}
 					data-testid="passkey-name-input"
 					class="flex-1 rounded-md px-3 py-2.5 text-sm"

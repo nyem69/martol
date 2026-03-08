@@ -424,12 +424,14 @@
 									type="email"
 									bind:value={inviteEmail}
 									placeholder={m.chat_invite_email_placeholder()}
+									aria-label={m.chat_invite_email_placeholder()}
 									class="agent-input"
 									data-testid="invite-email-input"
 								/>
 								<div class="flex items-center gap-2">
 									<select
 										bind:value={inviteRole}
+										aria-label={m.role_member()}
 										class="agent-input flex-1"
 										data-testid="invite-role-select"
 									>
@@ -742,6 +744,7 @@
 										type="text"
 										bind:value={newAgentName}
 										placeholder={m.agent_label_placeholder()}
+											aria-label={m.agent_label_placeholder()}
 										class="agent-input"
 										data-testid="agent-name-input"
 									/>

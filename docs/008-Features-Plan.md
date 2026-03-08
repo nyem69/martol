@@ -1,7 +1,7 @@
 # Pre-Launch Feature Plan
 
 **Date:** 2026-03-04
-**Status:** Phases 0-4 complete. Phase 5-6 in progress.
+**Status:** Phases 0-4 complete. Phase 5 KIV. Phase 6 in progress (NCMEC blocking image uploads).
 **Inputs:** Business study (001), external review (002), startup myths (003), final review (004), codebase audit
 
 ---
@@ -194,17 +194,17 @@ Monetization. Build after simulation engine and chat polish — users need to hi
 
 ---
 
-### Phase 5: Distribution Prep (Week 5-7)
+### Phase 5: Distribution Prep (Week 5-7) -- KIV
 
 Ship distribution mechanics BEFORE the HN launch. These create the viral loops.
 
-| Item | Description |
-|------|-------------|
-| "Open in Martol" badge | GitHub badge: click -> create room for repo + agent + API key. Multiple rooms per repo allowed (different keys, isolated history). Slug uses random suffix to avoid cross-user collisions on the UNIQUE index. Rate limiting (not yet implemented) is the abuse control, not per-repo uniqueness. |
-| OpenClaw migration guide | Blog post: "Keep the Power, Lose the Risk" — how to move from local agents to governed execution |
-| HN launch post | "Show HN: Martol — AI agents that show you what they'll do before they do it" |
-| Security incident response template | Pre-written blog post template: "Here's how martol prevents [X] class of attack" — ready for next agent security incident |
-| MCP registry listing | List martol's MCP endpoint in MCP directories/registries |
+| Item | Description | Status |
+|------|-------------|--------|
+| "Open in Martol" badge | GitHub badge: click -> create room for repo + agent + API key. Multiple rooms per repo allowed (different keys, isolated history). Slug uses random suffix to avoid cross-user collisions on the UNIQUE index. Rate limiting (not yet implemented) is the abuse control, not per-repo uniqueness. | Done |
+| OpenClaw migration guide | Blog post: "Keep the Power, Lose the Risk" — how to move from local agents to governed execution | KIV — research at `_data/006-OpenClaw.md`, no blog infra |
+| HN launch post | "Show HN: Martol — AI agents that show you what they'll do before they do it" | Done — `docs/show-hn.md` |
+| Security incident response template | Pre-written blog post template: "Here's how martol prevents [X] class of attack" — ready for next agent security incident | Done — `docs/security-incident-template.md` |
+| MCP registry listing | List martol's MCP endpoint in MCP directories/registries | Done — `docs/mcp-registry.md` ready, not yet submitted |
 
 **Exit criteria:** Badge generates working room links. Migration guide published. HN post drafted and reviewed.
 
@@ -214,16 +214,16 @@ Ship distribution mechanics BEFORE the HN launch. These create the viral loops.
 
 Production readiness before opening the doors.
 
-| Item | Description |
-|------|-------------|
-| Image scanning pipeline | Cloudflare Images + Workers AI for CSAM/NSFW detection. Blocks upload feature launch |
-| NCMEC registration | Legal requirement before accepting user-generated images |
-| Orphan R2 cleanup | Cron job: delete R2 objects with no DB reference older than 24h |
-| Email change + 72-hour undo | Design exists. Implement: change request -> confirmation email -> 72h undo window |
-| Rate limit audit | Review all endpoints for appropriate limits. Ensure fail-closed (503) when KV unavailable |
-| Load testing | k6 scripts: 100 concurrent users, 10 rooms, 5 agents each. Target: < 200ms p95 message delivery |
-| Sentry integration | Error tracking + performance monitoring in production |
-| Accessibility audit | WCAG 2.1 AA compliance on all interactive elements |
+| Item | Description | Status |
+|------|-------------|--------|
+| Image scanning pipeline | Cloudflare Images + Workers AI for CSAM/NSFW detection. Blocks upload feature launch | Partial — scaffolding in `image-scan.ts`, placeholder model (resnet-50). Blocked by NCMEC |
+| NCMEC registration | Legal requirement before accepting user-generated images | **BLOCKING** — plan at `docs/legal/NCMEC.md`, all items unchecked |
+| Orphan R2 cleanup | Cron job: delete R2 objects with no DB reference older than 24h | Done — `worker-entry.ts` cron handler |
+| Email change + 72-hour undo | Design exists. Implement: change request -> confirmation email -> 72h undo window | Done — full flow with dual email, revert, 30-day cooldown |
+| Rate limit audit | Review all endpoints for appropriate limits. Ensure fail-closed (503) when KV unavailable | Done — 11 rate-limited paths, all critical paths fail-closed |
+| Load testing | k6 scripts: 100 concurrent users, 10 rooms, 5 agents each. Target: < 200ms p95 message delivery | Partial — scripts at `tests/load/`, need to run |
+| Sentry integration | Error tracking + performance monitoring in production | Done — client + worker + version metadata |
+| Accessibility audit | WCAG 2.1 AA compliance on all interactive elements | Partial — extensive ARIA in components, no formal audit |
 
 **Exit criteria:** Image uploads enabled. Load test passes. Sentry capturing errors. No WCAG AA violations on critical flows.
 

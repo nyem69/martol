@@ -187,7 +187,8 @@
 		background: color-mix(in oklch, var(--bg-surface) 60%, transparent);
 	}
 
-	:global(.group):hover .msg-action {
+	:global(.group):hover .msg-action,
+	:global(.group):focus-within .msg-action {
 		opacity: 1;
 	}
 
