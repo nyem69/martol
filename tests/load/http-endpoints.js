@@ -18,7 +18,7 @@ export const options = {
 	],
 	thresholds: {
 		http_req_duration: ['p(95)<500'],  // 95th percentile < 500ms
-		http_req_failed: ['rate<0.05']     // Error rate < 5%
+		checks: ['rate>0.95']              // 95%+ checks must pass
 	}
 };
 
