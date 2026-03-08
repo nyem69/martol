@@ -74,6 +74,13 @@ export const attachments = pgTable(
 			.default('skipped')
 			.notNull()
 			.$type<'pending' | 'processing' | 'indexed' | 'failed' | 'skipped'>(),
+		parserName: text('parser_name'),
+		parserVersion: text('parser_version'),
+		extractedTextBytes: bigint('extracted_text_bytes', { mode: 'number' }),
+		extractionErrorCode: text('extraction_error_code'),
+		extractedAt: timestamp('extracted_at', { withTimezone: true }),
+		indexedAt: timestamp('indexed_at', { withTimezone: true }),
+		contentSha256: text('content_sha256'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
@@ -540,11 +547,49 @@ export const documentChunks = pgTable(
 		content: text('content').notNull(),
 		vectorId: text('vector_id').notNull(),
 		tokenCount: integer('token_count').notNull(),
+		pageStart: integer('page_start'),
+		pageEnd: integer('page_end'),
+		charStart: integer('char_start'),
+		charEnd: integer('char_end'),
+		chunkHash: text('chunk_hash'),
+		embeddingModel: text('embedding_model'),
+		embeddingDim: integer('embedding_dim'),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 	},
 	(table) => [
 		index('idx_doc_chunks_attachment').on(table.attachmentId),
 		index('idx_doc_chunks_org').on(table.orgId),
+		foreignKey({ columns: [table.attachmentId], foreignColumns: [attachments.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
+	]
+);
+
+/**
+ * Ingestion Jobs — tracks async document processing jobs.
+ * Enables retries, error tracking, and operational visibility.
+ */
+export const ingestionJobs = pgTable(
+	'ingestion_jobs',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		attachmentId: bigint('attachment_id', { mode: 'number' }).notNull(),
+		orgId: text('org_id').notNull(),
+		jobType: text('job_type')
+			.notNull()
+			.$type<'extract' | 'chunk' | 'embed' | 'reindex' | 'delete_cleanup'>(),
+		status: text('status')
+			.notNull()
+			.default('pending')
+			.$type<'pending' | 'running' | 'completed' | 'failed'>(),
+		attemptCount: integer('attempt_count').default(0).notNull(),
+		error: text('error'),
+		startedAt: timestamp('started_at', { withTimezone: true }),
+		finishedAt: timestamp('finished_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_ingestion_jobs_attachment').on(table.attachmentId),
+		index('idx_ingestion_jobs_status').on(table.status, table.createdAt),
 		foreignKey({ columns: [table.attachmentId], foreignColumns: [attachments.id] }).onDelete('cascade'),
 		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]
