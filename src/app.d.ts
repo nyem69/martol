@@ -3,6 +3,7 @@
 
 interface CloudflareEnv {
 	AI: Ai;
+	VECTORIZE: VectorizeIndex;
 	CACHE: KVNamespace;
 	HYPERDRIVE: Hyperdrive;
 	STORAGE: R2Bucket;
