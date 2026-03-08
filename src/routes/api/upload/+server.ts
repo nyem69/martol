@@ -10,8 +10,8 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
-import { attachments } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { attachments, subscriptions } from '$lib/server/db/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -94,6 +94,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		error(413, 'Request too large');
 	}
 
+	// Storage quota check
+	if (orgLimits.usage.storageBytes + contentLength > orgLimits.limits.maxStorageBytes) {
+		return new Response(
+			JSON.stringify({ error: { message: 'Storage limit reached. Delete files or upgrade to free up space.' } }),
+			{ status: 413, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
 	const formData = await request.formData();
 	const file = formData.get('file');
 	if (!file || !(file instanceof File)) error(400, 'No file provided');
@@ -149,6 +157,12 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			contentType: file.type,
 			sizeBytes: file.size
 		});
+
+		// Increment cached storage counter
+		await locals.db
+			.update(subscriptions)
+			.set({ storageBytesUsed: sql`${subscriptions.storageBytesUsed} + ${file.size}` })
+			.where(eq(subscriptions.orgId, activeOrgId));
 	} catch (dbErr) {
 		await r2.delete(r2Key).catch(() => {}); // best-effort R2 rollback
 		console.error('[Upload] DB insert failed, R2 object deleted:', dbErr);
