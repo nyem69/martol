@@ -687,7 +687,33 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			const updates: Record<string, StoredMessage> = {};
 			const failed: number[] = [];
 
+			// [C7] Build seqId → dbId map for replyTo translation.
+			// Agents send replyTo as serverSeqId (WAL sequence), but the DB FK
+			// expects a real messages.id. Resolve from already-flushed DO entries.
+			const seqToDbId = new Map<number, number>();
+			const allEntries = await this.ctx.storage.list<StoredMessage>({ prefix: 'msg:', limit: 500 });
+			for (const [key, msg] of allEntries) {
+				if (msg.flushed && msg.dbId) {
+					const seqId = parseInt(key.replace('msg:', ''), 10);
+					if (!isNaN(seqId)) seqToDbId.set(seqId, msg.dbId);
+				}
+			}
+
 			for (const { seqId, stored } of toFlush) {
+				// Resolve replyTo from WAL seqId to DB id.
+				// Agents send serverSeqId as replyTo; the DB expects messages.id.
+				let resolvedReplyTo: number | null = null;
+				if (stored.replyTo != null) {
+					const mapped = seqToDbId.get(stored.replyTo);
+					if (mapped) {
+						resolvedReplyTo = mapped;
+					} else {
+						// Not in WAL map — could be a real DB id (from web client) or
+						// a stale WAL ref. Pass through; FK constraint will catch invalids.
+						resolvedReplyTo = stored.replyTo;
+					}
+				}
+
 				try {
 					const [inserted] = await db
 						.insert(messagesTable)
@@ -702,13 +728,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 								| 'agent',
 							type: 'chat' as const,
 							body: stored.body,
-							replyTo: stored.replyTo ?? null,
+							replyTo: resolvedReplyTo,
 							createdAt: new Date(stored.timestamp)
 						})
 						.returning({ id: messagesTable.id });
 
 					stored.flushed = true;
 					stored.dbId = inserted.id;
+					seqToDbId.set(seqId, inserted.id); // Update map for later replyTo lookups
 					updates[storageKey(seqId)] = stored;
 					mappings.push({ localId: stored.localId, dbId: inserted.id });
 				} catch (insertErr) {
@@ -716,7 +743,58 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					const pgCode =
 						(insertErr as { code?: string })?.code ||
 						(insertErr as { cause?: { code?: string } })?.cause?.code;
-					// Constraint violations (23xxx) are permanent — mark as flushed to skip.
+
+					// 23503 = FK violation — likely bad replyTo. Retry without replyTo
+					// before giving up on the message entirely.
+					if (pgCode === '23503' && resolvedReplyTo != null) {
+						console.error(
+							`[ChatRoom] FK violation on seq=${seqId} replyTo=${resolvedReplyTo}, retrying without replyTo`
+						);
+						try {
+							const [retried] = await db
+								.insert(messagesTable)
+								.values({
+									orgId,
+									senderId: stored.senderId,
+									senderRole: stored.senderRole as
+										| 'owner'
+										| 'lead'
+										| 'member'
+										| 'viewer'
+										| 'agent',
+									type: 'chat' as const,
+									body: stored.body,
+									replyTo: null,
+									createdAt: new Date(stored.timestamp)
+								})
+								.returning({ id: messagesTable.id });
+
+							stored.flushed = true;
+							stored.dbId = retried.id;
+							seqToDbId.set(seqId, retried.id);
+							updates[storageKey(seqId)] = stored;
+							mappings.push({ localId: stored.localId, dbId: retried.id });
+							continue;
+						} catch (retryErr) {
+							// Retry also failed — fall through to skip logic
+							const retryCode =
+								(retryErr as { code?: string })?.code ||
+								(retryErr as { cause?: { code?: string } })?.cause?.code;
+							if (retryCode && retryCode.startsWith('23')) {
+								console.error(
+									`[ChatRoom] Skipping poison message seq=${seqId} (pg: ${retryCode}, sender: ${stored.senderId})`,
+									retryErr
+								);
+								stored.flushed = true;
+								updates[storageKey(seqId)] = stored;
+								failed.push(seqId);
+								continue;
+							}
+							throw retryErr;
+						}
+					}
+
+					// Other constraint violations (23xxx) are permanent — mark as flushed to skip.
 					// Transient errors (connection, timeout) should be retried.
 					if (pgCode && pgCode.startsWith('23')) {
 						console.error(
