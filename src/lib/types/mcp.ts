@@ -119,6 +119,14 @@ export const ticketUpdateSchema = z.object({
 	}),
 });
 
+export const docSearchSchema = z.object({
+	tool: z.literal('doc_search'),
+	params: z.object({
+		query: z.string().min(1).max(1000),
+		top_k: z.number().int().min(1).max(20).default(5),
+	}).default({ query: '', top_k: 5 }),
+});
+
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatSendSchema,
 	chatReadSchema,
@@ -132,6 +140,7 @@ export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	ticketReadSchema,
 	ticketCommentSchema,
 	ticketUpdateSchema,
+	docSearchSchema,
 ]);
 
 export type McpRequest = z.infer<typeof mcpRequestSchema>;
@@ -212,6 +221,20 @@ export interface TicketListItem {
 	category: string;
 	status: string;
 	created_at: string;
+}
+
+export interface DocSearchResultItem {
+	content: string;
+	filename: string;
+	chunk_index: number;
+	score: number;
+	char_start: number | null;
+	char_end: number | null;
+}
+
+export interface DocSearchResult {
+	results: DocSearchResultItem[];
+	total: number;
 }
 
 export interface TicketDetail extends TicketListItem {

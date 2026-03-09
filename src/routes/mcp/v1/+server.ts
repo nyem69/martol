@@ -13,6 +13,7 @@ import { ticketList } from '$lib/server/mcp/tools/ticket-list';
 import { ticketRead } from '$lib/server/mcp/tools/ticket-read';
 import { ticketComment } from '$lib/server/mcp/tools/ticket-comment';
 import { ticketUpdate } from '$lib/server/mcp/tools/ticket-update';
+import { docSearch } from '$lib/server/mcp/tools/doc-search';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.auth || !locals.db) {
@@ -99,6 +100,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			case 'ticket_update':
 				result = await ticketUpdate(req.params, agent, locals.db);
 				break;
+			case 'doc_search': {
+				const env = platform?.env;
+				if (!env?.VECTORIZE) {
+					return json({ ok: false, error: 'Document search not configured', code: 'vectorize_unavailable' }, { status: 503 });
+				}
+				result = await docSearch(req.params, agent, locals.db, env.AI, env.VECTORIZE);
+				break;
+			}
 			default: {
 				const _exhaustive: never = req;
 				return json(
