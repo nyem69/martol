@@ -595,3 +595,32 @@ export const ingestionJobs = pgTable(
 		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]
 );
+
+/**
+ * Versioned Project Brief
+ *
+ * Stores versioned brief snapshots per organization (room).
+ * A partial unique index enforces exactly one active brief per org.
+ * Old briefs are archived (status = 'archived') when a new version is saved.
+ */
+export const projectBrief = pgTable(
+	'project_brief',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		orgId: text('org_id').notNull(),
+		content: text('content').notNull(),
+		version: integer('version').notNull().default(1),
+		status: text('status').notNull().default('active').$type<'active' | 'archived'>(),
+		createdBy: text('created_by').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_project_brief_org_active')
+			.on(table.orgId)
+			.where(sql`status = 'active'`),
+		index('idx_project_brief_org_version').on(table.orgId, table.version),
+		check('chk_pb_status', sql`status IN ('active', 'archived')`),
+		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.createdBy], foreignColumns: [user.id] }).onDelete('restrict')
+	]
+);

@@ -135,6 +135,11 @@ export const docSearchSchema = z.object({
 	}).default({ query: '', top_k: 5 }),
 });
 
+export const briefGetActiveSchema = z.object({
+	tool: z.literal('brief_get_active'),
+	params: z.object({}).default({}),
+});
+
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatSendSchema,
 	chatEditSchema,
@@ -150,6 +155,7 @@ export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	ticketCommentSchema,
 	ticketUpdateSchema,
 	docSearchSchema,
+	briefGetActiveSchema,
 ]);
 
 export type McpRequest = z.infer<typeof mcpRequestSchema>;
@@ -209,6 +215,7 @@ export interface ChatWhoResult {
 	room_name: string;
 	self_user_id: string;
 	members: ChatWhoMember[];
+	brief: string | null;
 }
 
 export interface ActionSubmitResult {
@@ -264,4 +271,10 @@ export interface TicketDetail extends TicketListItem {
 		content: string;
 		created_at: string;
 	}>;
+}
+
+export interface BriefGetResult {
+	brief: string | null;
+	room_id: string;
+	version: number;
 }

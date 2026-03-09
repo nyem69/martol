@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader, LogOut, Send } from '@lucide/svelte';
+	import { X, ChevronDown, Check, Copy, ExternalLink, KeyRound, Trash2, Loader, LogOut, Send, FileText } from '@lucide/svelte';
 	import { organization } from '$lib/auth-client';
 	import { getAvailableCommands } from '$lib/chat/commands';
 	import { themeStore, THEMES } from '$lib/stores/theme.svelte';
@@ -39,6 +39,7 @@
 	// Collapsible section state — members open by default, rest collapsed
 	let sectionsOpen = $state<Record<string, boolean>>({
 		members: true,
+		brief: false,
 		invite: false,
 		guide: false,
 		theme: false,
@@ -129,6 +130,53 @@
 	let confirmPrevFocus: HTMLElement | null = null;
 
 	const canManageAgents = $derived(userRole === 'owner' || userRole === 'lead');
+	const canEditBrief = $derived(userRole === 'owner' || userRole === 'lead');
+
+	// ── Brief state ──
+	let briefText = $state('');
+	let briefLoading = $state(false);
+	let briefSaveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
+	let briefFetched = $state(false);
+
+	async function fetchBrief() {
+		if (!roomId) return;
+		briefLoading = true;
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/brief`);
+			const data: { ok?: boolean; brief?: string } = await res.json();
+			if (data.ok) briefText = data.brief ?? '';
+		} catch { /* silent */ }
+		briefLoading = false;
+		briefFetched = true;
+	}
+
+	async function saveBrief() {
+		if (!roomId) return;
+		briefSaveStatus = 'saving';
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/brief`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ brief: briefText })
+			});
+			const data: { ok?: boolean } = await res.json();
+			if (data.ok) {
+				briefSaveStatus = 'saved';
+				setTimeout(() => { if (briefSaveStatus === 'saved') briefSaveStatus = 'idle'; }, 2000);
+			} else {
+				briefSaveStatus = 'idle';
+			}
+		} catch {
+			briefSaveStatus = 'idle';
+		}
+	}
+
+	// Fetch brief when section opens
+	$effect(() => {
+		if (sectionsOpen.brief && !briefFetched) {
+			fetchBrief();
+		}
+	});
 
 	async function fetchAgents() {
 		try {
@@ -386,6 +434,79 @@
 								</p>
 							{/if}
 						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ═══ BRIEF SECTION ═══ -->
+		<div style="border-bottom: 1px solid var(--border);">
+			<button
+				class="section-toggle flex w-full items-center justify-between px-4 py-2.5"
+				onclick={() => toggleSection('brief')}
+				aria-expanded={sectionsOpen.brief}
+			>
+				<span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
+					<span class="inline-flex items-center gap-1">
+						<FileText size={11} />
+						{m.chat_brief()}
+					</span>
+				</span>
+				<span
+					class="transition-transform duration-150"
+					style="color: var(--text-muted); transform: rotate({sectionsOpen.brief ? '0' : '-90'}deg);"
+				>
+					<ChevronDown size={14} />
+				</span>
+			</button>
+
+			<div
+				class="section-body"
+				style="display: grid; grid-template-rows: {sectionsOpen.brief ? '1fr' : '0fr'}; transition: grid-template-rows 200ms ease;"
+			>
+				<div style="overflow: hidden;">
+					<div class="px-4 pb-3">
+						{#if briefLoading}
+							<div class="flex items-center gap-2 py-2">
+								<Loader size={12} class="animate-spin" style="color: var(--text-muted);" />
+							</div>
+						{:else}
+							<textarea
+								bind:value={briefText}
+								placeholder={m.chat_brief_placeholder()}
+								disabled={!canEditBrief}
+								maxlength={10000}
+								class="brief-textarea"
+								rows="6"
+								data-testid="brief-textarea"
+							></textarea>
+							<div class="mt-1.5 flex items-center justify-between">
+								<span class="text-[9px]" style="color: var(--text-muted); font-family: var(--font-mono);">
+									{briefText.length}/10,000
+								</span>
+								{#if canEditBrief}
+									<button
+										class="agent-btn"
+										onclick={saveBrief}
+										disabled={briefSaveStatus === 'saving'}
+										data-testid="brief-save-btn"
+									>
+										{#if briefSaveStatus === 'saving'}
+											<Loader size={11} class="animate-spin" />
+										{:else if briefSaveStatus === 'saved'}
+											<Check size={11} />
+											{m.chat_brief_saved()}
+										{:else}
+											{m.chat_brief_save()}
+										{/if}
+									</button>
+								{:else}
+									<span class="text-[9px]" style="color: var(--text-muted);">
+										{m.chat_brief_readonly()}
+									</span>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -1090,6 +1211,34 @@
 
 	.copy-btn:hover {
 		color: var(--accent);
+	}
+
+	.brief-textarea {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 0.375rem;
+		padding: 0.5rem;
+		font-size: 11px;
+		font-family: var(--font-mono);
+		color: var(--text);
+		outline: none;
+		width: 100%;
+		resize: vertical;
+		min-height: 4rem;
+		max-height: 16rem;
+	}
+
+	.brief-textarea:focus {
+		border-color: var(--accent);
+	}
+
+	.brief-textarea::placeholder {
+		color: var(--text-muted);
+	}
+
+	.brief-textarea:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
 	}
 
 	.agent-input {

@@ -423,5 +423,10 @@
   "billing_storage": "{used} / {limit} storage",
   "billing_ai_docs": "{count}/{limit} documents processed",
   "billing_ai_queries": "{count}/{limit} vector queries",
-  "billing_ai_cap": "AI processing paused — monthly cap reached"
+  "billing_ai_cap": "AI processing paused — monthly cap reached",
+  "chat_brief": "Project Brief",
+  "chat_brief_placeholder": "Describe your project goals, tech stack, conventions, and constraints for AI agents...",
+  "chat_brief_save": "Save",
+  "chat_brief_saved": "Saved",
+  "chat_brief_readonly": "Only room owners and leads can edit the brief"
 }
