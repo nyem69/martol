@@ -14,39 +14,12 @@ import { member, organization, user } from '$lib/server/db/auth-schema';
 import { messages, attachments } from '$lib/server/db/schema';
 import { eq, and, isNull, sql, asc, inArray } from 'drizzle-orm';
 import { sendEmail, exportReadyEmailTemplate } from '$lib/server/email';
+import { signExportToken } from '$lib/server/export-token';
 
 const R2_IMAGE_RE = /!\[[^\]]*\]\(r2:([^)]+)\)/g;
 const DOWNLOAD_EXPIRY_MS = 72 * 60 * 60 * 1000; // 72 hours
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // 50 MB cap for attachments in export
 const EXPORT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between exports per room
-
-/** HMAC-SHA256 sign a payload string */
-async function signToken(payload: string, secret: string): Promise<string> {
-	const key = await crypto.subtle.importKey(
-		'raw',
-		new TextEncoder().encode(secret),
-		{ name: 'HMAC', hash: 'SHA-256' },
-		false,
-		['sign']
-	);
-	const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
-	return btoa(String.fromCharCode(...new Uint8Array(sig)));
-}
-
-/** Verify HMAC-SHA256 signature */
-async function verifyToken(payload: string, signature: string, secret: string): Promise<boolean> {
-	const key = await crypto.subtle.importKey(
-		'raw',
-		new TextEncoder().encode(secret),
-		{ name: 'HMAC', hash: 'SHA-256' },
-		false,
-		['verify']
-	);
-	const sigBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
-	return crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payload));
-}
-
-export { verifyToken };
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Authentication required');
@@ -312,7 +285,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const tokenSecret = platform?.env?.RESEND_API_KEY || 'export-fallback-secret';
 	const payload = JSON.stringify({ key: exportKey, exp: expiresAt.getTime(), uid: userId });
 	const payloadB64 = btoa(payload);
-	const sig = await signToken(payload, tokenSecret);
+	const sig = await signExportToken(payload, tokenSecret);
 	const downloadToken = `${payloadB64}.${sig}`;
 
 	const baseUrl = platform?.env?.APP_BASE_URL || 'https://martol.plitix.com';

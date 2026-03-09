@@ -10,7 +10,7 @@
 
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
-import { verifyToken } from '../+server';
+import { verifyExportToken } from '$lib/server/export-token';
 
 export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Authentication required');
@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		error(400, 'Invalid token encoding');
 	}
 
-	const isValid = await verifyToken(payload, sig, tokenSecret);
+	const isValid = await verifyExportToken(payload, sig, tokenSecret);
 	if (!isValid) error(403, 'Invalid token signature');
 
 	let token: { key: string; exp: number; uid: string };
