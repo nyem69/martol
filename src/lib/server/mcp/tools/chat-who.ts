@@ -44,7 +44,8 @@ export async function chatWho(
 			room_name: org?.name ?? 'Unknown',
 			self_user_id: agent.agentUserId,
 			members: result,
-			brief: briefResult.content
+			brief: briefResult.content,
+			brief_version: briefResult.version
 		}
 	};
 }

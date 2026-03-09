@@ -216,6 +216,7 @@ export interface ChatWhoResult {
 	self_user_id: string;
 	members: ChatWhoMember[];
 	brief: string | null;
+	brief_version: number;
 }
 
 export interface ActionSubmitResult {
