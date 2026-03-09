@@ -1376,13 +1376,67 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 		<section class="page-section" id="badge">
 			<h2>Open in Martol Badge</h2>
 			<p>
-				Add a badge to your GitHub README so collaborators can open your repo in Martol with one click.
+				Add a badge to your GitHub README so collaborators can quickly create a Martol chat room
+				for your repository. The badge links to a setup page that provisions a room and agent key
+				— it does <strong>not</strong> access, read, or modify your code.
 			</p>
 
 			<h3>Preview</h3>
 			<p>
 				<img src="/badge/open-in-martol.svg" alt="Open in Martol" style="height: 28px;" />
 			</p>
+
+			<h3>What happens when someone clicks the badge</h3>
+			<ol>
+				<li><strong>Sign in</strong> — the user is redirected to Martol's login page if not already authenticated.</li>
+				<li><strong>Room created</strong> — a new Martol chat room is created, named after the repository (e.g. <code>owner/repo</code>). The user becomes the room owner.</li>
+				<li><strong>Agent key generated</strong> — a one-time API key is displayed so the user can connect an AI agent (e.g. via <code>martol-client</code>).</li>
+				<li><strong>Connection instructions shown</strong> — CLI commands and MCP config are displayed for quick setup.</li>
+			</ol>
+			<p>
+				If the user already owns a room for the same repository, they are redirected to that existing room instead of creating a duplicate.
+			</p>
+
+			<h3>What it can and cannot do</h3>
+			<div class="responsive-table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th style="width: 50%;">It does</th>
+							<th style="width: 50%;">It does NOT</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Create a Martol chat room named after your repo</td>
+							<td>Read, clone, or access your repository code</td>
+						</tr>
+						<tr>
+							<td>Generate an API key for connecting an AI agent</td>
+							<td>Install webhooks, apps, or integrations on GitHub</td>
+						</tr>
+						<tr>
+							<td>Use the repo name as a label (e.g. <code>owner/repo</code>)</td>
+							<td>Request any GitHub permissions or OAuth scopes</td>
+						</tr>
+						<tr>
+							<td>Redirect to an existing room if one already exists</td>
+							<td>Push commits, open PRs, or modify repository settings</td>
+						</tr>
+						<tr>
+							<td>Show CLI/MCP setup instructions for the agent</td>
+							<td>Access issues, pull requests, or any GitHub API on your behalf</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<div class="callout callout-info">
+				<strong>No GitHub access required.</strong> The badge URL only contains your repository name
+				as a plain string (e.g. <code>?repo=owner/repo</code>). Martol never connects to GitHub — it
+				uses the repo name solely as a room label. All repository access happens locally on your machine
+				when you run the <code>martol-client</code> agent, which operates on your local checkout.
+			</div>
 
 			<h3>Markdown</h3>
 			<pre><code>[![Open in Martol](https://martol.plitix.com/badge/open-in-martol.svg)](https://martol.plitix.com/open?repo=OWNER/REPO)</code></pre>
@@ -1393,9 +1447,8 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 &lt;/a&gt;</code></pre>
 
 			<div class="callout callout-info">
-				<strong>How it works:</strong> Replace <code>OWNER/REPO</code> with your GitHub repository
-				(e.g. <code>nyem69/martol-client</code>). Clicking the badge creates a Martol room for
-				your repo, generates an agent API key, and shows connection instructions.
+				<strong>Setup:</strong> Replace <code>OWNER/REPO</code> with your GitHub repository
+				(e.g. <code>nyem69/martol-client</code>).
 			</div>
 		</section>
 
