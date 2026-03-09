@@ -12,8 +12,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const orgLimits = await checkOrgLimits(locals.db, orgId);
 
 	return json({
-		canUpload: orgLimits.limits.uploadsEnabled,
+		canUpload: orgLimits.usage.uploads < orgLimits.limits.maxUploads,
 		plan: orgLimits.plan,
+		uploads: orgLimits.usage.uploads,
+		maxUploads: orgLimits.limits.maxUploads,
 		storageUsed: orgLimits.usage.storageBytes,
 		storageLimit: orgLimits.limits.maxStorageBytes,
 	});

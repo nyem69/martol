@@ -294,8 +294,17 @@
 					setTimeout(() => (uploadError = ''), 4000);
 				}
 			} else {
-				uploadError = m.chat_upload_failed();
-				setTimeout(() => (uploadError = ''), 4000);
+				try {
+					const errJson = JSON.parse(xhr.responseText);
+					if (errJson?.error?.code === 'upload_limit') {
+						uploadError = m.chat_upload_limit();
+					} else {
+						uploadError = m.chat_upload_failed();
+					}
+				} catch {
+					uploadError = m.chat_upload_failed();
+				}
+				setTimeout(() => (uploadError = ''), 6000);
 			}
 		};
 

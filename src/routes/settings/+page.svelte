@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, BookOpen, LifeBuoy, HardDrive, FileText, Search } from '@lucide/svelte';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, BookOpen, LifeBuoy, LayoutGrid } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
 
 	let { data } = $props();
@@ -226,18 +226,9 @@
 	// svelte-ignore state_referenced_locally
 	const billing = data.billing;
 	// svelte-ignore state_referenced_locally
+	const roomCount = data.roomCount;
+	// svelte-ignore state_referenced_locally
 	const isOwnerOrLead = data.isOwnerOrLead;
-	// svelte-ignore state_referenced_locally
-	const aiUsage = data.aiUsage;
-	// svelte-ignore state_referenced_locally
-	const aiAllowances = data.aiAllowances;
-
-	function formatBytes(bytes: number): string {
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-		return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-	}
 	let upgrading = $state(false);
 	let managing = $state(false);
 	let billingError = $state('');
@@ -985,41 +976,18 @@
 						</div>
 						<div
 							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
-							style="background: var(--bg); border: 1px solid var(--border); color: {billing.limits.uploadsEnabled
-								? 'var(--text)'
-								: 'var(--text-muted)'}; font-family: var(--font-mono);"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
-							<Upload size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_uploads()} —
-							{#if billing.limits.uploadsEnabled}
-								<span style="color: var(--success);">{m.billing_uploads_enabled()}</span>
-							{:else}
-								<span style="color: var(--text-muted);">{m.billing_uploads_disabled()}</span>
-							{/if}
+							<LayoutGrid size={12} style="color: var(--text-muted); flex-shrink: 0;" />
+							{m.billing_rooms({ count: String(roomCount), limit: String(billing.limits.maxRooms) })}
 						</div>
 						<div
 							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
-							<HardDrive size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_storage({ used: formatBytes(billing.usage.storageBytes), limit: formatBytes(billing.limits.maxStorageBytes) })}
+							<Upload size={12} style="color: var(--text-muted); flex-shrink: 0;" />
+							{m.billing_uploads_count({ count: String(billing.usage.uploads), limit: billing.plan === 'pro' ? '∞' : String(billing.limits.maxUploads) })}
 						</div>
-						{#if aiUsage}
-							<div
-								class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
-								style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
-							>
-								<FileText size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-								{m.billing_ai_docs({ count: String(aiUsage.doc_process), limit: String(aiAllowances.doc_process) })}
-							</div>
-							<div
-								class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
-								style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
-							>
-								<Search size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-								{m.billing_ai_queries({ count: String(aiUsage.vector_query), limit: String(aiAllowances.vector_query) })}
-							</div>
-						{/if}
 					</div>
 				</div>
 

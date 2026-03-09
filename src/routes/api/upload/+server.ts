@@ -82,10 +82,13 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!memberRecord) error(403, 'Not a member of this organization');
 	if (memberRecord.role === 'viewer') error(403, 'Viewers cannot upload files');
 
-	// Feature gate: check plan allows uploads
+	// Feature gate: check upload limits
 	const orgLimits = await checkOrgLimits(locals.db, activeOrgId);
-	if (!orgLimits.limits.uploadsEnabled) {
-		error(403, 'File uploads require a Pro plan.');
+	if (orgLimits.usage.uploads >= orgLimits.limits.maxUploads) {
+		return new Response(
+			JSON.stringify({ error: { message: 'Upload limit reached. Upgrade to Pro for unlimited uploads.', code: 'upload_limit' } }),
+			{ status: 403, headers: { 'Content-Type': 'application/json' } }
+		);
 	}
 
 	// Early reject oversized requests before buffering the full body

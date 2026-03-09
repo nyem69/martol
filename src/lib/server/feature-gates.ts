@@ -15,6 +15,7 @@ interface PlanLimits {
 	maxAgents: number;
 	maxMsgsPerDay: number;
 	maxStorageBytes: number;
+	maxUploads: number;
 	uploadsEnabled: boolean;
 }
 
@@ -23,7 +24,8 @@ const FREE_LIMITS: PlanLimits = {
 	maxAgents: 10,
 	maxMsgsPerDay: 1000,
 	maxStorageBytes: 100 * 1024 * 1024, // 100 MB
-	uploadsEnabled: false
+	maxUploads: 10,
+	uploadsEnabled: true
 };
 
 const PRO_LIMITS: PlanLimits = {
@@ -31,6 +33,7 @@ const PRO_LIMITS: PlanLimits = {
 	maxAgents: 999,
 	maxMsgsPerDay: 999999,
 	maxStorageBytes: 5 * 1024 * 1024 * 1024, // 5 GB
+	maxUploads: 999999,
 	uploadsEnabled: true
 };
 
@@ -38,7 +41,7 @@ export interface OrgLimitsResult {
 	plan: 'free' | 'pro';
 	status: 'active' | 'past_due' | 'canceled' | 'incomplete';
 	limits: PlanLimits;
-	usage: { users: number; agents: number; msgsToday: number; storageBytes: number };
+	usage: { users: number; agents: number; msgsToday: number; storageBytes: number; uploads: number };
 	foundingMember: boolean;
 	currentPeriodEnd: string | null;
 	cancelAtPeriodEnd: boolean;
@@ -86,9 +89,12 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 		.from(messages)
 		.where(and(eq(messages.orgId, orgId), gte(messages.createdAt, todayStart)));
 
-	// 5. Sum storage bytes
+	// 5. Sum storage bytes and count uploads
 	const [storageResult] = await db
-		.select({ total: sql<number>`coalesce(sum(${attachments.sizeBytes}), 0)::bigint` })
+		.select({
+			total: sql<number>`coalesce(sum(${attachments.sizeBytes}), 0)::bigint`,
+			count: sql<number>`count(*)::int`,
+		})
 		.from(attachments)
 		.where(eq(attachments.orgId, orgId));
 
@@ -100,7 +106,8 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 			users: users ?? 0,
 			agents: agents ?? 0,
 			msgsToday: msgCount?.count ?? 0,
-			storageBytes: Number(storageResult?.total ?? 0)
+			storageBytes: Number(storageResult?.total ?? 0),
+			uploads: storageResult?.count ?? 0
 		},
 		foundingMember: sub?.foundingMember === true,
 		currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
