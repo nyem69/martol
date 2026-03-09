@@ -3,6 +3,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, BookOpen, LifeBuoy, LayoutGrid } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { data } = $props();
 
@@ -421,12 +422,15 @@
 		</button>
 
 		<!-- Page title -->
-		<h1
-			class="mb-8 text-xl font-bold tracking-widest"
-			style="color: var(--accent); font-family: var(--font-mono);"
-		>
-			{m.settings_title()}
-		</h1>
+		<div class="mb-8 flex items-center justify-between">
+			<h1
+				class="text-xl font-bold tracking-widest"
+				style="color: var(--accent); font-family: var(--font-mono);"
+			>
+				{m.settings_title()}
+			</h1>
+			<ThemeToggle />
+		</div>
 
 		<!-- ═══ USERNAME SECTION ═══ -->
 		<section

@@ -4,6 +4,7 @@
 	import { tick } from 'svelte';
 	import { emailOtp, signIn } from '$lib/auth-client';
 	import * as m from '$lib/paraglide/messages';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { data } = $props();
 
@@ -283,7 +284,10 @@
 	{/if}
 </svelte:head>
 
-<div class="flex min-h-dvh items-center justify-center px-4" style="background: var(--bg);">
+<div class="flex min-h-dvh items-center justify-center px-4" style="background: var(--bg); position: relative;">
+	<div style="position: fixed; top: 16px; right: 16px; z-index: 120;">
+		<ThemeToggle />
+	</div>
 	<div
 		class="w-full max-w-sm"
 		style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem;"

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { children } = $props();
 </script>
@@ -13,7 +14,7 @@
 		class="w-full max-w-2xl"
 		style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem;"
 	>
-		<div class="mb-6">
+		<div class="mb-6 flex items-center justify-between">
 			<button
 				onclick={() => history.back()}
 				class="inline-flex items-center gap-1 text-sm hover:underline"
@@ -21,6 +22,7 @@
 			>
 				&larr; {m.login_back()}
 			</button>
+			<ThemeToggle />
 		</div>
 
 		{@render children()}

@@ -24,6 +24,7 @@
 		GraduationCap,
 		ScrollText
 	} from '@lucide/svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	function reveal(node: HTMLElement, opts: { stagger?: boolean } = {}) {
 		if (!opts.stagger) node.classList.add('reveal');
@@ -111,6 +112,10 @@
 		"license": "https://www.gnu.org/licenses/agpl-3.0.html"
 	})}</script>`}
 </svelte:head>
+
+<div class="theme-toggle-fixed">
+	<ThemeToggle />
+</div>
 
 <div class="landing scrollbar-thin">
 
@@ -499,6 +504,13 @@
 </div>
 
 <style>
+	.theme-toggle-fixed {
+		position: fixed;
+		top: 16px;
+		right: 16px;
+		z-index: 120;
+	}
+
 	/* ── Scrollable wrapper within fixed body ── */
 	.landing {
 		height: 100dvh;

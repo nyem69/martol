@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Loader, Plus, TicketCheck } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { data } = $props();
 
@@ -77,10 +78,13 @@
 
 <div class="support-page">
 	<div class="support-header">
-		<button class="back-link" onclick={() => goto('/chat')}>
+		<div style="display: flex; justify-content: space-between; align-items: center;">
+			<button class="back-link" onclick={() => goto('/chat')}>
 			<ArrowLeft size={16} />
 			{m.settings_back()}
 		</button>
+			<ThemeToggle />
+		</div>
 		<div class="header-row">
 			<div class="header-left">
 				<TicketCheck size={20} />

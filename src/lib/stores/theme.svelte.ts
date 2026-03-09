@@ -9,6 +9,8 @@ export interface ThemeDefinition {
 	id: string;
 	/** i18n key for the theme name */
 	nameKey: string;
+	/** Whether this theme is dark or light */
+	mode: 'dark' | 'light';
 	/** Preview colors for the swatch: [bg, surface, accent, text] */
 	preview: [string, string, string, string];
 	vars: Record<string, string>;
@@ -18,6 +20,7 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: 'forge',
 		nameKey: 'theme_forge',
+		mode: 'dark',
 		preview: ['#1e1e24', '#2a2a31', '#c8973a', '#e5e5e8'],
 		vars: {
 			'--bg': 'oklch(0.15 0.01 260)',
@@ -41,6 +44,7 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: 'obsidian',
 		nameKey: 'theme_obsidian',
+		mode: 'dark',
 		preview: ['#0a0a0c', '#111114', '#00d4aa', '#d0d0d4'],
 		vars: {
 			'--bg': 'oklch(0.10 0.005 270)',
@@ -64,6 +68,7 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: 'parchment',
 		nameKey: 'theme_parchment',
+		mode: 'light',
 		preview: ['#f0ebe3', '#e6e0d5', '#a0522d', '#2c2416'],
 		vars: {
 			'--bg': 'oklch(0.94 0.015 75)',
@@ -87,6 +92,7 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: 'neon',
 		nameKey: 'theme_neon',
+		mode: 'dark',
 		preview: ['#0d0d12', '#14141c', '#ff3c8e', '#e0e0e8'],
 		vars: {
 			'--bg': 'oklch(0.12 0.015 280)',
@@ -110,6 +116,7 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: 'patina',
 		nameKey: 'theme_patina',
+		mode: 'dark',
 		preview: ['#131a18', '#1a2320', '#5c9e82', '#c8d4ce'],
 		vars: {
 			'--bg': 'oklch(0.14 0.015 160)',
@@ -133,6 +140,7 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: 'daybreak',
 		nameKey: 'theme_daybreak',
+		mode: 'light',
 		preview: ['#f5f5f7', '#eaeaee', '#e06030', '#1c1c22'],
 		vars: {
 			'--bg': 'oklch(0.97 0.005 260)',
@@ -172,6 +180,14 @@ class ThemeStore {
 
 	get definition(): ThemeDefinition {
 		return THEMES.find((t) => t.id === this.current) ?? THEMES[0];
+	}
+
+	get isDark(): boolean {
+		return this.definition.mode === 'dark';
+	}
+
+	toggleDarkLight() {
+		this.set(this.isDark ? 'parchment' : 'forge');
 	}
 
 	set(id: string) {

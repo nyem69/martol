@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Shield } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { children } = $props();
 </script>
@@ -17,6 +18,7 @@
 			<a href="/admin/users" class="nav-link" data-testid="admin-nav-users">{m.admin_users()}</a>
 			<a href="/admin/tickets" class="nav-link" data-testid="admin-nav-tickets">{m.admin_tickets()}</a>
 		</div>
+		<ThemeToggle size={14} />
 		<button class="nav-back" onclick={() => goto('/chat')} data-testid="admin-back">
 			<ArrowLeft size={16} />
 			{m.settings_back()}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Check, X, Crown, Zap, Building2 } from '@lucide/svelte';
+	import { Check, X, Crown, Zap, Users, Building2 } from '@lucide/svelte';
 </script>
 
 <svelte:head>
@@ -101,21 +101,47 @@
 				</div>
 			</div>
 
-			<!-- Governance -->
+			<!-- Team -->
 			<div class="plan-card">
 				<div class="plan-header">
-					<div class="plan-icon gov">
+					<div class="plan-icon team">
+						<Users size={20} />
+					</div>
+					<h2 class="plan-name">Team</h2>
+					<div class="plan-price">
+						<span class="price-amount">$10</span>
+						<span class="price-period">/ user / month</span>
+					</div>
+					<p class="plan-desc">Pro for your whole team, one invoice</p>
+				</div>
+				<ul class="plan-features">
+					<li><Check size={14} class="feat-yes" /> Everything in Pro</li>
+					<li><Check size={14} class="feat-yes" /> Assign Pro to <strong>multiple users</strong></li>
+					<li><Check size={14} class="feat-yes" /> Centralized billing + invoice</li>
+					<li><Check size={14} class="feat-yes" /> Team member management</li>
+					<li><Check size={14} class="feat-yes" /> Shared room ownership</li>
+					<li><Check size={14} class="feat-yes" /> Priority support</li>
+				</ul>
+				<div class="plan-cta">
+					<a href="/settings" class="btn-plan btn-team">Start a Team</a>
+				</div>
+			</div>
+
+			<!-- Enterprise -->
+			<div class="plan-card">
+				<div class="plan-header">
+					<div class="plan-icon enterprise">
 						<Building2 size={20} />
 					</div>
-					<h2 class="plan-name">Governance</h2>
+					<h2 class="plan-name">Enterprise</h2>
 					<div class="plan-price">
 						<span class="price-amount">Custom</span>
 						<span class="price-period">contact us</span>
 					</div>
-					<p class="plan-desc">For enterprises requiring compliance and audit</p>
+					<p class="plan-desc">Compliance, audit, and governance at scale</p>
 				</div>
 				<ul class="plan-features">
-					<li><Check size={14} class="feat-yes" /> Everything in Pro</li>
+					<li><Check size={14} class="feat-yes" /> Everything in Team</li>
 					<li><Check size={14} class="feat-yes" /> Supervised AI workspaces</li>
 					<li><Check size={14} class="feat-yes" /> Graduated autonomy controls</li>
 					<li><Check size={14} class="feat-yes" /> SSO / SAML integration</li>
@@ -125,7 +151,7 @@
 					<li><Check size={14} class="feat-yes" /> On-premise deployment option</li>
 				</ul>
 				<div class="plan-cta">
-					<a href="mailto:hello@martol.app" class="btn-plan btn-gov">Contact Sales</a>
+					<a href="mailto:hello@martol.app" class="btn-plan btn-enterprise">Contact Sales</a>
 				</div>
 			</div>
 		</section>
@@ -198,19 +224,22 @@
 							<th>Feature</th>
 							<th>Free</th>
 							<th>Pro</th>
-							<th>Governance</th>
+							<th>Team</th>
+							<th>Enterprise</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr class="table-group"><td colspan="4">Account</td></tr>
+						<tr class="table-group"><td colspan="5">Account</td></tr>
 						<tr>
 							<td>Rooms (create/join)</td>
 							<td>100</td>
+							<td>Unlimited</td>
 							<td>Unlimited</td>
 							<td>Custom</td>
 						</tr>
 						<tr>
 							<td>Real-time WebSocket chat</td>
+							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -220,11 +249,27 @@
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
+						</tr>
+						<tr>
+							<td>Centralized billing</td>
+							<td><X size={14} class="feat-no" /></td>
+							<td><X size={14} class="feat-no" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
+						</tr>
+						<tr>
+							<td>Team member management</td>
+							<td><X size={14} class="feat-no" /></td>
+							<td><X size={14} class="feat-no" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 
-						<tr class="table-group"><td colspan="4">Agent Governance</td></tr>
+						<tr class="table-group"><td colspan="5">Agent Governance</td></tr>
 						<tr>
 							<td>Action approval workflow</td>
+							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -234,9 +279,11 @@
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 						<tr>
 							<td>Role &times; risk approval matrix</td>
+							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -246,18 +293,21 @@
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 						<tr>
 							<td>HMAC identity binding</td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 
-						<tr class="table-group"><td colspan="4">Storage &amp; RAG</td></tr>
+						<tr class="table-group"><td colspan="5">Storage &amp; RAG</td></tr>
 						<tr>
 							<td>File uploads (in your rooms)</td>
 							<td>10 files</td>
+							<td>Unlimited</td>
 							<td>Unlimited</td>
 							<td>Unlimited</td>
 						</tr>
@@ -265,10 +315,12 @@
 							<td>Storage (in your rooms)</td>
 							<td>100 MB</td>
 							<td>5 GB</td>
+							<td>5 GB</td>
 							<td>Custom</td>
 						</tr>
 						<tr>
 							<td>Max file size</td>
+							<td>10 MB</td>
 							<td>10 MB</td>
 							<td>10 MB</td>
 							<td>Custom</td>
@@ -277,24 +329,28 @@
 							<td>RAG document processing</td>
 							<td><X size={14} class="feat-no" /></td>
 							<td>50/month</td>
+							<td>50/user/month</td>
 							<td>Custom</td>
 						</tr>
 						<tr>
 							<td>Vector search queries</td>
 							<td><X size={14} class="feat-no" /></td>
 							<td>500/month</td>
+							<td>500/user/month</td>
 							<td>Custom</td>
 						</tr>
 						<tr>
 							<td>AI spending cap</td>
 							<td>—</td>
 							<td>$50/month</td>
+							<td>$50/user/month</td>
 							<td>Custom</td>
 						</tr>
 
-						<tr class="table-group"><td colspan="4">Security &amp; Auth</td></tr>
+						<tr class="table-group"><td colspan="5">Security &amp; Auth</td></tr>
 						<tr>
 							<td>Passwordless email OTP</td>
+							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -304,9 +360,11 @@
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 						<tr>
 							<td>SSO / SAML</td>
+							<td><X size={14} class="feat-no" /></td>
 							<td><X size={14} class="feat-no" /></td>
 							<td><X size={14} class="feat-no" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -316,17 +374,20 @@
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 						<tr>
 							<td>Data export (GDPR)</td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 
-						<tr class="table-group"><td colspan="4">Support</td></tr>
+						<tr class="table-group"><td colspan="5">Support</td></tr>
 						<tr>
 							<td>Community support</td>
+							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -336,9 +397,11 @@
 							<td><X size={14} class="feat-no" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
+							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 						<tr>
 							<td>SLA guarantee</td>
+							<td><X size={14} class="feat-no" /></td>
 							<td><X size={14} class="feat-no" /></td>
 							<td><X size={14} class="feat-no" /></td>
 							<td><Check size={14} class="feat-yes" /></td>
@@ -452,7 +515,7 @@
 	/* ── Main Content ──────────────────────────────────── */
 	.docs-main {
 		padding: 88px 48px 120px;
-		max-width: 1100px;
+		max-width: 1200px;
 		margin: 0 auto;
 		font-family: var(--font-serif);
 		font-size: 16.5px;
@@ -527,7 +590,7 @@
 	/* ── Pricing Cards ────────────────────────────────── */
 	.pricing-cards {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(4, 1fr);
 		gap: 20px;
 		margin-bottom: 32px;
 	}
@@ -591,7 +654,12 @@
 		color: var(--accent);
 	}
 
-	.plan-icon.gov {
+	.plan-icon.team {
+		background: oklch(0.65 0.15 145 / 0.12);
+		color: oklch(0.70 0.17 145);
+	}
+
+	.plan-icon.enterprise {
 		background: oklch(0.6 0.05 280 / 0.12);
 		color: oklch(0.7 0.08 280);
 	}
@@ -700,13 +768,21 @@
 
 	.btn-pro:hover { opacity: 0.9; }
 
-	.btn-gov {
+	.btn-team {
+		background: var(--bg);
+		border: 1px solid oklch(0.70 0.17 145);
+		color: oklch(0.70 0.17 145);
+	}
+
+	.btn-team:hover { background: oklch(0.70 0.17 145 / 0.08); }
+
+	.btn-enterprise {
 		background: var(--bg);
 		border: 1px solid var(--border);
 		color: var(--text);
 	}
 
-	.btn-gov:hover { background: var(--bg-elevated); }
+	.btn-enterprise:hover { background: var(--bg-elevated); }
 
 	/* ── Callouts ──────────────────────────────────────── */
 	.callout {
@@ -803,7 +879,7 @@
 		}
 	}
 
-	@media (min-width: 861px) and (max-width: 1024px) {
+	@media (min-width: 861px) and (max-width: 1200px) {
 		.pricing-cards {
 			grid-template-columns: 1fr 1fr;
 		}

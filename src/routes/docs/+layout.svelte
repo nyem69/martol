@@ -2,6 +2,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
 	import { ArrowLeft } from '@lucide/svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { children } = $props();
 
@@ -25,6 +26,7 @@
 			<span class="topnav-title">{m.app_name()}</span>
 			<span class="topnav-badge">docs</span>
 		</a>
+		<ThemeToggle size={14} />
 		<div class="topnav-tabs">
 			{#each tabs as tab}
 				<a
@@ -52,10 +54,10 @@
 		left: 0;
 		right: 0;
 		height: 48px;
-		background: rgba(8, 9, 10, 0.92);
+		background: color-mix(in oklch, var(--bg) 92%, transparent);
 		backdrop-filter: blur(16px) saturate(1.4);
 		-webkit-backdrop-filter: blur(16px) saturate(1.4);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+		border-bottom: 1px solid var(--border);
 		z-index: 110;
 		display: flex;
 		align-items: center;
@@ -70,14 +72,14 @@
 		width: 32px;
 		height: 32px;
 		border-radius: 6px;
-		color: rgba(255, 255, 255, 0.5);
+		color: var(--text-muted);
 		text-decoration: none;
 		transition: all 0.12s;
 	}
 
 	.back-link:hover {
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.08);
+		color: var(--text);
+		background: color-mix(in oklch, var(--text) 8%, transparent);
 	}
 
 	.topnav-brand {
@@ -106,16 +108,16 @@
 		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 500;
-		color: rgba(255, 255, 255, 0.95);
+		color: var(--text);
 		letter-spacing: -0.02em;
 	}
 
 	.topnav-badge {
 		font-family: var(--font-mono-alt);
 		font-size: 10px;
-		color: rgba(255, 255, 255, 0.5);
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		color: var(--text-muted);
+		background: color-mix(in oklch, var(--text) 6%, transparent);
+		border: 1px solid var(--border);
 		padding: 1px 6px;
 		border-radius: 3px;
 	}
@@ -129,7 +131,7 @@
 	.topnav-tab {
 		font-family: var(--font-mono-alt);
 		font-size: 12.5px;
-		color: rgba(255, 255, 255, 0.6);
+		color: var(--text-muted);
 		text-decoration: none;
 		padding: 6px 12px;
 		border-radius: 5px;
@@ -137,13 +139,13 @@
 	}
 
 	.topnav-tab:hover {
-		color: rgba(255, 255, 255, 0.95);
-		background: rgba(255, 255, 255, 0.08);
+		color: var(--text);
+		background: color-mix(in oklch, var(--text) 8%, transparent);
 	}
 
 	.topnav-tab.active {
-		color: oklch(0.82 0.15 65);
-		background: oklch(0.75 0.15 65 / 0.12);
+		color: var(--accent);
+		background: color-mix(in oklch, var(--accent) 12%, transparent);
 	}
 
 	@media (max-width: 640px) {

@@ -7,6 +7,7 @@
 		CheckCircle,
 		ExternalLink
 	} from '@lucide/svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	function reveal(node: HTMLElement) {
 		node.classList.add('reveal');
@@ -91,6 +92,10 @@
 	<meta name="twitter:description" content={m.security_subtitle()} />
 	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 </svelte:head>
+
+<div class="theme-toggle-fixed">
+	<ThemeToggle />
+</div>
 
 <div class="landing scrollbar-thin">
 
@@ -283,6 +288,13 @@
 </div>
 
 <style>
+	.theme-toggle-fixed {
+		position: fixed;
+		top: 16px;
+		right: 16px;
+		z-index: 120;
+	}
+
 	/* ── Scrollable wrapper ── */
 	.landing {
 		height: 100dvh;
