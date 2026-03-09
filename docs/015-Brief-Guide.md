@@ -1,7 +1,7 @@
 # Project Brief — Guide
 
 **Date:** 2026-03-10
-**Status:** Implemented (Phase A complete)
+**Status:** Implemented (Phase A + structured modal complete)
 
 ---
 
@@ -48,7 +48,7 @@ Do NOT touch the billing module — it ships separately.
 | Owner | Yes | Yes |
 | Lead (admin) | Yes | Yes |
 | Member | Yes | No |
-| Agent | Yes (via tools) | No |
+| Agent | Yes (via tools) | Yes (via `brief_update` tool) |
 
 ---
 
@@ -77,8 +77,11 @@ Agents have access to these tools:
 |------|-------------|------------|
 | `chat_who` | Get room info, members, and brief | None |
 | `brief_get_active` | Fetch the current active brief with version | None |
+| `brief_update` | Update individual brief sections (merge) | `goal?`, `stack?`, `conventions?`, `phase?`, `notes?` |
 
-Both tools return the brief content. `brief_get_active` is purpose-built for refreshing the brief mid-conversation, while `chat_who` provides the brief as part of broader room context.
+`brief_get_active` is purpose-built for refreshing the brief mid-conversation, while `chat_who` provides the brief as part of broader room context. `brief_update` allows agents to fill or update specific sections without overwriting the entire brief — only provided fields are merged.
+
+After a successful `brief_update`, the agent automatically re-fetches the full brief via `brief_get_active` to update its local state and system prompt.
 
 ---
 
@@ -183,7 +186,7 @@ On write, the KV cache is invalidated immediately.
 |--------|------|-------------|
 | `id` | bigserial | Primary key |
 | `org_id` | text | FK → organization.id (CASCADE on delete) |
-| `content` | text | Brief content (max 10,000 chars enforced at API level) |
+| `content` | text | Brief content — JSON (structured) or plain text (legacy). Max 10,000 chars. |
 | `version` | integer | Sequential version number |
 | `status` | text | `'active'` or `'archived'` |
 | `created_by` | text | FK → user.id (RESTRICT on delete) |
@@ -200,29 +203,45 @@ On write, the KV cache is invalidated immediately.
 
 ---
 
-## UI — Current Implementation
+## Structured Content Format
 
-The brief is currently edited in a collapsible section within the **MemberPanel** (right sidebar). It includes:
+The `content` column stores either structured JSON or legacy plain text. The `parseBriefContent()` function in `src/lib/brief-sections.ts` handles both:
 
-- Textarea with placeholder guidance
-- Live character counter (x/10,000)
-- Save button with status feedback (saving → saved → idle)
-- Error banner (red) on save failure
-- Conflict banner (yellow) on version conflict, with auto-reload
-- Read-only mode for non-owner/lead users
+- **JSON with `goal` key** → parsed into 5 sections: `goal`, `stack`, `conventions`, `phase`, `notes`
+- **Anything else** → treated as legacy plain text, placed entirely in the `notes` section
 
-### Planned: Brief Modal Dialog
+```json
+{
+  "goal": "Ship v2.0 of the admin dashboard by March 30",
+  "stack": "Next.js 15, TypeScript, Tailwind v4, Drizzle ORM, PostgreSQL",
+  "conventions": "Server components by default; Zod validation at boundaries",
+  "phase": "Migrating auth from NextAuth to Better Auth",
+  "notes": "Do NOT touch the billing module — it ships separately"
+}
+```
 
-The brief deserves a dedicated modal dialog for a better editing experience:
+When injected into agent system prompts, structured briefs render as markdown headings (`## Goal`, `## Stack`, etc.).
 
-- **More editing space** — the sidebar textarea is cramped (6 rows in a narrow panel)
-- **Version info** — show version number, last edited by, and timestamp
-- **Markdown preview** — side-by-side edit/preview for structured briefs
-- **Template suggestions** — pre-fill with common sections (Goals, Stack, Conventions)
-- **In-modal help** — explain what makes a good brief, with examples
-- **History** — list previous versions with ability to view (not yet restore)
+---
 
-The MemberPanel section would become a read-only preview with a "View / Edit" button that opens the modal.
+## UI
+
+### MemberPanel (Sidebar)
+
+The brief section in the MemberPanel shows a **read-only preview** of the first ~200 characters. For structured briefs, the preview combines the goal, stack, and phase fields.
+
+A **"View / Edit Brief"** button opens the full modal editor.
+
+### Brief Modal
+
+The modal provides a dedicated editing experience with:
+
+- **5 section textareas** — Goal, Stack, Conventions, Current Phase, Notes — each with guide text placeholders
+- **Version badge** — shows the current brief version number
+- **Character counter** — total across all sections (max 10,000)
+- **Save with conflict handling** — 409 conflict auto-reloads the brief
+- **Read-only mode** — non-owner/lead users see sections but cannot edit
+- **Keyboard navigation** — Escape to close, focus trapping, backdrop click to close
 
 ---
 
@@ -230,17 +249,21 @@ The MemberPanel section would become a read-only preview with a "View / Edit" bu
 
 | File | Purpose |
 |------|---------|
+| `src/lib/brief-sections.ts` | `BriefSections` type, parse/serialize/render helpers, `SECTION_META` |
 | `src/lib/server/db/schema.ts` | `projectBrief` table definition |
 | `src/lib/server/db/brief.ts` | Shared `getActiveBrief()` helper with KV caching |
 | `src/routes/api/rooms/[roomId]/brief/+server.ts` | REST API (GET/PUT) |
 | `src/lib/server/mcp/tools/brief-get.ts` | MCP `brief_get_active` tool |
+| `src/lib/server/mcp/tools/brief-update.ts` | MCP `brief_update` tool (merge sections) |
 | `src/lib/server/mcp/tools/chat-who.ts` | MCP `chat_who` tool (includes brief) |
-| `src/lib/types/mcp.ts` | `BriefGetResult`, `ChatWhoResult` types |
-| `src/lib/components/chat/MemberPanel.svelte` | Brief UI (edit/view) |
+| `src/lib/types/mcp.ts` | `BriefGetResult`, `BriefUpdateResult`, `ChatWhoResult` types |
+| `src/lib/components/chat/BriefModal.svelte` | Structured brief modal with 5 section textareas |
+| `src/lib/components/chat/MemberPanel.svelte` | Brief read-only preview + "View / Edit" button |
+| `src/lib/components/chat/ChatView.svelte` | Modal state wiring |
 | `messages/en.json` | i18n keys (`chat_brief_*`) |
-| `martol-client/martol_agent/tools.py` | Agent tool definition |
+| `martol-client/martol_agent/tools.py` | Agent tool definitions (including `brief_update`) |
 | `martol-client/martol_agent/base_wrapper.py` | Agent brief state + refresh |
-| `martol-client/martol_agent/wrapper.py` | System prompt injection |
+| `martol-client/martol_agent/wrapper.py` | Structured system prompt injection + `brief_update` handling |
 | `scripts/migrate-metadata-briefs.sql` | One-time legacy data migration |
 
 ---
