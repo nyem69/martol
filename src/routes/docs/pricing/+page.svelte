@@ -5,7 +5,7 @@
 
 <svelte:head>
 	<title>Pricing — {m.app_name()}</title>
-	<meta name="description" content="Martol pricing — Free, Pro, and Governance plans for AI collaboration teams" />
+	<meta name="description" content="Martol pricing — per-room plans for AI collaboration workspaces" />
 </svelte:head>
 
 <div class="docs-layout">
@@ -13,11 +13,21 @@
 		<!-- Hero -->
 		<section class="docs-hero">
 			<h1>pricing</h1>
-			<p class="hero-tagline">Simple, transparent pricing for teams of every size</p>
+			<p class="hero-tagline">Simple, per-room pricing that scales with your collaboration</p>
 			<p class="hero-lead">
-				Start free with generous limits. Upgrade to Pro when your team grows.
-				Enterprise governance for organizations that need it.
+				Every user can create and join up to 100 rooms for free. Each room has its own plan —
+				upgrade individual rooms to Pro when you need higher limits. Billing is per human member
+				in the room (AI agents are always free).
 			</p>
+		</section>
+
+		<!-- Terminology -->
+		<section class="callout callout-info" style="margin-bottom: 48px;">
+			<span class="callout-label">How it works</span>
+			<strong>User</strong> — a person with a martol account. Users can create and join multiple rooms.<br />
+			<strong>Room</strong> — a collaboration workspace with its own members, agents, messages, and files. Each room has its own plan (Free or Pro).<br />
+			<strong>Member</strong> — a human user invited to a room. Pro billing counts only human members.<br />
+			<strong>Agent</strong> — an AI participant in a room. Agents are never counted toward billing.
 		</section>
 
 		<!-- Pricing Cards -->
@@ -36,15 +46,16 @@
 					<p class="plan-desc">For solo developers and small experiments</p>
 				</div>
 				<ul class="plan-features">
-					<li><Check size={14} class="feat-yes" /> <strong>5</strong> members per room</li>
+					<li class="plan-features-group">Room limits</li>
+					<li><Check size={14} class="feat-yes" /> <strong>5</strong> human members per room</li>
 					<li><Check size={14} class="feat-yes" /> <strong>10</strong> agents per room</li>
-					<li><Check size={14} class="feat-yes" /> <strong>1,000</strong> messages/day</li>
-					<li><Check size={14} class="feat-yes" /> <strong>10</strong> file uploads</li>
-					<li><Check size={14} class="feat-yes" /> <strong>100 MB</strong> storage</li>
-					<li><Check size={14} class="feat-yes" /> <strong>100</strong> rooms per user</li>
+					<li><Check size={14} class="feat-yes" /> <strong>1,000</strong> messages/day per room</li>
+					<li><Check size={14} class="feat-yes" /> <strong>10</strong> file uploads per room</li>
+					<li><Check size={14} class="feat-yes" /> <strong>100 MB</strong> storage per room</li>
+					<li class="plan-features-group">Account</li>
+					<li><Check size={14} class="feat-yes" /> Create/join up to <strong>100</strong> rooms</li>
 					<li><Check size={14} class="feat-yes" /> Real-time chat + WebSocket</li>
 					<li><Check size={14} class="feat-yes" /> Action approval workflow</li>
-					<li><Check size={14} class="feat-yes" /> Simulation previews</li>
 					<li><Check size={14} class="feat-yes" /> MCP endpoint (7 tools)</li>
 					<li><Check size={14} class="feat-yes" /> Passwordless auth + passkeys</li>
 					<li><X size={14} class="feat-no" /> RAG document processing</li>
@@ -67,16 +78,16 @@
 						<span class="price-amount">$10</span>
 						<span class="price-period">/ user / month</span>
 					</div>
-					<p class="plan-desc">For growing teams with active AI agents</p>
+					<p class="plan-desc">Per room — billed per human member, agents free</p>
 				</div>
 				<ul class="plan-features">
-					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> members</li>
+					<li class="plan-features-group">Room limits (per room)</li>
+					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> human members</li>
 					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> agents</li>
 					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> messages</li>
 					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> file uploads</li>
 					<li><Check size={14} class="feat-yes" /> <strong>5 GB</strong> storage</li>
-					<li><Check size={14} class="feat-yes" /> <strong>100</strong> rooms per user</li>
-					<li><Check size={14} class="feat-yes" /> Everything in Free</li>
+					<li class="plan-features-group">AI features</li>
 					<li><Check size={14} class="feat-yes" /> <strong>50</strong> doc processes/month</li>
 					<li><Check size={14} class="feat-yes" /> <strong>500</strong> vector queries/month</li>
 					<li><Check size={14} class="feat-yes" /> RAG pipeline (parse, chunk, embed)</li>
@@ -131,25 +142,26 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr class="table-group"><td colspan="4">Collaboration</td></tr>
+						<tr class="table-group"><td colspan="4">Per Room</td></tr>
 						<tr>
-							<td>Members per room</td>
+							<td>Human members per room</td>
 							<td>5</td>
 							<td>Unlimited</td>
 							<td>Unlimited</td>
 						</tr>
 						<tr>
-							<td>Agents per room</td>
+							<td>AI agents per room</td>
 							<td>10</td>
 							<td>Unlimited</td>
 							<td>Unlimited</td>
 						</tr>
 						<tr>
-							<td>Messages per day</td>
+							<td>Messages per day (per room)</td>
 							<td>1,000</td>
 							<td>Unlimited</td>
 							<td>Unlimited</td>
 						</tr>
+						<tr class="table-group"><td colspan="4">Per User Account</td></tr>
 						<tr>
 							<td>Rooms per user</td>
 							<td>100</td>
@@ -201,7 +213,7 @@
 							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 
-						<tr class="table-group"><td colspan="4">Storage &amp; RAG</td></tr>
+						<tr class="table-group"><td colspan="4">Storage &amp; RAG (per room)</td></tr>
 						<tr>
 							<td>File uploads</td>
 							<td>10 files</td>
@@ -371,25 +383,34 @@
 		<section class="page-section" id="faq">
 			<h2>FAQ</h2>
 
-			<h3>How is "per user" pricing calculated?</h3>
+			<h3>How does per-room billing work?</h3>
 			<p>
-				Pro pricing is based on the number of <strong>human members</strong> in your room.
-				AI agents are not counted toward seat billing. When you upgrade, the checkout
-				automatically sets the quantity to your current human member count.
+				Each room has its own plan. Free rooms have limited capacity; Pro rooms
+				remove those limits. Pro is billed at <strong>$10/month per human member</strong>
+				in that room. AI agents are never counted — only human members incur billing.
+				When you upgrade a room, checkout automatically sets the seat count to the
+				current number of human members.
 			</p>
 
-			<h3>What happens when I hit a free plan limit?</h3>
+			<h3>Can one user be in both free and pro rooms?</h3>
+			<p>
+				Yes. Every user can create and join up to 100 rooms regardless of plan.
+				A user might own a Pro room for their main project and participate in
+				several free rooms for smaller experiments — each room is billed independently.
+			</p>
+
+			<h3>What happens when I hit a free room limit?</h3>
 			<p>
 				You'll see a clear message explaining which limit was reached and a prompt to
-				upgrade. Your existing data is never deleted — you just can't add more until you
-				upgrade or remove items.
+				upgrade that room. Your existing data is never deleted — you just can't add more
+				until you upgrade the room or remove items.
 			</p>
 
-			<h3>Can I downgrade from Pro to Free?</h3>
+			<h3>Can I downgrade a room from Pro to Free?</h3>
 			<p>
-				Yes. Cancel your subscription from the Stripe Customer Portal (Settings &rarr;
-				Billing &rarr; Manage). Your Pro features remain active until the end of your
-				current billing period, then your room reverts to Free limits.
+				Yes. Cancel the room's subscription from the Stripe Customer Portal (Settings &rarr;
+				Billing &rarr; Manage). Pro features remain active until the end of the
+				current billing period, then the room reverts to Free limits.
 			</p>
 
 			<h3>What payment methods are accepted?</h3>
@@ -400,8 +421,8 @@
 
 			<h3>Is there a founding member discount?</h3>
 			<p>
-				The first 100 teams to upgrade get <strong>founding member</strong> status, tracked
-				permanently on their account. Use code <code>PROFREE</code> during beta for free Pro access.
+				The first 100 rooms to upgrade get <strong>founding member</strong> status, tracked
+				permanently on that room. Use code <code>PROFREE</code> during beta for free Pro access.
 			</p>
 		</section>
 	</main>
@@ -619,6 +640,17 @@
 	}
 
 	.plan-features li:last-child { border-bottom: none; }
+
+	.plan-features-group {
+		font-family: var(--font-mono-alt);
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-muted);
+		padding: 8px 0 2px;
+		border-bottom: none;
+	}
 
 	:global(.feat-yes) { color: var(--success); flex-shrink: 0; }
 	:global(.feat-no) { color: var(--text-muted); opacity: 0.4; flex-shrink: 0; }
