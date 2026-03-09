@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
-	import { X, Loader, Check } from '@lucide/svelte';
+	import { X, Loader, Check, Bot } from '@lucide/svelte';
 	import {
 		type BriefSections,
 		SECTION_META,
@@ -15,13 +15,15 @@
 		currentBrief,
 		currentVersion,
 		canEdit,
-		onclose
+		onclose,
+		onAskAgent
 	}: {
 		orgId: string;
 		currentBrief: string;
 		currentVersion: number;
 		canEdit: boolean;
 		onclose: () => void;
+		onAskAgent: (() => void) | null;
 	} = $props();
 
 	const MAX_TOTAL = 10_000;
@@ -185,45 +187,65 @@
 		</div>
 
 		<!-- Footer -->
-		<div class="flex items-center justify-between border-t px-5 py-3" style="border-color: var(--border);">
-			<span
-				class="text-[9px]"
-				style="color: {charCount > MAX_TOTAL ? 'var(--danger, #ef4444)' : 'var(--text-muted)'}; font-family: var(--font-mono);"
-			>
-				{charCount.toLocaleString()}/{MAX_TOTAL.toLocaleString()}
-			</span>
+		<div class="flex flex-col gap-2 border-t px-5 py-3" style="border-color: var(--border);">
+			{#if saveStatus === 'error'}
+				<div class="rounded px-2 py-1.5 text-[10px]" style="background: var(--danger-bg, rgba(239,68,68,0.1)); color: var(--danger, #ef4444);" role="alert">
+					{m.chat_brief_save_error()}
+				</div>
+			{:else if saveStatus === 'conflict'}
+				<div class="rounded px-2 py-1.5 text-[10px]" style="background: var(--warning-bg, rgba(234,179,8,0.1)); color: var(--warning, #eab308);" role="alert">
+					{m.chat_brief_conflict()}
+				</div>
+			{/if}
+			<div class="flex items-center justify-between">
+				<span
+					class="text-[9px]"
+					style="color: {charCount > MAX_TOTAL ? 'var(--danger, #ef4444)' : 'var(--text-muted)'}; font-family: var(--font-mono);"
+				>
+					{charCount.toLocaleString()}/{MAX_TOTAL.toLocaleString()}
+				</span>
 
-			<div class="flex items-center gap-2" aria-live="polite">
-				{#if !canEdit}
-					<span class="text-[9px]" style="color: var(--text-muted);">
-						{m.chat_brief_readonly_hint()}
-					</span>
-				{:else}
-					{#if saveStatus === 'error'}
-						<span class="text-[9px]" style="color: var(--danger, #ef4444);">
-							{m.chat_brief_save_error()}
-						</span>
-					{:else if saveStatus === 'conflict'}
-						<span class="text-[9px]" style="color: var(--warning, #eab308);">
-							{m.chat_brief_conflict()}
+				<div class="flex items-center gap-2" aria-live="polite">
+					{#if !canEdit}
+						<span class="text-[9px]" style="color: var(--text-muted);">
+							{m.chat_brief_readonly_hint()}
 						</span>
 					{/if}
+					{#if onAskAgent}
+						<button
+							class="brief-btn brief-btn-secondary"
+							onclick={() => { onAskAgent?.(); onclose(); }}
+							data-testid="brief-modal-ask-agent"
+						>
+							<Bot size={12} />
+							{m.chat_brief_ask_agent()}
+						</button>
+					{/if}
 					<button
-						class="agent-btn"
-						onclick={save}
-						disabled={saveStatus === 'saving' || saveStatus === 'conflict' || charCount > MAX_TOTAL}
-						data-testid="brief-modal-save"
+						class="brief-btn brief-btn-secondary"
+						onclick={onclose}
+						data-testid="brief-modal-cancel"
 					>
-						{#if saveStatus === 'saving'}
-							<Loader size={11} class="animate-spin" />
-						{:else if saveStatus === 'saved'}
-							<Check size={11} />
-							{m.chat_brief_saved()}
-						{:else}
-							{m.chat_brief_save()}
-						{/if}
+						{m.cancel()}
 					</button>
-				{/if}
+					{#if canEdit}
+						<button
+							class="brief-btn brief-btn-primary"
+							onclick={save}
+							disabled={saveStatus === 'saving' || saveStatus === 'conflict' || charCount > MAX_TOTAL}
+							data-testid="brief-modal-save"
+						>
+							{#if saveStatus === 'saving'}
+								<Loader size={11} class="animate-spin" />
+							{:else if saveStatus === 'saved'}
+								<Check size={11} />
+								{m.chat_brief_saved()}
+							{:else}
+								{m.chat_brief_save()}
+							{/if}
+						</button>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>
@@ -257,5 +279,39 @@
 	.brief-section-textarea:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
+	}
+
+	.brief-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 5px 12px;
+		border-radius: 6px;
+		font-size: 11px;
+		font-family: var(--font-mono);
+		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 150ms ease;
+		border: 1px solid var(--border);
+	}
+
+	.brief-btn:hover:not(:disabled) {
+		opacity: 0.85;
+	}
+
+	.brief-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.brief-btn-primary {
+		background: var(--accent);
+		color: var(--bg);
+		border-color: var(--accent);
+	}
+
+	.brief-btn-secondary {
+		background: transparent;
+		color: var(--text-muted);
 	}
 </style>

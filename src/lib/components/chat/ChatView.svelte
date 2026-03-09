@@ -375,5 +375,11 @@
 		currentVersion={briefModalData.version}
 		canEdit={userRole === 'owner' || userRole === 'lead'}
 		onclose={() => { briefModalData = null; }}
+		onAskAgent={(() => {
+			const agent = [...store.onlineUsers.entries()].find(([, u]) => u.role === 'agent');
+			if (!agent) return null;
+			const agentName = agent[1].name;
+			return () => { store.sendMessage(`@${agentName} please fill in the project brief using the brief_update tool`); };
+		})()}
 	/>
 {/if}
