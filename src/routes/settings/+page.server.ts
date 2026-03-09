@@ -10,6 +10,7 @@ import { user, member } from '$lib/server/db/auth-schema';
 import { usernameHistory, accountAudit } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
+import { getAiUsageForOrg, getFreeAllowances } from '$lib/server/ai-billing';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -89,6 +90,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		? await checkOrgLimits(db, activeOrgId)
 		: null;
 
+	const aiUsageData = activeOrgId ? await getAiUsageForOrg(db, activeOrgId) : null;
+
 	return {
 		profile: {
 			id: userData.id,
@@ -100,6 +103,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		lastUsernameChange: lastChange?.changedAt?.toISOString() ?? null,
 		lastEmailChange: lastEmailChange?.changedAt?.toISOString() ?? null,
 		billing,
-		isOwnerOrLead
+		isOwnerOrLead,
+		aiUsage: aiUsageData,
+		aiAllowances: getFreeAllowances()
 	};
 };
