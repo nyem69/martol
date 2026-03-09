@@ -55,7 +55,7 @@
 		background: rgba(8, 9, 10, 0.92);
 		backdrop-filter: blur(16px) saturate(1.4);
 		-webkit-backdrop-filter: blur(16px) saturate(1.4);
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 		z-index: 110;
 		display: flex;
 		align-items: center;
@@ -70,14 +70,14 @@
 		width: 32px;
 		height: 32px;
 		border-radius: 6px;
-		color: var(--text-muted);
+		color: rgba(255, 255, 255, 0.5);
 		text-decoration: none;
 		transition: all 0.12s;
 	}
 
 	.back-link:hover {
-		color: var(--text);
-		background: var(--bg-elevated);
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.08);
 	}
 
 	.topnav-brand {
@@ -106,16 +106,16 @@
 		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 500;
-		color: var(--text);
+		color: rgba(255, 255, 255, 0.95);
 		letter-spacing: -0.02em;
 	}
 
 	.topnav-badge {
 		font-family: var(--font-mono-alt);
 		font-size: 10px;
-		color: var(--text-muted);
-		background: var(--bg-elevated);
-		border: 1px solid var(--border);
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.12);
 		padding: 1px 6px;
 		border-radius: 3px;
 	}
@@ -129,7 +129,7 @@
 	.topnav-tab {
 		font-family: var(--font-mono-alt);
 		font-size: 12.5px;
-		color: var(--text-muted);
+		color: rgba(255, 255, 255, 0.6);
 		text-decoration: none;
 		padding: 6px 12px;
 		border-radius: 5px;
@@ -137,13 +137,13 @@
 	}
 
 	.topnav-tab:hover {
-		color: var(--text);
-		background: rgba(255, 255, 255, 0.04);
+		color: rgba(255, 255, 255, 0.95);
+		background: rgba(255, 255, 255, 0.08);
 	}
 
 	.topnav-tab.active {
-		color: var(--accent);
-		background: oklch(0.75 0.15 65 / 0.08);
+		color: oklch(0.82 0.15 65);
+		background: oklch(0.75 0.15 65 / 0.12);
 	}
 
 	@media (max-width: 640px) {
