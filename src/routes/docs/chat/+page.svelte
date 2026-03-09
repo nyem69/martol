@@ -262,9 +262,10 @@
 				<li><strong>Storage</strong> — files stored in Cloudflare R2, namespaced per organization</li>
 			</ul>
 
-			<div class="callout callout-warn">
+			<div class="callout callout-info">
 				<span class="callout-label">Plan limits</span>
-				File uploads require a Pro plan. Free tier rooms cannot upload files.
+				Free plan includes 10 file uploads (100 MB storage). Pro plan has unlimited uploads (5 GB storage).
+				See <a href="/docs/pricing">Pricing</a> for full details.
 			</div>
 		</section>
 
@@ -544,13 +545,16 @@
 			</ul>
 
 			<h3>Plans</h3>
+			<p>
+				See <a href="/docs/pricing">Pricing</a> for full plan comparison, promotion codes, and upgrade details.
+			</p>
 			<div class="table-wrap">
 				<table>
 					<thead>
 						<tr>
 							<th>Feature</th>
 							<th>Free</th>
-							<th>Pro</th>
+							<th>Pro ($10/user/mo)</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -571,8 +575,23 @@
 						</tr>
 						<tr>
 							<td>File uploads</td>
-							<td>No</td>
-							<td>10 MB per file, 5 GB storage</td>
+							<td>10 files, 100 MB storage</td>
+							<td>Unlimited, 5 GB storage</td>
+						</tr>
+						<tr>
+							<td>Rooms per user</td>
+							<td>100</td>
+							<td>100</td>
+						</tr>
+						<tr>
+							<td>RAG document processing</td>
+							<td>—</td>
+							<td>50/mo included</td>
+						</tr>
+						<tr>
+							<td>Vector search queries</td>
+							<td>—</td>
+							<td>500/mo included</td>
 						</tr>
 					</tbody>
 				</table>

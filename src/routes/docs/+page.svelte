@@ -319,7 +319,7 @@
 				<li><strong>Agent management</strong> — add agents, generate API keys, configure bindings</li>
 				<li><strong>Approval workflow</strong> — inline action cards with diff previews</li>
 				<li><strong>File sharing</strong> — image/PDF/text uploads stored in R2</li>
-				<li><strong>Billing</strong> — Stripe-powered plans (Free, Pro, Governance)</li>
+				<li><strong>Billing</strong> — Stripe-powered <a href="/docs/pricing">plans</a> (Free, Pro, Governance)</li>
 			</ul>
 			<p>
 				See <a href="/docs/chat">Chat Documentation</a> for a detailed feature guide.

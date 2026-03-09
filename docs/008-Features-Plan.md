@@ -186,9 +186,11 @@ Monetization. Build after simulation engine and chat polish — users need to hi
 
 | Tier | Price | Limits |
 |------|-------|--------|
-| Free | $0 | 5 users, 10 agents, 1000 msgs/day, no uploads |
-| Pro | $8/user/mo (annual) / $10/user/mo (monthly) | Unlimited users, agents, messages. 10MB uploads, 5GB storage |
+| Free | $0 | 5 users, 10 agents, 1000 msgs/day, 10 file uploads, 100 MB storage, 100 rooms/user |
+| Pro | $10/user/mo | Unlimited users, agents, messages, uploads. 10 MB/file, 5 GB storage. RAG pipeline (50 doc process + 500 vector queries/mo included, $50 AI cap) |
 | Governance | Contact us | Enterprise — listed on pricing page, not built |
+
+**Promotion codes:** `PROFREE` (100% off), `BETA50` (50% off) — enabled via `allow_promotion_codes: true` on Checkout session.
 
 **Exit criteria:** Free user hits limit -> upgrade prompt -> Stripe Checkout -> Pro features unlocked. Webhook handles renewals and cancellations.
 

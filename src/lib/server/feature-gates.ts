@@ -16,6 +16,7 @@ interface PlanLimits {
 	maxMsgsPerDay: number;
 	maxStorageBytes: number;
 	maxUploads: number;
+	maxRooms: number;
 	uploadsEnabled: boolean;
 }
 
@@ -25,6 +26,7 @@ const FREE_LIMITS: PlanLimits = {
 	maxMsgsPerDay: 1000,
 	maxStorageBytes: 100 * 1024 * 1024, // 100 MB
 	maxUploads: 10,
+	maxRooms: 100,
 	uploadsEnabled: true
 };
 
@@ -34,6 +36,7 @@ const PRO_LIMITS: PlanLimits = {
 	maxMsgsPerDay: 999999,
 	maxStorageBytes: 5 * 1024 * 1024 * 1024, // 5 GB
 	maxUploads: 999999,
+	maxRooms: 100,
 	uploadsEnabled: true
 };
 
@@ -114,4 +117,16 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 		cancelAtPeriodEnd: sub?.cancelAtPeriodEnd === true,
 		quantity: sub?.quantity ?? 0
 	};
+}
+
+/**
+ * Count how many rooms (organizations) a user belongs to.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function checkUserRoomCount(db: any, userId: string): Promise<number> {
+	const [result] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(member)
+		.where(and(eq(member.userId, userId), sql`${member.role} != 'agent'`));
+	return result?.count ?? 0;
 }

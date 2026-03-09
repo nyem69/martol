@@ -8,7 +8,8 @@
 	const tabs = [
 		{ href: '/docs', label: 'Overview' },
 		{ href: '/docs/chat', label: 'Chat' },
-		{ href: '/docs/client', label: 'Agent Client' }
+		{ href: '/docs/client', label: 'Agent Client' },
+		{ href: '/docs/pricing', label: 'Pricing' }
 	];
 
 	const currentPath = $derived(page.url.pathname);
