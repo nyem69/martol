@@ -135,7 +135,7 @@
 	// ── Brief state ──
 	let briefText = $state('');
 	let briefLoading = $state(false);
-	let briefSaveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
+	let briefSaveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
 	let briefFetched = $state(false);
 
 	async function fetchBrief() {
@@ -164,10 +164,10 @@
 				briefSaveStatus = 'saved';
 				setTimeout(() => { if (briefSaveStatus === 'saved') briefSaveStatus = 'idle'; }, 2000);
 			} else {
-				briefSaveStatus = 'idle';
+				briefSaveStatus = 'error';
 			}
 		} catch {
-			briefSaveStatus = 'idle';
+			briefSaveStatus = 'error';
 		}
 	}
 
@@ -478,6 +478,7 @@
 								maxlength={10000}
 								class="brief-textarea"
 								rows="6"
+								aria-label={m.chat_brief()}
 								data-testid="brief-textarea"
 							></textarea>
 							<div class="mt-1.5 flex items-center justify-between">
@@ -485,27 +486,36 @@
 									{briefText.length}/10,000
 								</span>
 								{#if canEditBrief}
-									<button
-										class="agent-btn"
-										onclick={saveBrief}
-										disabled={briefSaveStatus === 'saving'}
-										data-testid="brief-save-btn"
-									>
-										{#if briefSaveStatus === 'saving'}
-											<Loader size={11} class="animate-spin" />
-										{:else if briefSaveStatus === 'saved'}
-											<Check size={11} />
-											{m.chat_brief_saved()}
-										{:else}
-											{m.chat_brief_save()}
-										{/if}
-									</button>
+									<div class="flex items-center gap-2" aria-live="polite">
+										<button
+											class="agent-btn"
+											onclick={saveBrief}
+											disabled={briefSaveStatus === 'saving'}
+											data-testid="brief-save-btn"
+										>
+											{#if briefSaveStatus === 'saving'}
+												<Loader size={11} class="animate-spin" />
+											{:else if briefSaveStatus === 'saved'}
+												<Check size={11} />
+												{m.chat_brief_saved()}
+											{:else if briefSaveStatus === 'error'}
+												{m.chat_brief_save()}
+											{:else}
+												{m.chat_brief_save()}
+											{/if}
+										</button>
+									</div>
 								{:else}
 									<span class="text-[9px]" style="color: var(--text-muted);">
 										{m.chat_brief_readonly()}
 									</span>
 								{/if}
 							</div>
+							{#if briefSaveStatus === 'error'}
+								<div class="mt-1.5 rounded px-2 py-1.5 text-[10px]" style="background: var(--danger-bg, rgba(239,68,68,0.1)); color: var(--danger, #ef4444);" role="alert">
+									{m.chat_brief_save_error()}
+								</div>
+							{/if}
 						{/if}
 					</div>
 				</div>

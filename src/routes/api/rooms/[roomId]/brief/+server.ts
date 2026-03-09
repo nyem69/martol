@@ -11,19 +11,10 @@ import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
 import { member, organization } from '$lib/server/db/auth-schema';
 import { projectBrief } from '$lib/server/db/schema';
+import { getActiveBrief } from '$lib/server/db/brief';
 import { eq, and, sql } from 'drizzle-orm';
 
 const MAX_BRIEF_LENGTH = 10_000;
-
-function parseMetadata(raw: string | null | undefined): Record<string, unknown> {
-	if (!raw) return {};
-	try {
-		const parsed = JSON.parse(raw);
-		return typeof parsed === 'object' && parsed !== null ? parsed : {};
-	} catch {
-		return {};
-	}
-}
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user || !locals.session) {
@@ -47,31 +38,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		error(403, 'Not a member of this room');
 	}
 
-	// Try project_brief table first (active row)
-	const [activeBrief] = await db
-		.select({ content: projectBrief.content, version: projectBrief.version })
-		.from(projectBrief)
-		.where(and(eq(projectBrief.orgId, orgId), eq(projectBrief.status, 'active')))
-		.limit(1);
+	const brief = await getActiveBrief(db, orgId);
 
-	if (activeBrief) {
-		return json({ ok: true, brief: activeBrief.content, version: activeBrief.version });
-	}
-
-	// Fallback: organization.metadata
-	const [org] = await db
-		.select({ metadata: organization.metadata })
-		.from(organization)
-		.where(eq(organization.id, orgId))
-		.limit(1);
-
-	const meta = parseMetadata(org?.metadata);
-
-	return json({
-		ok: true,
-		brief: typeof meta.brief === 'string' ? meta.brief : '',
-		version: 0
-	});
+	return json({ ok: true, brief: brief.content ?? '', version: brief.version });
 };
 
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
@@ -105,7 +74,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	try {
 		body = await request.json();
 	} catch {
-		error(400, 'Invalid JSON');
+		return json({ ok: false, error: 'Invalid JSON' }, { status: 400 });
 	}
 
 	if (typeof body.brief !== 'string') {
@@ -116,29 +85,48 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 		return json({ ok: false, error: `brief exceeds ${MAX_BRIEF_LENGTH} characters` }, { status: 400 });
 	}
 
-	// Versioned insert in a transaction
-	await db.transaction(async (tx: typeof db) => {
-		// Get current max version for this org
-		const [{ maxVersion }] = await tx
-			.select({ maxVersion: sql<number>`COALESCE(MAX(${projectBrief.version}), 0)` })
-			.from(projectBrief)
-			.where(eq(projectBrief.orgId, orgId));
+	// Versioned insert in a transaction with serialization lock
+	let newVersion: number;
+	try {
+		newVersion = await db.transaction(async (tx: typeof db) => {
+			// Lock the org row to serialize concurrent brief updates
+			await tx
+				.select({ id: organization.id })
+				.from(organization)
+				.where(eq(organization.id, orgId))
+				.for('update');
 
-		// Archive current active brief (if any)
-		await tx
-			.update(projectBrief)
-			.set({ status: 'archived' })
-			.where(and(eq(projectBrief.orgId, orgId), eq(projectBrief.status, 'active')));
+			// Get current max version for this org
+			const [{ maxVersion }] = await tx
+				.select({ maxVersion: sql<number>`COALESCE(MAX(${projectBrief.version}), 0)` })
+				.from(projectBrief)
+				.where(eq(projectBrief.orgId, orgId));
 
-		// Insert new active version
-		await tx.insert(projectBrief).values({
-			orgId,
-			content: body.brief as string,
-			version: maxVersion + 1,
-			status: 'active',
-			createdBy: locals.user!.id
+			// Archive current active brief (if any)
+			await tx
+				.update(projectBrief)
+				.set({ status: 'archived' })
+				.where(and(eq(projectBrief.orgId, orgId), eq(projectBrief.status, 'active')));
+
+			// Insert new active version
+			const version = maxVersion + 1;
+			await tx.insert(projectBrief).values({
+				orgId,
+				content: body.brief as string,
+				version,
+				status: 'active',
+				createdBy: locals.user!.id
+			});
+
+			return version;
 		});
-	});
+	} catch (e: any) {
+		// Unique constraint violation from partial index = concurrent write conflict
+		if (e?.code === '23505') {
+			return json({ ok: false, error: 'Conflict: brief was updated by another user' }, { status: 409 });
+		}
+		throw e;
+	}
 
-	return json({ ok: true });
+	return json({ ok: true, version: newVersion });
 };
