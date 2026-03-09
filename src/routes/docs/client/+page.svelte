@@ -1438,6 +1438,25 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 				when you run the <code>martol-client</code> agent, which operates on your local checkout.
 			</div>
 
+			<h3>What if two people click the badge for the same repo?</h3>
+			<p>
+				Each person gets <strong>their own separate room</strong>. Rooms are scoped to the user who
+				created them — there is no shared global room per repository.
+			</p>
+			<p>
+				For example, if Alice and Bob both click the badge for <code>acme/dashboard</code>:
+			</p>
+			<ul>
+				<li>Alice gets her own room named <code>acme/dashboard</code>, where she is the owner.</li>
+				<li>Bob gets a separate room also named <code>acme/dashboard</code>, where he is the owner.</li>
+				<li>They cannot see each other's rooms, messages, or agents.</li>
+			</ul>
+			<p>
+				To collaborate in the <strong>same</strong> room, one person creates the room (via the badge or
+				manually), then invites others using the Invite section in the member panel. Invited users join
+				the existing room rather than creating a new one.
+			</p>
+
 			<h3>Markdown</h3>
 			<pre><code>[![Open in Martol](https://martol.plitix.com/badge/open-in-martol.svg)](https://martol.plitix.com/open?repo=OWNER/REPO)</code></pre>
 
