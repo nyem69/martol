@@ -1,11 +1,11 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Check, X, Crown, Zap, Building2 } from '@lucide/svelte';
+	import { Check, X, Crown, Zap, Building2, Users } from '@lucide/svelte';
 </script>
 
 <svelte:head>
 	<title>Pricing — {m.app_name()}</title>
-	<meta name="description" content="Martol pricing — per-room plans for AI collaboration workspaces" />
+	<meta name="description" content="Martol pricing — per-user plans for AI collaboration workspaces" />
 </svelte:head>
 
 <div class="docs-layout">
@@ -13,21 +13,21 @@
 		<!-- Hero -->
 		<section class="docs-hero">
 			<h1>pricing</h1>
-			<p class="hero-tagline">Simple, per-room pricing that scales with your collaboration</p>
+			<p class="hero-tagline">Pay per user, not per room</p>
 			<p class="hero-lead">
-				Every user can create and join up to 100 rooms for free. Each room has its own plan —
-				upgrade individual rooms to Pro when you need higher limits. Billing is per human member
-				in the room (AI agents are always free).
+				Upgrade your account to Pro and every room you create gets unlimited capacity.
+				Add team members to give them Pro privileges too. AI agents are always free.
 			</p>
 		</section>
 
-		<!-- Terminology -->
+		<!-- How it works -->
 		<section class="callout callout-info" style="margin-bottom: 48px;">
 			<span class="callout-label">How it works</span>
-			<strong>User</strong> — a person with a martol account. Users can create and join multiple rooms.<br />
-			<strong>Room</strong> — a collaboration workspace with its own members, agents, messages, and files. Each room has its own plan (Free or Pro).<br />
-			<strong>Member</strong> — a human user invited to a room. Pro billing counts only human members.<br />
-			<strong>Agent</strong> — an AI participant in a room. Agents are never counted toward billing.
+			<strong>User</strong> — a person with a martol account. Each user has their own plan (Free or Pro).<br />
+			<strong>Room</strong> — a collaboration workspace. Room limits are determined by the <strong>creator's plan</strong> at creation time.<br />
+			<strong>Member</strong> — a user invited to a room. Any mix of Free and Pro users can join any room.<br />
+			<strong>Agent</strong> — an AI participant in a room. Agents are never counted toward billing.<br />
+			<strong>Team</strong> — a Pro subscription that covers multiple users. Each team member gets full Pro privileges.
 		</section>
 
 		<!-- Pricing Cards -->
@@ -46,13 +46,13 @@
 					<p class="plan-desc">For solo developers and small experiments</p>
 				</div>
 				<ul class="plan-features">
-					<li class="plan-features-group">Room limits</li>
-					<li><Check size={14} class="feat-yes" /> <strong>5</strong> human members per room</li>
+					<li class="plan-features-group">Your rooms</li>
+					<li><Check size={14} class="feat-yes" /> <strong>5</strong> members per room</li>
 					<li><Check size={14} class="feat-yes" /> <strong>10</strong> agents per room</li>
-					<li><Check size={14} class="feat-yes" /> <strong>1,000</strong> messages/day per room</li>
-					<li><Check size={14} class="feat-yes" /> <strong>10</strong> file uploads per room</li>
-					<li><Check size={14} class="feat-yes" /> <strong>100 MB</strong> storage per room</li>
-					<li class="plan-features-group">Account</li>
+					<li><Check size={14} class="feat-yes" /> <strong>1,000</strong> messages/day</li>
+					<li><Check size={14} class="feat-yes" /> <strong>10</strong> file uploads</li>
+					<li><Check size={14} class="feat-yes" /> <strong>100 MB</strong> storage</li>
+					<li class="plan-features-group">Your account</li>
 					<li><Check size={14} class="feat-yes" /> Create/join up to <strong>100</strong> rooms</li>
 					<li><Check size={14} class="feat-yes" /> Real-time chat + WebSocket</li>
 					<li><Check size={14} class="feat-yes" /> Action approval workflow</li>
@@ -78,20 +78,22 @@
 						<span class="price-amount">$10</span>
 						<span class="price-period">/ user / month</span>
 					</div>
-					<p class="plan-desc">Per room — billed per human member, agents free</p>
+					<p class="plan-desc">Unlimited rooms, unlimited room capacity</p>
 				</div>
 				<ul class="plan-features">
-					<li class="plan-features-group">Room limits (per room)</li>
-					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> human members</li>
-					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> agents</li>
+					<li class="plan-features-group">Your rooms</li>
+					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> members per room</li>
+					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> agents per room</li>
 					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> messages</li>
 					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> file uploads</li>
 					<li><Check size={14} class="feat-yes" /> <strong>5 GB</strong> storage</li>
+					<li class="plan-features-group">Your account</li>
+					<li><Check size={14} class="feat-yes" /> <strong>Unlimited</strong> rooms</li>
+					<li><Check size={14} class="feat-yes" /> Everything in Free</li>
 					<li class="plan-features-group">AI features</li>
 					<li><Check size={14} class="feat-yes" /> <strong>50</strong> doc processes/month</li>
 					<li><Check size={14} class="feat-yes" /> <strong>500</strong> vector queries/month</li>
-					<li><Check size={14} class="feat-yes" /> RAG pipeline (parse, chunk, embed)</li>
-					<li><Check size={14} class="feat-yes" /> Semantic document search</li>
+					<li><Check size={14} class="feat-yes" /> RAG pipeline + semantic search</li>
 					<li><Check size={14} class="feat-yes" /> $50/mo AI spending cap</li>
 				</ul>
 				<div class="plan-cta">
@@ -99,36 +101,98 @@
 				</div>
 			</div>
 
-			<!-- Governance -->
+			<!-- Team -->
 			<div class="plan-card">
 				<div class="plan-header">
-					<div class="plan-icon gov">
-						<Building2 size={20} />
+					<div class="plan-icon team">
+						<Users size={20} />
 					</div>
-					<h2 class="plan-name">Governance</h2>
+					<h2 class="plan-name">Team</h2>
 					<div class="plan-price">
-						<span class="price-amount">Custom</span>
-						<span class="price-period">contact us</span>
+						<span class="price-amount">$10</span>
+						<span class="price-period">/ user / month</span>
 					</div>
-					<p class="plan-desc">For enterprises requiring compliance and audit</p>
+					<p class="plan-desc">Pro for your whole team, centrally managed</p>
 				</div>
 				<ul class="plan-features">
-					<li><Check size={14} class="feat-yes" /> Everything in Pro</li>
-					<li><Check size={14} class="feat-yes" /> SSO / SAML integration</li>
-					<li><Check size={14} class="feat-yes" /> Advanced audit logging</li>
-					<li><Check size={14} class="feat-yes" /> Custom retention policies</li>
-					<li><Check size={14} class="feat-yes" /> Dedicated support</li>
-					<li><Check size={14} class="feat-yes" /> SLA guarantees</li>
-					<li><Check size={14} class="feat-yes" /> Custom AI spending caps</li>
-					<li><Check size={14} class="feat-yes" /> On-premise deployment option</li>
+					<li><Check size={14} class="feat-yes" /> Everything in Pro for <strong>each member</strong></li>
+					<li><Check size={14} class="feat-yes" /> Add/remove members from billing</li>
+					<li><Check size={14} class="feat-yes" /> Each member gets full Pro privileges</li>
+					<li><Check size={14} class="feat-yes" /> Single invoice for the team</li>
+					<li><Check size={14} class="feat-yes" /> Priority support</li>
 				</ul>
 				<div class="plan-cta">
-					<a href="mailto:hello@martol.app" class="btn-plan btn-gov">Contact Sales</a>
+					<a href="/settings" class="btn-plan btn-team">Manage Team</a>
 				</div>
 			</div>
 		</section>
 
-		<!-- Detailed Comparison -->
+		<!-- Governance callout -->
+		<section class="callout callout-gov" style="margin-bottom: 72px;">
+			<span class="callout-label">Enterprise / Governance</span>
+			Need SSO/SAML, advanced audit logging, custom retention policies, SLA guarantees, or
+			on-premise deployment? <a href="mailto:hello@martol.app">Contact us</a> for a custom plan.
+		</section>
+
+		<!-- How room limits work -->
+		<section class="page-section" id="room-limits">
+			<h2>How Room Limits Work</h2>
+			<p>
+				When you create a room, it inherits the limits of <strong>your current plan</strong>.
+				A Pro user's rooms have unlimited capacity. A Free user's rooms are capped.
+				Any user — Free or Pro — can <em>join</em> any room, regardless of their own plan.
+			</p>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Limit</th>
+							<th>Room by Free creator</th>
+							<th>Room by Pro creator</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Human members</td>
+							<td>5</td>
+							<td>Unlimited</td>
+						</tr>
+						<tr>
+							<td>AI agents</td>
+							<td>10</td>
+							<td>Unlimited</td>
+						</tr>
+						<tr>
+							<td>Messages per day</td>
+							<td>1,000</td>
+							<td>Unlimited</td>
+						</tr>
+						<tr>
+							<td>File uploads</td>
+							<td>10</td>
+							<td>Unlimited</td>
+						</tr>
+						<tr>
+							<td>Storage</td>
+							<td>100 MB</td>
+							<td>5 GB</td>
+						</tr>
+						<tr>
+							<td>RAG document processing</td>
+							<td><X size={14} class="feat-no" /></td>
+							<td>50/month</td>
+						</tr>
+						<tr>
+							<td>Vector search queries</td>
+							<td><X size={14} class="feat-no" /></td>
+							<td>500/month</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<!-- Feature Comparison -->
 		<section class="page-section" id="comparison">
 			<h2>Feature Comparison</h2>
 			<div class="table-wrap">
@@ -137,35 +201,16 @@
 						<tr>
 							<th>Feature</th>
 							<th>Free</th>
-							<th>Pro</th>
+							<th>Pro / Team</th>
 							<th>Governance</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr class="table-group"><td colspan="4">Per Room</td></tr>
+						<tr class="table-group"><td colspan="4">Account</td></tr>
 						<tr>
-							<td>Human members per room</td>
-							<td>5</td>
-							<td>Unlimited</td>
-							<td>Unlimited</td>
-						</tr>
-						<tr>
-							<td>AI agents per room</td>
-							<td>10</td>
-							<td>Unlimited</td>
-							<td>Unlimited</td>
-						</tr>
-						<tr>
-							<td>Messages per day (per room)</td>
-							<td>1,000</td>
-							<td>Unlimited</td>
-							<td>Unlimited</td>
-						</tr>
-						<tr class="table-group"><td colspan="4">Per User Account</td></tr>
-						<tr>
-							<td>Rooms per user</td>
+							<td>Rooms (create/join)</td>
 							<td>100</td>
-							<td>100</td>
+							<td>Unlimited</td>
 							<td>Custom</td>
 						</tr>
 						<tr>
@@ -213,15 +258,15 @@
 							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 
-						<tr class="table-group"><td colspan="4">Storage &amp; RAG (per room)</td></tr>
+						<tr class="table-group"><td colspan="4">Storage &amp; RAG</td></tr>
 						<tr>
-							<td>File uploads</td>
+							<td>File uploads (in your rooms)</td>
 							<td>10 files</td>
 							<td>Unlimited</td>
 							<td>Unlimited</td>
 						</tr>
 						<tr>
-							<td>Storage</td>
+							<td>Storage (in your rooms)</td>
 							<td>100 MB</td>
 							<td>5 GB</td>
 							<td>Custom</td>
@@ -311,8 +356,9 @@
 		<section class="page-section" id="ai-usage">
 			<h2>AI Usage &amp; Metered Billing</h2>
 			<p>
-				Pro plans include monthly allowances for AI-powered features. Usage beyond the
-				free allowance is metered and billed at the rates below, up to your spending cap.
+				Pro users get monthly allowances for AI-powered features in their rooms.
+				Usage beyond the free allowance is metered and billed at the rates below,
+				up to your spending cap.
 			</p>
 
 			<div class="table-wrap">
@@ -341,7 +387,7 @@
 
 			<div class="callout callout-info">
 				<span class="callout-label">Spending cap</span>
-				Pro plans have a default <strong>$50/month AI spending cap</strong>. When the cap is
+				Pro accounts have a default <strong>$50/month AI spending cap</strong>. When the cap is
 				reached, document processing pauses and vector queries return an error until the
 				next billing cycle. The cap can be adjusted in your billing settings.
 			</div>
@@ -383,34 +429,40 @@
 		<section class="page-section" id="faq">
 			<h2>FAQ</h2>
 
-			<h3>How does per-room billing work?</h3>
+			<h3>What does "per user" mean?</h3>
 			<p>
-				Each room has its own plan. Free rooms have limited capacity; Pro rooms
-				remove those limits. Pro is billed at <strong>$10/month per human member</strong>
-				in that room. AI agents are never counted — only human members incur billing.
-				When you upgrade a room, checkout automatically sets the seat count to the
-				current number of human members.
+				You pay <strong>$10/month per user account</strong> that has Pro status.
+				This is not per room — a single Pro subscription unlocks Pro privileges across
+				all rooms you create and join. AI agents are never billed.
 			</p>
 
-			<h3>Can one user be in both free and pro rooms?</h3>
+			<h3>How do room limits work?</h3>
 			<p>
-				Yes. Every user can create and join up to 100 rooms regardless of plan.
-				A user might own a Pro room for their main project and participate in
-				several free rooms for smaller experiments — each room is billed independently.
+				A room inherits the limits of its <strong>creator's plan</strong>. If a Pro user
+				creates a room, that room has unlimited members, agents, and messages. If a Free
+				user creates a room, it's capped at 5 members, 10 agents, and 1,000 messages/day.
+				Any user (Free or Pro) can join any room.
 			</p>
 
-			<h3>What happens when I hit a free room limit?</h3>
+			<h3>What is a Team subscription?</h3>
+			<p>
+				A Team subscription lets you select and assign Pro status to multiple users
+				under a single invoice. Each team member gets the same privileges as an individual
+				Pro user — unlimited room capacity, RAG features, and more.
+			</p>
+
+			<h3>What happens when I hit a free plan limit?</h3>
 			<p>
 				You'll see a clear message explaining which limit was reached and a prompt to
-				upgrade that room. Your existing data is never deleted — you just can't add more
-				until you upgrade the room or remove items.
+				upgrade. Your existing data is never deleted — you just can't add more until you
+				upgrade your account or remove items.
 			</p>
 
-			<h3>Can I downgrade a room from Pro to Free?</h3>
+			<h3>Can I downgrade from Pro to Free?</h3>
 			<p>
-				Yes. Cancel the room's subscription from the Stripe Customer Portal (Settings &rarr;
-				Billing &rarr; Manage). Pro features remain active until the end of the
-				current billing period, then the room reverts to Free limits.
+				Yes. Cancel your subscription from the Stripe Customer Portal (Settings &rarr;
+				Billing &rarr; Manage). Your Pro features remain active until the end of your
+				current billing period, then your account reverts to Free limits.
 			</p>
 
 			<h3>What payment methods are accepted?</h3>
@@ -421,8 +473,8 @@
 
 			<h3>Is there a founding member discount?</h3>
 			<p>
-				The first 100 rooms to upgrade get <strong>founding member</strong> status, tracked
-				permanently on that room. Use code <code>PROFREE</code> during beta for free Pro access.
+				The first 100 users to upgrade get <strong>founding member</strong> status, tracked
+				permanently on their account. Use code <code>PROFREE</code> during beta for free Pro access.
 			</p>
 		</section>
 	</main>
@@ -518,7 +570,7 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 20px;
-		margin-bottom: 72px;
+		margin-bottom: 32px;
 	}
 
 	.plan-card {
@@ -580,9 +632,9 @@
 		color: var(--accent);
 	}
 
-	.plan-icon.gov {
-		background: oklch(0.6 0.05 280 / 0.12);
-		color: oklch(0.7 0.08 280);
+	.plan-icon.team {
+		background: oklch(0.65 0.12 160 / 0.12);
+		color: oklch(0.7 0.15 160);
 	}
 
 	.plan-name {
@@ -689,13 +741,51 @@
 
 	.btn-pro:hover { opacity: 0.9; }
 
-	.btn-gov {
+	.btn-team {
 		background: var(--bg);
 		border: 1px solid var(--border);
 		color: var(--text);
 	}
 
-	.btn-gov:hover { background: var(--bg-elevated); }
+	.btn-team:hover { background: var(--bg-elevated); }
+
+	/* ── Callouts ──────────────────────────────────────── */
+	.callout {
+		border-radius: 8px;
+		padding: 14px 18px;
+		margin-bottom: 20px;
+		font-size: 15px;
+	}
+
+	.callout-info {
+		background: oklch(0.7 0.12 240 / 0.08);
+		border: 1px solid oklch(0.7 0.12 240 / 0.2);
+	}
+
+	.callout-gov {
+		background: oklch(0.6 0.05 280 / 0.08);
+		border: 1px solid oklch(0.6 0.05 280 / 0.2);
+	}
+
+	.callout-gov .callout-label {
+		color: oklch(0.7 0.08 280);
+	}
+
+	.callout-gov a {
+		color: oklch(0.7 0.12 240);
+		text-decoration: underline;
+	}
+
+	.callout-label {
+		font-family: var(--font-mono-alt);
+		font-size: 11.5px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		display: block;
+		margin-bottom: 4px;
+		color: oklch(0.7 0.12 240);
+	}
 
 	/* ── Tables ────────────────────────────────────────── */
 	.table-wrap {
@@ -749,30 +839,6 @@
 		padding: 1px 6px;
 		border-radius: 4px;
 		color: var(--accent);
-	}
-
-	/* ── Callouts ──────────────────────────────────────── */
-	.callout {
-		border-radius: 8px;
-		padding: 14px 18px;
-		margin-bottom: 20px;
-		font-size: 15px;
-	}
-
-	.callout-info {
-		background: oklch(0.7 0.12 240 / 0.08);
-		border: 1px solid oklch(0.7 0.12 240 / 0.2);
-	}
-
-	.callout-label {
-		font-family: var(--font-mono-alt);
-		font-size: 11.5px;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		display: block;
-		margin-bottom: 4px;
-		color: oklch(0.7 0.12 240);
 	}
 
 	/* ── Responsive ────────────────────────────────────── */
