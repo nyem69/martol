@@ -659,24 +659,6 @@
 							{/each}
 						</div>
 
-						<!-- Documentation link -->
-						<a
-							href="/docs"
-							target="_blank"
-							class="flex items-center gap-1.5 text-[11px] font-medium"
-							style="color: var(--accent);"
-						>
-							<ExternalLink size={12} />
-							{m.guide_documentation()}
-						</a>
-						<a
-							href="/support"
-							class="flex items-center gap-1 text-[11px] hover:underline"
-							style="color: var(--accent);"
-						>
-							<ExternalLink size={12} />
-							{m.support_title()}
-						</a>
 					</div>
 				</div>
 			</div>
@@ -949,6 +931,27 @@
 					</div>
 				</div>
 			</div>
+		</div>
+
+		<!-- Documentation & Support -->
+		<div class="flex flex-col gap-1 px-4 py-3" style="border-top: 1px solid var(--border);">
+			<a
+				href="/docs"
+				target="_blank"
+				class="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] font-medium transition-opacity hover:opacity-80"
+				style="color: var(--accent);"
+			>
+				<ExternalLink size={13} />
+				{m.guide_documentation()}
+			</a>
+			<a
+				href="/support"
+				class="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] font-medium transition-opacity hover:opacity-80"
+				style="color: var(--accent);"
+			>
+				<ExternalLink size={13} />
+				{m.support_title()}
+			</a>
 		</div>
 	</div>
 
