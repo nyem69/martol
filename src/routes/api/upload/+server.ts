@@ -10,8 +10,8 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
-import { attachments } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { attachments, subscriptions } from '$lib/server/db/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -94,6 +94,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		error(413, 'Request too large');
 	}
 
+	// Storage quota check
+	if (orgLimits.usage.storageBytes + contentLength > orgLimits.limits.maxStorageBytes) {
+		return new Response(
+			JSON.stringify({ error: { message: 'Storage limit reached. Delete files or upgrade to free up space.' } }),
+			{ status: 413, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
 	const formData = await request.formData();
 	const file = formData.get('file');
 	if (!file || !(file instanceof File)) error(400, 'No file provided');
@@ -138,21 +146,51 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	});
 
+	// Determine if file is parseable for RAG
+	const isParseable = file.type === 'application/pdf' || file.type === 'text/plain' || file.type === 'text/markdown';
+
 	// Record in attachments table (message_id backfilled when message is persisted)
 	// Compensate on DB failure: delete the R2 object to prevent orphans
+	let insertedId: number | null = null;
 	try {
-		await locals.db.insert(attachments).values({
+		const [inserted] = await locals.db.insert(attachments).values({
 			orgId: activeOrgId,
 			uploadedBy: locals.user.id,
 			filename: safeName,
 			r2Key,
 			contentType: file.type,
-			sizeBytes: file.size
-		});
+			sizeBytes: file.size,
+			processingStatus: isParseable ? 'pending' : 'skipped',
+		}).returning({ id: attachments.id });
+		insertedId = inserted?.id ?? null;
+
+		// Increment cached storage counter
+		await locals.db
+			.update(subscriptions)
+			.set({ storageBytesUsed: sql`${subscriptions.storageBytesUsed} + ${file.size}` })
+			.where(eq(subscriptions.orgId, activeOrgId));
 	} catch (dbErr) {
 		await r2.delete(r2Key).catch(() => {}); // best-effort R2 rollback
 		console.error('[Upload] DB insert failed, R2 object deleted:', dbErr);
 		error(500, 'Failed to record upload');
+	}
+
+	// Trigger async RAG processing via waitUntil (non-blocking)
+	if (isParseable && insertedId && platform?.env?.VECTORIZE) {
+		const ctx = platform.context;
+		if (ctx?.waitUntil) {
+			const { processDocument } = await import('$lib/server/rag/process-document');
+			ctx.waitUntil(
+				processDocument(
+					locals.db,
+					platform.env.AI,
+					platform.env.VECTORIZE,
+					platform.env.STORAGE,
+					insertedId,
+					activeOrgId
+				).catch((err: unknown) => console.error('[RAG] Background processing failed:', err))
+			);
+		}
 	}
 
 	return json({

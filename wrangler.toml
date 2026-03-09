@@ -83,6 +83,10 @@ STRIPE_PRO_PRICE_ID = "price_1T7NluDkVAFKcyqKBdjrDYey"
 # CSAM scanning: enable in Cloudflare dashboard → Caching > Configuration > CSAM Scanning Tool
 # Image responses are cached via Workers Cache API so they flow through the scanning pipeline.
 
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "martol-docs"
+
 [ai]
 binding = "AI"
 

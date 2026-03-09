@@ -61,7 +61,7 @@ const worker = {
 
 		const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
 		const { pendingActions, attachments } = await import('./src/lib/server/db/schema');
-		const { eq, and, lt, isNull } = await import('drizzle-orm');
+		const { eq, and, lt, isNull, sql } = await import('drizzle-orm');
 
 		const { db, client, connectPromise } = createHyperdriveDb(hyperdrive);
 		await connectPromise;
@@ -136,6 +136,65 @@ const worker = {
 			}
 		} catch (err) {
 			console.error('[Cron] Orphan attachment cleanup failed:', err);
+		}
+
+		// Recalculate storage_bytes_used for all orgs (self-heal drift)
+		try {
+			await db.execute(sql`
+				UPDATE subscriptions s
+				SET storage_bytes_used = COALESCE(
+					(SELECT SUM(size_bytes) FROM attachments a WHERE a.org_id = s.org_id), 0
+				)
+			`);
+			console.log('[Cron] Storage recalculated for all orgs');
+		} catch (err) {
+			console.error('[Cron] Storage recalculation failed:', err);
+		}
+
+		// Retry failed ingestion jobs (max 3 attempts)
+		try {
+			const { ingestionJobs } = await import('./src/lib/server/db/schema');
+			const failedJobs = await db
+				.select({
+					id: ingestionJobs.id,
+					attachmentId: ingestionJobs.attachmentId,
+					orgId: ingestionJobs.orgId,
+				})
+				.from(ingestionJobs)
+				.where(
+					and(
+						eq(ingestionJobs.status, 'failed'),
+						lt(ingestionJobs.attemptCount, 3)
+					)
+				)
+				.limit(10);
+
+			if (failedJobs.length > 0) {
+				// Reset to pending for retry on next upload or manual trigger
+				for (const job of failedJobs) {
+					await db
+						.update(ingestionJobs)
+						.set({ status: 'pending', attemptCount: sql`${ingestionJobs.attemptCount} + 1` })
+						.where(eq(ingestionJobs.id, job.id));
+				}
+				console.log(`[Cron] Reset ${failedJobs.length} failed ingestion jobs for retry`);
+			}
+		} catch (err) {
+			console.error('[Cron] Ingestion job retry failed:', err);
+		}
+
+		// Report AI usage to Stripe (daily at midnight UTC only)
+		const now = new Date();
+		if (now.getUTCHours() === 0) {
+			try {
+				// Query all Pro orgs with AI usage this month
+				// Report overage to Stripe via subscription items
+				// TODO: Implement after metered prices created in Stripe dashboard
+				// Will use stripe.subscriptionItems.createUsageRecord()
+				console.log('[Cron] Stripe AI usage reporting: pending metered price setup');
+			} catch (err) {
+				console.error('[Cron] Stripe usage reporting failed:', err);
+			}
 		}
 
 		// TODO: Message retention — requires product decision on retention periods per plan tier.

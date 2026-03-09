@@ -400,5 +400,9 @@
   "ticket_cat_other": "Other",
   "chat_slash_ticket": "Create a support ticket",
   "chat_slash_repair": "Repair degraded room (retry flush or drop unflushed)",
-  "ticket_chat_created": "Ticket created: {title}"
+  "ticket_chat_created": "Ticket created: {title}",
+  "billing_storage": "{used} / {limit} storage",
+  "billing_ai_docs": "{count}/{limit} documents processed",
+  "billing_ai_queries": "{count}/{limit} vector queries",
+  "billing_ai_cap": "AI processing paused — monthly cap reached"
 }
