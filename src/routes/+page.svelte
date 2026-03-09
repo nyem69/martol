@@ -18,7 +18,11 @@
 		Code2,
 		Upload,
 		User,
-		Radio
+		Radio,
+		Building2,
+		Eye,
+		GraduationCap,
+		ScrollText
 	} from '@lucide/svelte';
 
 	function reveal(node: HTMLElement, opts: { stagger?: boolean } = {}) {
@@ -312,6 +316,66 @@
 			<div class="security-cta-row">
 				<a href="/security" class="security-link">
 					{m.section_security_cta()} <ArrowRight size={14} />
+				</a>
+			</div>
+		</div>
+	</section>
+
+	<!-- GOVERNANCE -->
+	<section class="section" use:reveal>
+		<div class="container">
+			{@render sectionHead('enterprise governance')}
+			<p class="lead">
+				Most AI tools hand each developer their own hammer in a glass room.
+			</p>
+			<p class="lead" style="margin-bottom: 24px;">
+				No oversight. No peer review. No audit trail. Martol is different.
+			</p>
+			<div class="gov-grid">
+				<div class="gov-card">
+					<div class="gov-card-icon"><Eye size={18} /></div>
+					<h3 class="gov-card-title">Oversight without friction</h3>
+					<p class="gov-card-desc">
+						Leads review agent intents before execution — not after damage.
+						New AI users get guardrails from day one.
+					</p>
+				</div>
+				<div class="gov-card">
+					<div class="gov-card-icon"><GraduationCap size={18} /></div>
+					<h3 class="gov-card-title">Graduated autonomy</h3>
+					<p class="gov-card-desc">
+						Start new developers in rooms with strict approval thresholds.
+						Relax limits as they build confidence with AI tools.
+					</p>
+				</div>
+				<div class="gov-card">
+					<div class="gov-card-icon"><ScrollText size={18} /></div>
+					<h3 class="gov-card-title">Full audit trail</h3>
+					<p class="gov-card-desc">
+						Every prompt, intent, approval, and execution logged in an
+						append-only server database. No local logs to tamper with.
+					</p>
+				</div>
+				<div class="gov-card">
+					<div class="gov-card-icon"><Building2 size={18} /></div>
+					<h3 class="gov-card-title">Enterprise controls</h3>
+					<p class="gov-card-desc">
+						SSO/SAML, custom retention policies, SLA guarantees,
+						and on-premise deployment options.
+					</p>
+				</div>
+			</div>
+			<div class="intent-note" style="margin-top: 24px;">
+				<ShieldCheck size={16} />
+				<p>
+					Rooms are supervised AI workspaces, not isolated silos. The room creator's plan
+					sets the guardrails — the approval matrix, the risk thresholds, the audit scope.
+					Enterprise can hand-hold new AI users instead of hoping for the best.
+				</p>
+			</div>
+			<div class="section-link-row">
+				<a href="/docs/pricing#comparison" class="section-link">
+					See pricing &amp; plans <ArrowRight size={14} />
 				</a>
 			</div>
 		</div>
@@ -915,6 +979,48 @@
 
 	.section-link:hover {
 		text-decoration: underline;
+	}
+
+	/* ── Governance grid ── */
+	.gov-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 14px;
+		margin-bottom: 8px;
+	}
+
+	.gov-card {
+		padding: 20px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--bg-surface);
+	}
+
+	.gov-card-icon {
+		color: var(--accent);
+		margin-bottom: 10px;
+	}
+
+	.gov-card-title {
+		font-family: var(--font-mono-alt);
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--text);
+		margin: 0 0 6px;
+	}
+
+	.gov-card-desc {
+		font-family: var(--font-serif);
+		font-size: 13px;
+		color: var(--text-muted);
+		line-height: 1.55;
+		margin: 0;
+	}
+
+	@media (max-width: 640px) {
+		.gov-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	/* ── Screenshot ── */
