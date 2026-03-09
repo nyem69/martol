@@ -11,7 +11,8 @@ export type ClientMessage =
 	| { type: 'message'; body: string; replyTo?: number; localId: string }
 	| { type: 'command'; name: string; args: string }
 	| { type: 'typing'; active: boolean }
-	| { type: 'read'; lastReadId: number };
+	| { type: 'read'; lastReadId: number }
+	| { type: 'edit'; serverSeqId: number; body: string };
 
 // ── Server → Client ─────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ export type ServerMessage =
 	| { type: 'roster'; members: Array<{ id: string; name: string; role: string }> }
 	| { type: 'history'; messages: ServerMessagePayload[] }
 	| { type: 'id_map'; mappings: Array<{ localId: string; dbId: number }> }
+	| { type: 'edit'; serverSeqId: number; body: string; editedAt: string; senderId: string }
 	| { type: 'clear'; clearedBy: string }
 	| { type: 'error'; code: ErrorCode; message: string };
 
@@ -56,6 +58,7 @@ export interface StoredMessage {
 	body: string;
 	replyTo?: number;
 	timestamp: string;
+	editedAt?: string;
 	flushed: boolean;
 	dbId?: number;
 }

@@ -22,6 +22,7 @@ export interface DisplayMessage {
 	body: string;
 	replyTo?: number;
 	timestamp: string;
+	editedAt?: string;
 	pending: boolean;
 	failed: boolean;
 	isOwn: boolean;
@@ -103,6 +104,9 @@ export class MessagesStore {
 				break;
 			case 'roster':
 				this.handleRoster(msg.members);
+				break;
+			case 'edit':
+				this.handleEdit(msg.serverSeqId, msg.body, msg.editedAt);
 				break;
 			case 'clear':
 				this.handleClear(msg.clearedBy);
@@ -203,6 +207,14 @@ export class MessagesStore {
 			if (msg) {
 				msg.dbId = dbId;
 			}
+		}
+	}
+
+	private handleEdit(serverSeqId: number, body: string, editedAt: string): void {
+		const msg = this.messages.find((m) => m.serverSeqId === serverSeqId);
+		if (msg) {
+			msg.body = body;
+			msg.editedAt = editedAt;
 		}
 	}
 

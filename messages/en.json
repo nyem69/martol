@@ -41,6 +41,7 @@
   "chat_connection_failed": "Connection failed — please refresh",
   "chat_loading": "Loading messages...",
   "chat_sending": "Sending...",
+  "chat_edited": "edited",
   "chat_refresh": "Refresh",
   "chat_dismiss": "Dismiss",
   "chat_action_thinking": "{name} is thinking",

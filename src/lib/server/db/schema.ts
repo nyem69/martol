@@ -44,6 +44,7 @@ export const messages = pgTable(
 		type: text('type').notNull().default('chat').$type<'chat' | 'system' | 'join' | 'action'>(),
 		body: text('body').notNull(),
 		replyTo: bigint('reply_to', { mode: 'number' }),
+		editedAt: timestamp('edited_at', { withTimezone: true }),
 		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},

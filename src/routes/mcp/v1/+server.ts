@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { mcpRequestSchema } from '$lib/types/mcp';
 import { authenticateAgent } from '$lib/server/mcp/auth';
 import { chatSend } from '$lib/server/mcp/tools/chat-send';
+import { chatEdit } from '$lib/server/mcp/tools/chat-edit';
 import { chatRead, chatResync } from '$lib/server/mcp/tools/chat-read';
 import { chatJoin } from '$lib/server/mcp/tools/chat-join';
 import { chatWho } from '$lib/server/mcp/tools/chat-who';
@@ -66,6 +67,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		switch (req.tool) {
 			case 'chat_send':
 				result = await chatSend(req.params, agent, locals.db, platform ?? undefined);
+				break;
+			case 'chat_edit':
+				result = await chatEdit(req.params, agent, locals.db, platform ?? undefined);
 				break;
 			case 'chat_read':
 				result = await chatRead(req.params, agent, locals.db);

@@ -54,6 +54,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			senderId: messagesTable.senderId,
 			senderRole: messagesTable.senderRole,
 			body: messagesTable.body,
+			editedAt: messagesTable.editedAt,
 			createdAt: messagesTable.createdAt
 		})
 		.from(messagesTable)
@@ -81,6 +82,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		sender_name: senderNameMap.get(msg.senderId) ?? 'Unknown',
 		sender_role: msg.senderRole,
 		body: msg.body,
+		edited_at: msg.editedAt?.toISOString() ?? null,
 		created_at: msg.createdAt.toISOString()
 	}));
 

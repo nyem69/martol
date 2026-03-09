@@ -218,6 +218,7 @@ export const load: PageServerLoad = async (event) => {
 			senderRole: messagesTable.senderRole,
 			body: messagesTable.body,
 			replyTo: messagesTable.replyTo,
+			editedAt: messagesTable.editedAt,
 			createdAt: messagesTable.createdAt
 		})
 		.from(messagesTable)
@@ -246,6 +247,7 @@ export const load: PageServerLoad = async (event) => {
 		senderRole: msg.senderRole,
 		body: msg.body,
 		replyTo: msg.replyTo ?? undefined,
+		editedAt: msg.editedAt?.toISOString() ?? undefined,
 		createdAt: msg.createdAt.toISOString()
 	}));
 

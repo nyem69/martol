@@ -85,6 +85,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// Debounced read cursor updates — flushed alongside WAL or on 5s timeout
 	private pendingReadCursors = new Map<string, { orgId: string; userId: string; lastReadId: number }>();
 
+	// Pending edits to already-flushed messages — processed during flushToDb()
+	private pendingEdits = new Map<number, { dbId: number; body: string; editedAt: string; orgId: string }>();
+
 	// [R6] Pre-imported HMAC key for signing broadcast messages
 	private broadcastSigningKey: CryptoKey | null = null;
 
@@ -143,6 +146,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// REST message ingest — used by MCP chat_send to route through the DO
 		if (request.method === 'POST' && url.pathname.endsWith('/ingest')) {
 			return this.handleRestIngest(request);
+		}
+
+		// REST message edit — used by MCP chat_edit to route through the DO
+		if (request.method === 'POST' && url.pathname.endsWith('/edit')) {
+			return this.handleRestEdit(request);
 		}
 
 		if (request.headers.get('Upgrade') !== 'websocket') {
@@ -293,6 +301,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			case 'read':
 				await this.handleReadCursor(ws, msg.lastReadId);
 				break;
+			case 'edit':
+				await this.handleEditMessage(ws, msg);
+				break;
 			case 'command':
 				await this.handleCommand(ws, msg.name, msg.args);
 				break;
@@ -317,13 +328,30 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// ── Alarm: Batch Flush to DB ──────────────────────────────────────
 
 	async alarm(): Promise<void> {
-		// Flush read cursors even if no WAL messages
+		// Flush read cursors and pending edits even if no WAL messages
 		if (this.unflushedIds.length === 0) {
-			if (this.pendingReadCursors.size > 0) {
+			if (this.pendingReadCursors.size > 0 || this.pendingEdits.size > 0) {
 				try {
-					await this.withDb((db) => this.flushReadCursors(db));
+					await this.withDb(async (db) => {
+						// Flush pending edits
+						if (this.pendingEdits.size > 0) {
+							const edits = [...this.pendingEdits.values()];
+							this.pendingEdits.clear();
+							for (const edit of edits) {
+								try {
+									await db
+										.update(messagesTable)
+										.set({ body: edit.body, editedAt: new Date(edit.editedAt) })
+										.where(and(eq(messagesTable.id, edit.dbId), eq(messagesTable.orgId, edit.orgId)));
+								} catch (editErr) {
+									console.error(`[ChatRoom] Edit flush failed for dbId=${edit.dbId}:`, editErr);
+								}
+							}
+						}
+						await this.flushReadCursors(db);
+					});
 				} catch (err) {
-					console.error('[ChatRoom] Read cursor flush failed:', err);
+					console.error('[ChatRoom] Standalone flush failed:', err);
 				}
 			}
 			return;
@@ -647,6 +675,173 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		);
 	}
 
+	// ── Edit Handling ────────────────────────────────────────────────
+
+	private async handleEditMessage(
+		ws: WebSocket,
+		msg: Extract<ClientMessage, { type: 'edit' }>
+	): Promise<void> {
+		const tags = this.ctx.getTags(ws);
+		const userId = this.extractTag(tags, 'user:');
+		const role = this.extractTag(tags, 'role:');
+		const orgId = this.extractTag(tags, 'org:');
+
+		if (!userId || !role) {
+			await this.sendError(ws, 'unauthorized', 'Missing user identity');
+			return;
+		}
+
+		if (role === 'viewer') {
+			await this.sendError(ws, 'unauthorized', 'Viewers cannot edit messages');
+			return;
+		}
+
+		if (typeof msg.serverSeqId !== 'number' || !Number.isInteger(msg.serverSeqId) || msg.serverSeqId <= 0) {
+			await this.sendError(ws, 'invalid_message', 'Invalid serverSeqId');
+			return;
+		}
+
+		if (!msg.body || typeof msg.body !== 'string') {
+			await this.sendError(ws, 'invalid_message', 'Message body required');
+			return;
+		}
+
+		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
+		if (bodyBytes > MAX_BODY_SIZE) {
+			await this.sendError(ws, 'invalid_message', `Message too large (max ${MAX_BODY_SIZE / 1024}KB)`);
+			return;
+		}
+
+		// Look up the stored message
+		const stored = await this.ctx.storage.get<StoredMessage>(storageKey(msg.serverSeqId));
+		if (!stored) {
+			await this.sendError(ws, 'invalid_message', 'Message not found');
+			return;
+		}
+
+		// Only the sender can edit their own message
+		if (stored.senderId !== userId) {
+			await this.sendError(ws, 'unauthorized', 'Can only edit your own messages');
+			return;
+		}
+
+		const editedAt = new Date().toISOString();
+
+		// Update stored message body and editedAt
+		stored.body = msg.body;
+		stored.editedAt = editedAt;
+		await this.ctx.storage.put(storageKey(msg.serverSeqId), stored);
+
+		// If already flushed to DB, queue a DB edit for next flush
+		if (stored.flushed && stored.dbId) {
+			this.pendingEdits.set(msg.serverSeqId, {
+				dbId: stored.dbId,
+				body: msg.body,
+				editedAt,
+				orgId: orgId || stored.orgId
+			});
+
+			// Ensure alarm is scheduled to process pending edits
+			const existing = await this.ctx.storage.getAlarm();
+			if (!existing) {
+				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+			}
+		}
+		// If not yet flushed, the updated StoredMessage will be flushed with the new body
+
+		// Broadcast edit to all clients
+		await this.broadcast({
+			type: 'edit',
+			serverSeqId: msg.serverSeqId,
+			body: msg.body,
+			editedAt,
+			senderId: userId
+		});
+	}
+
+	// ── REST Edit (for MCP chat_edit) ────────────────────────────────
+
+	private async handleRestEdit(request: Request): Promise<Response> {
+		// Verify internal caller
+		const internalSecret = request.headers.get('X-Internal-Secret');
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
+			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
+		}
+
+		let payload: {
+			serverSeqId: number;
+			body: string;
+			senderId: string;
+			orgId: string;
+		};
+
+		try {
+			payload = await request.json();
+		} catch {
+			return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
+		}
+
+		if (!payload.serverSeqId || !payload.body || !payload.senderId || !payload.orgId) {
+			return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 });
+		}
+
+		if (typeof payload.body !== 'string') {
+			return new Response(JSON.stringify({ error: 'Body must be a string' }), { status: 400 });
+		}
+
+		const bodyBytes = new TextEncoder().encode(payload.body).byteLength;
+		if (bodyBytes > MAX_BODY_SIZE) {
+			return new Response(JSON.stringify({ error: 'Message too large' }), { status: 413 });
+		}
+
+		// Look up stored message
+		const stored = await this.ctx.storage.get<StoredMessage>(storageKey(payload.serverSeqId));
+		if (!stored) {
+			return new Response(JSON.stringify({ error: 'Message not found' }), { status: 404 });
+		}
+
+		// Verify sender matches
+		if (stored.senderId !== payload.senderId) {
+			return new Response(JSON.stringify({ error: 'Can only edit own messages' }), { status: 403 });
+		}
+
+		const editedAt = new Date().toISOString();
+
+		// Update stored message
+		stored.body = payload.body;
+		stored.editedAt = editedAt;
+		await this.ctx.storage.put(storageKey(payload.serverSeqId), stored);
+
+		// Queue DB edit if already flushed
+		if (stored.flushed && stored.dbId) {
+			this.pendingEdits.set(payload.serverSeqId, {
+				dbId: stored.dbId,
+				body: payload.body,
+				editedAt,
+				orgId: payload.orgId
+			});
+
+			const existing = await this.ctx.storage.getAlarm();
+			if (!existing) {
+				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+			}
+		}
+
+		// Broadcast edit to all connected WebSocket clients
+		await this.broadcast({
+			type: 'edit',
+			serverSeqId: payload.serverSeqId,
+			body: payload.body,
+			editedAt,
+			senderId: payload.senderId
+		});
+
+		return new Response(
+			JSON.stringify({ ok: true, editedAt }),
+			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
 	// ── Flush to PostgreSQL ───────────────────────────────────────────
 
 	private async flushToDb(): Promise<void> {
@@ -729,6 +924,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							type: 'chat' as const,
 							body: stored.body,
 							replyTo: resolvedReplyTo,
+							editedAt: stored.editedAt ? new Date(stored.editedAt) : null,
 							createdAt: new Date(stored.timestamp)
 						})
 						.returning({ id: messagesTable.id });
@@ -765,6 +961,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 									type: 'chat' as const,
 									body: stored.body,
 									replyTo: null,
+									editedAt: stored.editedAt ? new Date(stored.editedAt) : null,
 									createdAt: new Date(stored.timestamp)
 								})
 								.returning({ id: messagesTable.id });
@@ -842,6 +1039,22 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 								eq(attachments.uploadedBy, stored.senderId)
 							))
 							.catch((err: unknown) => console.error('[ChatRoom] Attachment backfill failed:', err));
+					}
+				}
+			}
+
+			// Flush pending edits to already-flushed messages
+			if (this.pendingEdits.size > 0) {
+				const edits = [...this.pendingEdits.values()];
+				this.pendingEdits.clear();
+				for (const edit of edits) {
+					try {
+						await db
+							.update(messagesTable)
+							.set({ body: edit.body, editedAt: new Date(edit.editedAt) })
+							.where(and(eq(messagesTable.id, edit.dbId), eq(messagesTable.orgId, edit.orgId)));
+					} catch (editErr) {
+						console.error(`[ChatRoom] Edit flush failed for dbId=${edit.dbId}:`, editErr);
 					}
 				}
 			}

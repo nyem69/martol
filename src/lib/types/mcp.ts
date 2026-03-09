@@ -119,6 +119,14 @@ export const ticketUpdateSchema = z.object({
 	}),
 });
 
+export const chatEditSchema = z.object({
+	tool: z.literal('chat_edit'),
+	params: z.object({
+		message_id: z.number().int().positive(),
+		body: z.string().min(1).max(32768),
+	}),
+});
+
 export const docSearchSchema = z.object({
 	tool: z.literal('doc_search'),
 	params: z.object({
@@ -129,6 +137,7 @@ export const docSearchSchema = z.object({
 
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatSendSchema,
+	chatEditSchema,
 	chatReadSchema,
 	chatResyncSchema,
 	chatJoinSchema,
@@ -165,6 +174,10 @@ export type McpResponse<T = unknown> = McpSuccess<T> | McpError;
 export interface ChatSendResult {
 	message_id: number;
 	timestamp: string;
+}
+
+export interface ChatEditResult {
+	edited_at: string;
 }
 
 export interface ChatMessage {

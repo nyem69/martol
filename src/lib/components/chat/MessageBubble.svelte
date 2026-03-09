@@ -109,6 +109,11 @@
 		>
 			{@html htmlBody}
 		</article>
+		{#if message.editedAt}
+			<span class="text-[10px]" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};">
+				({m.chat_edited()})
+			</span>
+		{/if}
 		{#if message.pending}
 			<span class="text-[10px] animate-pulse" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 70%, transparent)' : 'var(--text-muted)'};">
 				{m.chat_sending()}
