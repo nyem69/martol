@@ -389,38 +389,6 @@
 			</div>
 		</section>
 
-		<!-- Promotion Codes -->
-		<section class="page-section" id="promotions">
-			<h2>Promotion Codes</h2>
-			<p>
-				Enter a promotion code during checkout to apply a discount. Codes are entered on
-				the Stripe payment page after clicking "Upgrade to Pro" in Settings.
-			</p>
-			<div class="table-wrap">
-				<table>
-					<thead>
-						<tr>
-							<th>Code</th>
-							<th>Discount</th>
-							<th>Duration</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td><code>PROFREE</code></td>
-							<td>100% off</td>
-							<td>Forever</td>
-						</tr>
-						<tr>
-							<td><code>BETA50</code></td>
-							<td>50% off</td>
-							<td>Forever</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		</section>
-
 		<!-- FAQ -->
 		<section class="page-section" id="faq">
 			<h2>FAQ</h2>
@@ -467,11 +435,6 @@
 				depending on your region.
 			</p>
 
-			<h3>Is there a founding member discount?</h3>
-			<p>
-				The first 100 users to upgrade get <strong>founding member</strong> status, tracked
-				permanently on their account. Use code <code>PROFREE</code> during beta for free Pro access.
-			</p>
 		</section>
 	</main>
 </div>
