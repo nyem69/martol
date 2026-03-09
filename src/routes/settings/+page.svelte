@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import * as m from '$lib/paraglide/messages';
-	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, BookOpen, LifeBuoy, LayoutGrid } from '@lucide/svelte';
+	import { ArrowLeft, User, Shield, AlertTriangle, Loader, Check, Monitor, Download, Trash2, X, CreditCard, Crown, Upload, Users, Bot, MessageSquare, Fingerprint, BookOpen, LifeBuoy, LayoutGrid, FileText, Mail, Image, Paperclip, ChevronLeft } from '@lucide/svelte';
 	import { signOut, passkey } from '$lib/auth-client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
@@ -198,10 +198,117 @@
 	}
 
 	// ── Data export state ──
-	let exporting = $state(false);
+	let exportingAudit = $state(false);
+	let showExportModal = $state(false);
+	let exportStep = $state<'rooms' | 'preview' | 'generating' | 'done'>('rooms');
+	let exportRooms = $state<{ id: string; name: string }[]>([]);
+	let exportSelectedRoom = $state<{ id: string; name: string } | null>(null);
+	let exportPreview = $state<{
+		roomName: string;
+		messageCount: number;
+		dateRange: { from: string | null; to: string | null };
+		photos: { count: number; bytes: number };
+		files: { count: number; bytes: number };
+	} | null>(null);
+	let exportIncludePhotos = $state(false);
+	let exportIncludeFiles = $state(false);
+	let exportLoading = $state(false);
+	let exportError = $state('');
+	let exportDoneMsg = $state('');
 
-	async function handleExport() {
-		exporting = true;
+	async function openExportModal() {
+		showExportModal = true;
+		exportStep = 'rooms';
+		exportError = '';
+		exportLoading = true;
+		try {
+			const res = await fetch('/api/account/export/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({})
+			});
+			const result: any = await res.json();
+			if (res.ok && result.ok) {
+				exportRooms = result.rooms;
+			} else {
+				exportError = result.error?.message || m.error_generic();
+			}
+		} catch {
+			exportError = m.error_generic();
+		}
+		exportLoading = false;
+	}
+
+	async function selectExportRoom(room: { id: string; name: string }) {
+		exportSelectedRoom = room;
+		exportStep = 'preview';
+		exportError = '';
+		exportLoading = true;
+		exportIncludePhotos = false;
+		exportIncludeFiles = false;
+		try {
+			const res = await fetch('/api/account/export/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ roomId: room.id })
+			});
+			const result: any = await res.json();
+			if (res.ok && result.ok) {
+				exportPreview = result.preview;
+			} else {
+				exportError = result.error?.message || m.error_generic();
+			}
+		} catch {
+			exportError = m.error_generic();
+		}
+		exportLoading = false;
+	}
+
+	async function confirmExport() {
+		if (!exportSelectedRoom) return;
+		exportStep = 'generating';
+		exportError = '';
+		try {
+			const res = await fetch('/api/account/export/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					roomId: exportSelectedRoom.id,
+					includePhotos: exportIncludePhotos,
+					includeFiles: exportIncludeFiles,
+					confirm: true
+				})
+			});
+			const result: any = await res.json();
+			if (res.ok && result.ok) {
+				exportStep = 'done';
+				exportDoneMsg = result.message;
+			} else {
+				exportStep = 'preview';
+				exportError = result.error?.message || m.error_generic();
+			}
+		} catch {
+			exportStep = 'preview';
+			exportError = m.error_generic();
+		}
+	}
+
+	function closeExportModal() {
+		showExportModal = false;
+		exportSelectedRoom = null;
+		exportPreview = null;
+		exportError = '';
+		exportDoneMsg = '';
+	}
+
+	function formatBytes(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	async function handleAuditExport() {
+		exportingAudit = true;
 		try {
 			const res = await fetch('/api/account/export');
 			if (!res.ok) throw new Error();
@@ -220,7 +327,7 @@
 		} catch {
 			errorMsg = m.error_generic();
 		}
-		exporting = false;
+		exportingAudit = false;
 	}
 
 	// ── Billing state ──
@@ -861,25 +968,182 @@
 			</div>
 
 			<p class="mb-3 text-xs" style="color: var(--text-muted);">
-				{m.settings_export_desc()}
+				{m.export_desc()}
 			</p>
 
-			<button
-				onclick={handleExport}
-				disabled={exporting}
-				data-testid="export-data-btn"
-				class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
-				style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
-			>
-				{#if exporting}
-					<Loader size={14} class="animate-spin" />
-					{m.settings_export_downloading()}
-				{:else}
-					<Download size={14} />
-					{m.settings_export_btn()}
-				{/if}
-			</button>
+			<div class="flex gap-3">
+				<button
+					onclick={openExportModal}
+					data-testid="export-chat-btn"
+					class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity"
+					style="background: var(--accent); color: var(--bg); font-family: var(--font-mono);"
+				>
+					<FileText size={14} />
+					{m.export_chat_btn()}
+				</button>
+
+				<button
+					onclick={handleAuditExport}
+					disabled={exportingAudit}
+					data-testid="export-audit-btn"
+					class="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
+					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+				>
+					{#if exportingAudit}
+						<Loader size={14} class="animate-spin" />
+						{m.settings_export_downloading()}
+					{:else}
+						<Download size={14} />
+						{m.export_audit_btn()}
+					{/if}
+				</button>
+			</div>
 		</section>
+
+		<!-- ═══ EXPORT MODAL ═══ -->
+		{#if showExportModal}
+			<div
+				class="fixed inset-0 z-50 flex items-center justify-center p-4"
+				style="background: rgba(0,0,0,0.6);"
+			>
+				<div
+					class="w-full max-w-md rounded-lg p-6"
+					style="background: var(--bg-surface); border: 1px solid var(--border); max-height: 80vh; overflow-y: auto;"
+				>
+					<!-- Header -->
+					<div class="mb-4 flex items-center justify-between">
+						<div class="flex items-center gap-2">
+							{#if exportStep !== 'rooms'}
+								<button
+									onclick={() => { exportStep = 'rooms'; exportSelectedRoom = null; exportPreview = null; exportError = ''; }}
+									class="p-1"
+									style="color: var(--text-muted); background: none; border: none; cursor: pointer;"
+								>
+									<ChevronLeft size={16} />
+								</button>
+							{/if}
+							<h3 class="text-sm font-bold uppercase tracking-wider" style="color: var(--text); font-family: var(--font-mono);">
+								{m.export_chat_title()}
+							</h3>
+						</div>
+						<button
+							onclick={closeExportModal}
+							class="p-1"
+							style="color: var(--text-muted); background: none; border: none; cursor: pointer;"
+						>
+							<X size={16} />
+						</button>
+					</div>
+
+					{#if exportError}
+						<div class="mb-3 rounded-md p-3 text-xs" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444;">
+							{exportError}
+						</div>
+					{/if}
+
+					<!-- Step: Room selection -->
+					{#if exportStep === 'rooms'}
+						{#if exportLoading}
+							<div class="flex items-center justify-center py-8">
+								<Loader size={20} class="animate-spin" style="color: var(--accent);" />
+							</div>
+						{:else if exportRooms.length === 0}
+							<p class="py-4 text-center text-xs" style="color: var(--text-muted);">{m.export_no_rooms()}</p>
+						{:else}
+							<p class="mb-3 text-xs" style="color: var(--text-muted);">{m.export_select_room()}</p>
+							<div class="flex flex-col gap-1.5">
+								{#each exportRooms as room (room.id)}
+									<button
+										onclick={() => selectExportRoom(room)}
+										class="flex items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors"
+										style="background: var(--bg); border: 1px solid var(--border); color: var(--text); cursor: pointer;"
+										data-testid={`export-room-${room.id}`}
+									>
+										<MessageSquare size={14} style="color: var(--text-muted);" />
+										{room.name}
+									</button>
+								{/each}
+							</div>
+						{/if}
+
+					<!-- Step: Preview -->
+					{:else if exportStep === 'preview'}
+						{#if exportLoading}
+							<div class="flex items-center justify-center py-8">
+								<Loader size={20} class="animate-spin" style="color: var(--accent);" />
+							</div>
+						{:else if exportPreview}
+							<div class="mb-4 rounded-md p-3" style="background: var(--bg); border: 1px solid var(--border);">
+								<h4 class="mb-2 text-sm font-semibold" style="color: var(--accent);">{exportPreview.roomName}</h4>
+								<div class="flex flex-col gap-1 text-xs" style="color: var(--text-muted); font-family: var(--font-mono);">
+									<span>{m.export_messages()}: {exportPreview.messageCount.toLocaleString()}</span>
+									<span>{m.export_date_range()}: {exportPreview.dateRange.from ? new Date(exportPreview.dateRange.from).toLocaleDateString() : '—'} — {exportPreview.dateRange.to ? new Date(exportPreview.dateRange.to).toLocaleDateString() : '—'}</span>
+								</div>
+							</div>
+
+							<!-- Attachment options -->
+							{#if exportPreview.photos.count > 0 || exportPreview.files.count > 0}
+								<div class="mb-4">
+									<p class="mb-2 text-xs font-semibold" style="color: var(--text);">{m.export_include_attachments()}</p>
+									{#if exportPreview.photos.count > 0}
+										<label class="mb-1.5 flex items-center gap-2 text-xs" style="color: var(--text-muted); cursor: pointer;">
+											<input type="checkbox" bind:checked={exportIncludePhotos} />
+											<Image size={13} />
+											{m.export_photos()} ({exportPreview.photos.count} · {formatBytes(exportPreview.photos.bytes)})
+										</label>
+									{/if}
+									{#if exportPreview.files.count > 0}
+										<label class="flex items-center gap-2 text-xs" style="color: var(--text-muted); cursor: pointer;">
+											<input type="checkbox" bind:checked={exportIncludeFiles} />
+											<Paperclip size={13} />
+											{m.export_files()} ({exportPreview.files.count} · {formatBytes(exportPreview.files.bytes)})
+										</label>
+									{/if}
+								</div>
+							{/if}
+
+							<div class="mb-3 rounded-md p-2.5 text-xs" style="background: rgba(196,154,60,0.1); border: 1px solid rgba(196,154,60,0.2); color: var(--text-muted);">
+								<Mail size={12} style="display: inline; vertical-align: middle; margin-right: 4px;" />
+								{m.export_email_notice()}
+							</div>
+
+							<button
+								onclick={confirmExport}
+								data-testid="confirm-export"
+								class="flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
+								style="background: var(--accent); color: var(--bg); font-family: var(--font-mono);"
+							>
+								<Download size={14} />
+								{m.export_confirm()}
+							</button>
+						{/if}
+
+					<!-- Step: Generating -->
+					{:else if exportStep === 'generating'}
+						<div class="flex flex-col items-center gap-3 py-8">
+							<Loader size={24} class="animate-spin" style="color: var(--accent);" />
+							<p class="text-xs" style="color: var(--text-muted);">{m.export_generating()}</p>
+						</div>
+
+					<!-- Step: Done -->
+					{:else if exportStep === 'done'}
+						<div class="flex flex-col items-center gap-3 py-6">
+							<div class="flex h-10 w-10 items-center justify-center rounded-full" style="background: rgba(34,197,94,0.15);">
+								<Mail size={20} style="color: #22c55e;" />
+							</div>
+							<p class="text-center text-sm" style="color: var(--text);">{exportDoneMsg}</p>
+							<button
+								onclick={closeExportModal}
+								class="mt-2 rounded-md px-4 py-2 text-sm font-semibold"
+								style="background: var(--bg); border: 1px solid var(--border); color: var(--text); cursor: pointer;"
+							>
+								{m.close()}
+							</button>
+						</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
 
 		<!-- ═══ BILLING SECTION ═══ -->
 		{#if billing}

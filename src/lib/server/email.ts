@@ -270,3 +270,54 @@ export function otpEmailTemplate(
     `
 	};
 }
+
+/**
+ * Export ready email template
+ * Sent when a chat export zip is ready for download.
+ */
+export function exportReadyEmailTemplate(
+	roomName: string,
+	downloadUrl: string,
+	expiresIn: string
+): { subject: string; html: string } {
+	return {
+		subject: `Your chat export is ready — ${roomName}`,
+		html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #e0e0e0; max-width: 600px; margin: 0 auto; padding: 20px; background: #0f0f14;">
+  <div style="background: linear-gradient(135deg, #2a2a32 0%, #1a1a1f 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #c49a3c;">
+    <h1 style="color: #c49a3c; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 2px;">MARTOL</h1>
+  </div>
+
+  <div style="background: #1a1a1f; padding: 30px; border: 1px solid #2a2a32; border-top: none; border-radius: 0 0 12px 12px;">
+    <h2 style="margin-top: 0; color: #e8e8e8; font-size: 18px;">Your export is ready</h2>
+
+    <p style="color: #a0a0a8;">Your chat export for <strong style="color: #c49a3c;">${roomName}</strong> has been generated and is ready for download.</p>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${downloadUrl}" style="background: #c49a3c; color: #0f0f14; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; letter-spacing: 0.5px;">
+        Download Export
+      </a>
+    </div>
+
+    <p style="font-size: 14px; color: #6a6a72; text-align: center;">
+      This link expires in ${expiresIn}. Download your export before it's removed.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #2a2a32; margin: 20px 0;">
+
+    <p style="font-size: 12px; color: #4a4a52; margin: 0;">
+      If the button doesn't work, copy and paste this link:<br>
+      <a href="${downloadUrl}" style="color: #c49a3c; word-break: break-all;">${downloadUrl}</a>
+    </p>
+  </div>
+</body>
+</html>
+    `
+	};
+}
