@@ -9,8 +9,7 @@ import { redirect, error } from '@sveltejs/kit';
 import { user, member } from '$lib/server/db/auth-schema';
 import { usernameHistory, accountAudit } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { checkOrgLimits } from '$lib/server/feature-gates';
-import { getAiUsageForOrg, getFreeAllowances } from '$lib/server/ai-billing';
+import { checkOrgLimits, checkUserRoomCount } from '$lib/server/feature-gates';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -90,7 +89,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		? await checkOrgLimits(db, activeOrgId)
 		: null;
 
-	const aiUsageData = activeOrgId ? await getAiUsageForOrg(db, activeOrgId) : null;
+	const roomCount = await checkUserRoomCount(db, locals.user.id);
 
 	return {
 		profile: {
@@ -103,8 +102,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		lastUsernameChange: lastChange?.changedAt?.toISOString() ?? null,
 		lastEmailChange: lastEmailChange?.changedAt?.toISOString() ?? null,
 		billing,
-		isOwnerOrLead,
-		aiUsage: aiUsageData,
-		aiAllowances: getFreeAllowances()
+		roomCount,
+		isOwnerOrLead
 	};
 };

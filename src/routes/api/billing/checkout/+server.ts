@@ -74,17 +74,18 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 		stripeCustomerId = customer.id;
 	}
 
-	// Count current org members for seat quantity
+	// Count human members only (exclude agents) for seat quantity
 	const [{ count: rawMemberCount }] = await locals.db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(member)
-		.where(eq(member.organizationId, orgId));
+		.where(and(eq(member.organizationId, orgId), sql`${member.role} != 'agent'`));
 	const memberCount = Math.max(1, rawMemberCount ?? 0);
 
 	// Create Checkout Session
 	const session = await stripe.checkout.sessions.create({
 		customer: stripeCustomerId,
 		mode: 'subscription',
+		allow_promotion_codes: true,
 		line_items: [
 			{
 				price: env.STRIPE_PRO_PRICE_ID,

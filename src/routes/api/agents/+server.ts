@@ -57,7 +57,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Feature gate: check agent limit
 	const orgLimits = await checkOrgLimits(locals.db, orgId);
 	if (orgLimits.usage.agents >= orgLimits.limits.maxAgents) {
-		error(403, `Free plan allows ${orgLimits.limits.maxAgents} agents. Upgrade to add more.`);
+		error(403, `Agent limit reached (${orgLimits.limits.maxAgents} per room). Remove an agent before adding another.`);
 	}
 
 	const body = await request.json().catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>;

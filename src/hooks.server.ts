@@ -18,7 +18,7 @@ import { checkRateLimit } from '$lib/server/rate-limit';
 import { isDisposableEmail } from '$lib/server/disposable-emails';
 import { termsVersions, termsAcceptances } from '$lib/server/db/schema';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
-import { checkOrgLimits } from '$lib/server/feature-gates';
+import { checkOrgLimits, checkUserRoomCount } from '$lib/server/feature-gates';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -219,6 +219,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.url.pathname === '/api/upload' && event.request.method === 'POST';
 	const isEmailChange =
 		event.url.pathname === '/api/account/email' && event.request.method === 'POST';
+	const isOrgCreate =
+		event.url.pathname === '/api/auth/organization/create' && event.request.method === 'POST';
+
+	// ── Room creation limit: max 100 rooms per user ──
+	if (isOrgCreate && event.locals.user && event.locals.db) {
+		const roomCount = await checkUserRoomCount(event.locals.db, event.locals.user.id);
+		if (roomCount >= 100) {
+			return new Response(
+				JSON.stringify({ error: { message: 'Room limit reached (100). Remove a room before creating another.' } }),
+				{ status: 403, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+	}
 
 	// ── Turnstile CAPTCHA verification (OTP send only) ──
 	// Turnstile tokens are single-use. Enforce only on send, not verify.
@@ -404,7 +417,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				return new Response(
 					JSON.stringify({
 						error: {
-							message: `Free plan allows ${orgLimits.limits.maxUsers} users. Upgrade to add more.`
+							message: `Room limit reached (${orgLimits.limits.maxUsers} users). Remove a member before inviting another.`
 						}
 					}),
 					{ status: 403, headers: { 'Content-Type': 'application/json' } }

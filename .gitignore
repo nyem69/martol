@@ -21,3 +21,4 @@ docs/prompt
 .playwright-mcp/
 .worktrees/
 _data
+.mcp.json
