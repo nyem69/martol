@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Check, X, Crown, Zap, Building2, Users } from '@lucide/svelte';
+	import { Check, X, Crown, Zap, Building2 } from '@lucide/svelte';
 </script>
 
 <svelte:head>
@@ -101,68 +101,32 @@
 				</div>
 			</div>
 
-			<!-- Team -->
+			<!-- Governance -->
 			<div class="plan-card">
 				<div class="plan-header">
-					<div class="plan-icon team">
-						<Users size={20} />
+					<div class="plan-icon gov">
+						<Building2 size={20} />
 					</div>
-					<h2 class="plan-name">Team</h2>
+					<h2 class="plan-name">Governance</h2>
 					<div class="plan-price">
-						<span class="price-amount">$10</span>
-						<span class="price-period">/ user / month</span>
+						<span class="price-amount">Custom</span>
+						<span class="price-period">contact us</span>
 					</div>
-					<p class="plan-desc">Pro for your whole team, centrally managed</p>
+					<p class="plan-desc">For enterprises requiring compliance and audit</p>
 				</div>
 				<ul class="plan-features">
-					<li><Check size={14} class="feat-yes" /> Everything in Pro for <strong>each member</strong></li>
-					<li><Check size={14} class="feat-yes" /> Add/remove members from billing</li>
-					<li><Check size={14} class="feat-yes" /> Each member gets full Pro privileges</li>
-					<li><Check size={14} class="feat-yes" /> Single invoice for the team</li>
-					<li><Check size={14} class="feat-yes" /> Priority support</li>
+					<li><Check size={14} class="feat-yes" /> Everything in Pro</li>
+					<li><Check size={14} class="feat-yes" /> Supervised AI workspaces</li>
+					<li><Check size={14} class="feat-yes" /> Graduated autonomy controls</li>
+					<li><Check size={14} class="feat-yes" /> SSO / SAML integration</li>
+					<li><Check size={14} class="feat-yes" /> Advanced audit logging</li>
+					<li><Check size={14} class="feat-yes" /> Custom retention policies</li>
+					<li><Check size={14} class="feat-yes" /> Dedicated support + SLA</li>
+					<li><Check size={14} class="feat-yes" /> On-premise deployment option</li>
 				</ul>
 				<div class="plan-cta">
-					<a href="/settings" class="btn-plan btn-team">Manage Team</a>
+					<a href="mailto:hello@martol.app" class="btn-plan btn-gov">Contact Sales</a>
 				</div>
-			</div>
-		</section>
-
-		<!-- Governance -->
-		<section class="gov-section">
-			<h2 class="gov-heading">Governance</h2>
-			<p class="gov-lead">
-				Most AI coding tools hand each developer their own hammer in a glass room.
-				No oversight, no peer review, no audit trail. Martol is different.
-			</p>
-			<p>
-				Every room is a <strong>supervised AI workspace</strong>. Agents submit structured
-				intents — not raw commands. The server enforces a role × risk approval matrix before
-				anything executes. Every prompt, every decision, every approval is logged.
-			</p>
-			<div class="gov-features">
-				<div class="gov-feature">
-					<strong>Oversight without friction</strong>
-					<span>Leads review agent intents before execution, not after damage. New AI users
-					get guardrails from day one.</span>
-				</div>
-				<div class="gov-feature">
-					<strong>Graduated autonomy</strong>
-					<span>Start new developers in rooms with strict approval thresholds. Relax limits
-					as they build confidence with AI tools.</span>
-				</div>
-				<div class="gov-feature">
-					<strong>Full audit trail</strong>
-					<span>Every prompt, intent, approval, and execution is logged per-room in an
-					append-only server database. No local logs to tamper with.</span>
-				</div>
-				<div class="gov-feature">
-					<strong>Enterprise controls</strong>
-					<span>SSO/SAML, custom retention policies, SLA guarantees, dedicated support,
-					and on-premise deployment.</span>
-				</div>
-			</div>
-			<div class="gov-cta">
-				<a href="mailto:hello@martol.app" class="btn-plan btn-team">Contact us for Governance pricing</a>
 			</div>
 		</section>
 
@@ -233,7 +197,7 @@
 						<tr>
 							<th>Feature</th>
 							<th>Free</th>
-							<th>Pro / Team</th>
+							<th>Pro</th>
 							<th>Governance</th>
 						</tr>
 					</thead>
@@ -664,9 +628,9 @@
 		color: var(--accent);
 	}
 
-	.plan-icon.team {
-		background: oklch(0.65 0.12 160 / 0.12);
-		color: oklch(0.7 0.15 160);
+	.plan-icon.gov {
+		background: oklch(0.6 0.05 280 / 0.12);
+		color: oklch(0.7 0.08 280);
 	}
 
 	.plan-name {
@@ -773,13 +737,13 @@
 
 	.btn-pro:hover { opacity: 0.9; }
 
-	.btn-team {
+	.btn-gov {
 		background: var(--bg);
 		border: 1px solid var(--border);
 		color: var(--text);
 	}
 
-	.btn-team:hover { background: var(--bg-elevated); }
+	.btn-gov:hover { background: var(--bg-elevated); }
 
 	/* ── Callouts ──────────────────────────────────────── */
 	.callout {
@@ -794,64 +758,6 @@
 		border: 1px solid oklch(0.7 0.12 240 / 0.2);
 	}
 
-	/* ── Governance Section ───────────────────────────── */
-	.gov-section {
-		margin-bottom: 72px;
-		padding: 32px 28px;
-		background: oklch(0.6 0.05 280 / 0.06);
-		border: 1px solid oklch(0.6 0.05 280 / 0.15);
-		border-radius: 12px;
-	}
-
-	.gov-heading {
-		border: none;
-		padding: 0;
-		margin-bottom: 12px;
-	}
-
-	.gov-lead {
-		font-size: 17px;
-		font-style: italic;
-		color: var(--text-muted);
-	}
-
-	.gov-features {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 16px;
-		margin: 24px 0;
-	}
-
-	.gov-feature {
-		padding: 16px;
-		background: var(--bg-surface);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-	}
-
-	.gov-feature strong {
-		display: block;
-		font-family: var(--font-mono-alt);
-		font-size: 13px;
-		margin-bottom: 6px;
-	}
-
-	.gov-feature span {
-		font-size: 14px;
-		color: var(--text-muted);
-		line-height: 1.55;
-	}
-
-	.gov-cta {
-		text-align: center;
-		margin-top: 8px;
-	}
-
-	@media (max-width: 640px) {
-		.gov-features {
-			grid-template-columns: 1fr;
-		}
-	}
 
 	.callout-label {
 		font-family: var(--font-mono-alt);
