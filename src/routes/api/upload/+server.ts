@@ -146,17 +146,23 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	});
 
+	// Determine if file is parseable for RAG
+	const isParseable = file.type === 'application/pdf' || file.type === 'text/plain' || file.type === 'text/markdown';
+
 	// Record in attachments table (message_id backfilled when message is persisted)
 	// Compensate on DB failure: delete the R2 object to prevent orphans
+	let insertedId: number | null = null;
 	try {
-		await locals.db.insert(attachments).values({
+		const [inserted] = await locals.db.insert(attachments).values({
 			orgId: activeOrgId,
 			uploadedBy: locals.user.id,
 			filename: safeName,
 			r2Key,
 			contentType: file.type,
-			sizeBytes: file.size
-		});
+			sizeBytes: file.size,
+			processingStatus: isParseable ? 'pending' : 'skipped',
+		}).returning({ id: attachments.id });
+		insertedId = inserted?.id ?? null;
 
 		// Increment cached storage counter
 		await locals.db
@@ -167,6 +173,24 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		await r2.delete(r2Key).catch(() => {}); // best-effort R2 rollback
 		console.error('[Upload] DB insert failed, R2 object deleted:', dbErr);
 		error(500, 'Failed to record upload');
+	}
+
+	// Trigger async RAG processing via waitUntil (non-blocking)
+	if (isParseable && insertedId && platform?.env?.VECTORIZE) {
+		const ctx = platform.context;
+		if (ctx?.waitUntil) {
+			const { processDocument } = await import('$lib/server/rag/process-document');
+			ctx.waitUntil(
+				processDocument(
+					locals.db,
+					platform.env.AI,
+					platform.env.VECTORIZE,
+					platform.env.STORAGE,
+					insertedId,
+					activeOrgId
+				).catch((err: unknown) => console.error('[RAG] Background processing failed:', err))
+			);
+		}
 	}
 
 	return json({
