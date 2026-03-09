@@ -76,26 +76,12 @@ const pdfProvider: ExtractionProvider = {
 	supports(contentType: string) {
 		return contentType === 'application/pdf';
 	},
-	async extract(buffer, _contentType, _filename) {
-		try {
-			// pdf-parse works in Node; may fail in Workers (no fs)
-			// @ts-expect-error — pdf-parse has no TS declarations; runtime-only dep
-			const { default: pdfParse } = await import('pdf-parse');
-			const result = await pdfParse(Buffer.from(buffer));
-			const text = result.text?.trim();
-			if (!text) return null;
-			return {
-				text,
-				tokenEstimate: Math.ceil(text.length / 4),
-				parserName: this.name,
-				parserVersion: this.version,
-				contentSha256: await sha256(buffer),
-				pageCount: result.numpages ?? null,
-			};
-		} catch (err) {
-			console.error('[RAG] PDF parse failed:', err);
-			return null;
-		}
+	async extract(_buffer, _contentType, _filename) {
+		// PDF parsing requires a Workers-compatible library (Kreuzberg Phase 2).
+		// pdf-parse depends on node:fs which is unavailable in Cloudflare Workers.
+		// Until a compatible parser is registered via registerProvider(), PDFs are skipped.
+		console.log('[RAG] PDF extraction not yet available — register a provider via registerProvider()');
+		return null;
 	},
 };
 
