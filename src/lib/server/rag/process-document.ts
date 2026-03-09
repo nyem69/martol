@@ -12,6 +12,7 @@ import { attachments, documentChunks, aiUsage, ingestionJobs } from '$lib/server
 import { extractText } from './parser';
 import { chunkText } from './chunker';
 import { embedAndIndex, getEmbeddingModel, getEmbeddingDim } from './embedder';
+import { isAiCapReached } from '$lib/server/ai-billing';
 
 export async function processDocument(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,7 +35,15 @@ export async function processDocument(
 		})
 		.returning({ id: ingestionJobs.id });
 
-	// 2. Load attachment metadata
+	// 2. Check spending cap
+	if (await isAiCapReached(db, orgId)) {
+		await db.update(attachments).set({ processingStatus: 'skipped' }).where(eq(attachments.id, attachmentId));
+		await finishJob(db, job.id, 'completed', null);
+		console.log(`[RAG] Org ${orgId} AI cap reached, skipping document`);
+		return null;
+	}
+
+	// 3. Load attachment metadata
 	const [att] = await db
 		.select({
 			r2Key: attachments.r2Key,
@@ -51,7 +60,7 @@ export async function processDocument(
 		return null;
 	}
 
-	// 3. Mark as processing
+	// 4. Mark as processing
 	await db
 		.update(attachments)
 		.set({ processingStatus: 'processing' })

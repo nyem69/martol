@@ -183,6 +183,20 @@ const worker = {
 			console.error('[Cron] Ingestion job retry failed:', err);
 		}
 
+		// Report AI usage to Stripe (daily at midnight UTC only)
+		const now = new Date();
+		if (now.getUTCHours() === 0) {
+			try {
+				// Query all Pro orgs with AI usage this month
+				// Report overage to Stripe via subscription items
+				// TODO: Implement after metered prices created in Stripe dashboard
+				// Will use stripe.subscriptionItems.createUsageRecord()
+				console.log('[Cron] Stripe AI usage reporting: pending metered price setup');
+			} catch (err) {
+				console.error('[Cron] Stripe usage reporting failed:', err);
+			}
+		}
+
 		// TODO: Message retention — requires product decision on retention periods per plan tier.
 		// When defined, add a cron job to soft-delete messages older than the retention period
 		// and clean up associated R2 objects.

@@ -7,6 +7,7 @@ import type { McpResponse, DocSearchResult } from '$lib/types/mcp';
 import { searchDocuments } from '$lib/server/rag/search';
 import { aiUsage } from '$lib/server/db/schema';
 import { sql } from 'drizzle-orm';
+import { isAiCapReached } from '$lib/server/ai-billing';
 
 export async function docSearch(
 	params: { query: string; top_k: number },
@@ -16,6 +17,10 @@ export async function docSearch(
 	ai: Ai,
 	vectorize: VectorizeIndex
 ): Promise<McpResponse<DocSearchResult>> {
+	if (await isAiCapReached(db, agent.orgId)) {
+		return { ok: false, error: 'Monthly AI processing cap reached. Resumes next billing cycle.', code: 'ai_cap_reached' };
+	}
+
 	const results = await searchDocuments(db, ai, vectorize, agent.orgId, params.query, params.top_k);
 
 	// Track usage
