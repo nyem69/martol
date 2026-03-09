@@ -53,8 +53,17 @@ export async function searchDocuments(
 		.where(and(eq(documentChunks.orgId, orgId), inArray(documentChunks.vectorId, vectorIds)));
 
 	// 4. Merge scores with chunk content
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const chunkMap = new Map(chunks.map((c: any) => [c.vectorId, c]));
+	interface ChunkRow {
+		vectorId: string;
+		content: string;
+		chunkIndex: number;
+		attachmentId: number;
+		charStart: number | null;
+		charEnd: number | null;
+	}
+	const chunkMap = new Map<string, ChunkRow>(
+		chunks.map((c: ChunkRow) => [c.vectorId, c] as const)
+	);
 
 	return results.matches
 		.filter((m) => chunkMap.has(m.id))

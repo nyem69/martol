@@ -24,9 +24,10 @@ export async function embedAndIndex(
 	if (chunks.length === 0) return [];
 
 	// Generate embeddings in batch
-	const { data: embeddings } = await ai.run(EMBEDDING_MODEL, {
+	const result = await ai.run(EMBEDDING_MODEL, {
 		text: chunks.map((c) => c.content),
 	});
+	const embeddings = (result as { data: number[][] }).data;
 
 	// Build vectors with metadata for filtering
 	const vectors: VectorizeVector[] = chunks.map((chunk, i) => {
@@ -59,8 +60,8 @@ export async function embedQuery(
 	ai: Ai,
 	query: string
 ): Promise<number[]> {
-	const { data } = await ai.run(EMBEDDING_MODEL, { text: [query] });
-	return data[0];
+	const result = await ai.run(EMBEDDING_MODEL, { text: [query] });
+	return (result as { data: number[][] }).data[0];
 }
 
 export function getEmbeddingModel(): string {

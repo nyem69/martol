@@ -79,6 +79,7 @@ const pdfProvider: ExtractionProvider = {
 	async extract(buffer, _contentType, _filename) {
 		try {
 			// pdf-parse works in Node; may fail in Workers (no fs)
+			// @ts-expect-error — pdf-parse has no TS declarations; runtime-only dep
 			const { default: pdfParse } = await import('pdf-parse');
 			const result = await pdfParse(Buffer.from(buffer));
 			const text = result.text?.trim();

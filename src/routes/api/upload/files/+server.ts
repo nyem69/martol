@@ -43,7 +43,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	return json({
 		ok: true,
-		data: files.map((f) => ({
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		data: files.map((f: any) => ({
 			id: f.id,
 			filename: f.filename,
 			content_type: f.contentType,
