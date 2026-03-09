@@ -6,7 +6,8 @@ import type { ChatWhoResult, ChatWhoMember, McpResponse } from '$lib/types/mcp';
 
 export async function chatWho(
 	agent: AgentContext,
-	db: any
+	db: any,
+	kv?: KVNamespace
 ): Promise<McpResponse<ChatWhoResult>> {
 	const [orgResult, briefResult, membersResult] = await Promise.all([
 		db
@@ -14,7 +15,7 @@ export async function chatWho(
 			.from(organization)
 			.where(eq(organization.id, agent.orgId))
 			.limit(1),
-		getActiveBrief(db, agent.orgId),
+		getActiveBrief(db, agent.orgId, kv),
 		db
 			.select({
 				userId: member.userId,

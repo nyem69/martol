@@ -4,9 +4,10 @@ import type { BriefGetResult, McpResponse } from '$lib/types/mcp';
 
 export async function briefGetActive(
 	agent: AgentContext,
-	db: any
+	db: any,
+	kv?: KVNamespace
 ): Promise<McpResponse<BriefGetResult>> {
-	const brief = await getActiveBrief(db, agent.orgId);
+	const brief = await getActiveBrief(db, agent.orgId, kv);
 
 	return {
 		ok: true,

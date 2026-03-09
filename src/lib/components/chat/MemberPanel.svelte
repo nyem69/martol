@@ -134,8 +134,9 @@
 
 	// ── Brief state ──
 	let briefText = $state('');
+	let briefVersion = $state(0);
 	let briefLoading = $state(false);
-	let briefSaveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+	let briefSaveStatus = $state<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
 	let briefFetched = $state(false);
 
 	async function fetchBrief() {
@@ -143,8 +144,11 @@
 		briefLoading = true;
 		try {
 			const res = await fetch(`/api/rooms/${roomId}/brief`);
-			const data: { ok?: boolean; brief?: string } = await res.json();
-			if (data.ok) briefText = data.brief ?? '';
+			const data: { ok?: boolean; brief?: string; version?: number } = await res.json();
+			if (data.ok) {
+				briefText = data.brief ?? '';
+				briefVersion = data.version ?? 0;
+			}
 		} catch { /* silent */ }
 		briefLoading = false;
 		briefFetched = true;
@@ -157,12 +161,17 @@
 			const res = await fetch(`/api/rooms/${roomId}/brief`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ brief: briefText })
+				body: JSON.stringify({ brief: briefText, expectedVersion: briefVersion })
 			});
-			const data: { ok?: boolean } = await res.json();
+			const data: { ok?: boolean; version?: number; currentVersion?: number } = await res.json();
 			if (data.ok) {
+				briefVersion = data.version ?? briefVersion + 1;
 				briefSaveStatus = 'saved';
 				setTimeout(() => { if (briefSaveStatus === 'saved') briefSaveStatus = 'idle'; }, 2000);
+			} else if (res.status === 409) {
+				// Version conflict — reload the brief
+				briefSaveStatus = 'conflict';
+				setTimeout(() => fetchBrief().then(() => { briefSaveStatus = 'idle'; }), 1500);
 			} else {
 				briefSaveStatus = 'error';
 			}
@@ -490,7 +499,7 @@
 										<button
 											class="agent-btn"
 											onclick={saveBrief}
-											disabled={briefSaveStatus === 'saving'}
+											disabled={briefSaveStatus === 'saving' || briefSaveStatus === 'conflict'}
 											data-testid="brief-save-btn"
 										>
 											{#if briefSaveStatus === 'saving'}
@@ -498,8 +507,8 @@
 											{:else if briefSaveStatus === 'saved'}
 												<Check size={11} />
 												{m.chat_brief_saved()}
-											{:else if briefSaveStatus === 'error'}
-												{m.chat_brief_save()}
+											{:else if briefSaveStatus === 'conflict'}
+												<Loader size={11} class="animate-spin" />
 											{:else}
 												{m.chat_brief_save()}
 											{/if}
@@ -514,6 +523,10 @@
 							{#if briefSaveStatus === 'error'}
 								<div class="mt-1.5 rounded px-2 py-1.5 text-[10px]" style="background: var(--danger-bg, rgba(239,68,68,0.1)); color: var(--danger, #ef4444);" role="alert">
 									{m.chat_brief_save_error()}
+								</div>
+							{:else if briefSaveStatus === 'conflict'}
+								<div class="mt-1.5 rounded px-2 py-1.5 text-[10px]" style="background: var(--warning-bg, rgba(234,179,8,0.1)); color: var(--warning, #eab308);" role="alert">
+									{m.chat_brief_conflict()}
 								</div>
 							{/if}
 						{/if}

@@ -82,7 +82,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				result = await chatJoin(agent, locals.db);
 				break;
 			case 'chat_who':
-				result = await chatWho(agent, locals.db);
+				result = await chatWho(agent, locals.db, kv);
 				break;
 			case 'action_submit':
 				result = await actionSubmit(req.params, agent, locals.db);
@@ -114,7 +114,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				break;
 			}
 			case 'brief_get_active':
-				result = await briefGetActive(agent, locals.db);
+				result = await briefGetActive(agent, locals.db, kv);
 				break;
 			default: {
 				const _exhaustive: never = req;

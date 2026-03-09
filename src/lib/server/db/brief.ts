@@ -2,8 +2,9 @@
  * Shared brief-fetch logic.
  *
  * Single source of truth for reading the active brief:
- *   1. Query project_brief table (active row)
- *   2. Fall back to organization.metadata JSON
+ *   1. KV cache (if available, 60s TTL)
+ *   2. Query project_brief table (active row)
+ *   3. Fall back to organization.metadata JSON
  *
  * Used by: REST API, brief_get_active MCP tool, chat_who MCP tool.
  */
@@ -17,8 +18,25 @@ export interface ActiveBrief {
 	version: number;
 }
 
-export async function getActiveBrief(db: any, orgId: string): Promise<ActiveBrief> {
-	// Try project_brief table first (active row)
+const KV_PREFIX = 'brief:';
+const KV_TTL_SECONDS = 60;
+
+export async function getActiveBrief(
+	db: any,
+	orgId: string,
+	kv?: KVNamespace
+): Promise<ActiveBrief> {
+	// 1. Try KV cache
+	if (kv) {
+		try {
+			const cached = await kv.get(`${KV_PREFIX}${orgId}`);
+			if (cached) {
+				return JSON.parse(cached) as ActiveBrief;
+			}
+		} catch { /* cache miss or parse error — fall through */ }
+	}
+
+	// 2. Try project_brief table (active row)
 	const [activeBrief] = await db
 		.select({ content: projectBrief.content, version: projectBrief.version })
 		.from(projectBrief)
@@ -26,10 +44,15 @@ export async function getActiveBrief(db: any, orgId: string): Promise<ActiveBrie
 		.limit(1);
 
 	if (activeBrief) {
-		return { content: activeBrief.content, version: activeBrief.version };
+		const result: ActiveBrief = { content: activeBrief.content, version: activeBrief.version };
+		if (kv) {
+			// Fire-and-forget cache write
+			kv.put(`${KV_PREFIX}${orgId}`, JSON.stringify(result), { expirationTtl: KV_TTL_SECONDS }).catch(() => {});
+		}
+		return result;
 	}
 
-	// Fallback: organization.metadata
+	// 3. Fallback: organization.metadata
 	const [org] = await db
 		.select({ metadata: organization.metadata })
 		.from(organization)
@@ -46,4 +69,15 @@ export async function getActiveBrief(db: any, orgId: string): Promise<ActiveBrie
 	}
 
 	return { content: null, version: 0 };
+}
+
+/**
+ * Invalidate cached brief for an org.
+ * Call after PUT to ensure subsequent reads get fresh data.
+ */
+export async function invalidateBriefCache(kv: KVNamespace | undefined, orgId: string): Promise<void> {
+	if (!kv) return;
+	try {
+		await kv.delete(`${KV_PREFIX}${orgId}`);
+	} catch { /* best-effort */ }
 }
