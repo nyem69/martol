@@ -16,6 +16,7 @@ import { ticketComment } from '$lib/server/mcp/tools/ticket-comment';
 import { ticketUpdate } from '$lib/server/mcp/tools/ticket-update';
 import { docSearch } from '$lib/server/mcp/tools/doc-search';
 import { briefGetActive } from '$lib/server/mcp/tools/brief-get';
+import { briefUpdate } from '$lib/server/mcp/tools/brief-update';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.auth || !locals.db) {
@@ -115,6 +116,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			}
 			case 'brief_get_active':
 				result = await briefGetActive(agent, locals.db, kv);
+				break;
+			case 'brief_update':
+				result = await briefUpdate(req.params, agent, locals.db, kv);
 				break;
 			default: {
 				const _exhaustive: never = req;

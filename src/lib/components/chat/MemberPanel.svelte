@@ -25,7 +25,8 @@
 		userRole = 'member',
 		roomId = '',
 		invitations = [],
-		hmacSecret = null
+		hmacSecret = null,
+		onShowBriefModal
 	}: {
 		open: boolean;
 		onClose: () => void;
@@ -34,6 +35,7 @@
 		roomId?: string;
 		invitations?: Invitation[];
 		hmacSecret?: string | null;
+		onShowBriefModal: (brief: string, version: number) => void;
 	} = $props();
 
 	// Collapsible section state — members open by default, rest collapsed
@@ -136,8 +138,23 @@
 	let briefText = $state('');
 	let briefVersion = $state(0);
 	let briefLoading = $state(false);
-	let briefSaveStatus = $state<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
 	let briefFetched = $state(false);
+
+	const briefPreview = $derived.by(() => {
+		// Try to show a human-readable preview
+		try {
+			const parsed = JSON.parse(briefText);
+			if (parsed && typeof parsed === 'object' && 'goal' in parsed) {
+				const parts: string[] = [];
+				if (parsed.goal) parts.push(parsed.goal);
+				if (parsed.stack) parts.push(parsed.stack);
+				if (parsed.phase) parts.push(parsed.phase);
+				const joined = parts.join(' — ');
+				return joined.length > 200 ? joined.slice(0, 200) + '...' : joined;
+			}
+		} catch { /* not JSON */ }
+		return briefText.length > 200 ? briefText.slice(0, 200) + '...' : briefText;
+	});
 
 	async function fetchBrief() {
 		if (!roomId) return;
@@ -154,30 +171,10 @@
 		briefFetched = true;
 	}
 
-	async function saveBrief() {
-		if (!roomId) return;
-		briefSaveStatus = 'saving';
-		try {
-			const res = await fetch(`/api/rooms/${roomId}/brief`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ brief: briefText, expectedVersion: briefVersion })
-			});
-			const data: { ok?: boolean; version?: number; currentVersion?: number } = await res.json();
-			if (data.ok) {
-				briefVersion = data.version ?? briefVersion + 1;
-				briefSaveStatus = 'saved';
-				setTimeout(() => { if (briefSaveStatus === 'saved') briefSaveStatus = 'idle'; }, 2000);
-			} else if (res.status === 409) {
-				// Version conflict — reload the brief
-				briefSaveStatus = 'conflict';
-				setTimeout(() => fetchBrief().then(() => { briefSaveStatus = 'idle'; }), 1500);
-			} else {
-				briefSaveStatus = 'error';
-			}
-		} catch {
-			briefSaveStatus = 'error';
-		}
+	/** Called by parent when brief modal saves — update local state without re-fetch */
+	export function updateBrief(newBrief: string, newVersion: number) {
+		briefText = newBrief;
+		briefVersion = newVersion;
 	}
 
 	// Fetch brief when section opens
@@ -480,55 +477,22 @@
 								<Loader size={12} class="animate-spin" style="color: var(--text-muted);" />
 							</div>
 						{:else}
-							<textarea
-								bind:value={briefText}
-								placeholder={m.chat_brief_placeholder()}
-								disabled={!canEditBrief}
-								maxlength={10000}
-								class="brief-textarea"
-								rows="6"
-								aria-label={m.chat_brief()}
-								data-testid="brief-textarea"
-							></textarea>
-							<div class="mt-1.5 flex items-center justify-between">
-								<span class="text-[9px]" style="color: var(--text-muted); font-family: var(--font-mono);">
-									{briefText.length}/10,000
-								</span>
-								{#if canEditBrief}
-									<div class="flex items-center gap-2" aria-live="polite">
-										<button
-											class="agent-btn"
-											onclick={saveBrief}
-											disabled={briefSaveStatus === 'saving' || briefSaveStatus === 'conflict'}
-											data-testid="brief-save-btn"
-										>
-											{#if briefSaveStatus === 'saving'}
-												<Loader size={11} class="animate-spin" />
-											{:else if briefSaveStatus === 'saved'}
-												<Check size={11} />
-												{m.chat_brief_saved()}
-											{:else if briefSaveStatus === 'conflict'}
-												<Loader size={11} class="animate-spin" />
-											{:else}
-												{m.chat_brief_save()}
-											{/if}
-										</button>
-									</div>
-								{:else}
-									<span class="text-[9px]" style="color: var(--text-muted);">
-										{m.chat_brief_readonly()}
-									</span>
-								{/if}
-							</div>
-							{#if briefSaveStatus === 'error'}
-								<div class="mt-1.5 rounded px-2 py-1.5 text-[10px]" style="background: var(--danger-bg, rgba(239,68,68,0.1)); color: var(--danger, #ef4444);" role="alert">
-									{m.chat_brief_save_error()}
-								</div>
-							{:else if briefSaveStatus === 'conflict'}
-								<div class="mt-1.5 rounded px-2 py-1.5 text-[10px]" style="background: var(--warning-bg, rgba(234,179,8,0.1)); color: var(--warning, #eab308);" role="alert">
-									{m.chat_brief_conflict()}
-								</div>
+							{#if briefPreview}
+								<p class="mb-2 text-[11px] leading-relaxed" style="color: var(--text-muted); font-family: var(--font-mono); word-break: break-word;">
+									{briefPreview}
+								</p>
+							{:else}
+								<p class="mb-2 text-[11px] italic" style="color: var(--text-muted); opacity: 0.6;">
+									{m.chat_brief_placeholder()}
+								</p>
 							{/if}
+							<button
+								class="agent-btn"
+								onclick={() => onShowBriefModal(briefText, briefVersion)}
+								data-testid="brief-view-edit-btn"
+							>
+								{m.chat_brief_view_edit()}
+							</button>
 						{/if}
 					</div>
 				</div>
@@ -1236,33 +1200,6 @@
 		color: var(--accent);
 	}
 
-	.brief-textarea {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 0.375rem;
-		padding: 0.5rem;
-		font-size: 11px;
-		font-family: var(--font-mono);
-		color: var(--text);
-		outline: none;
-		width: 100%;
-		resize: vertical;
-		min-height: 4rem;
-		max-height: 16rem;
-	}
-
-	.brief-textarea:focus {
-		border-color: var(--accent);
-	}
-
-	.brief-textarea::placeholder {
-		color: var(--text-muted);
-	}
-
-	.brief-textarea:disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
-	}
 
 	.agent-input {
 		background: var(--bg);

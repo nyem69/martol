@@ -140,6 +140,17 @@ export const briefGetActiveSchema = z.object({
 	params: z.object({}).default({}),
 });
 
+export const briefUpdateSchema = z.object({
+	tool: z.literal('brief_update'),
+	params: z.object({
+		goal: z.string().max(5000).optional(),
+		stack: z.string().max(5000).optional(),
+		conventions: z.string().max(5000).optional(),
+		phase: z.string().max(5000).optional(),
+		notes: z.string().max(5000).optional(),
+	}),
+});
+
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	chatSendSchema,
 	chatEditSchema,
@@ -156,6 +167,7 @@ export const mcpRequestSchema = z.discriminatedUnion('tool', [
 	ticketUpdateSchema,
 	docSearchSchema,
 	briefGetActiveSchema,
+	briefUpdateSchema,
 ]);
 
 export type McpRequest = z.infer<typeof mcpRequestSchema>;
@@ -277,5 +289,9 @@ export interface TicketDetail extends TicketListItem {
 export interface BriefGetResult {
 	brief: string | null;
 	room_id: string;
+	version: number;
+}
+
+export interface BriefUpdateResult {
 	version: number;
 }

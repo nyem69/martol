@@ -430,5 +430,19 @@
   "chat_brief_saved": "Saved",
   "chat_brief_readonly": "Only room owners and leads can edit the brief",
   "chat_brief_save_error": "Failed to save brief. Please try again.",
-  "chat_brief_conflict": "Brief was updated by another user. Reloading..."
+  "chat_brief_conflict": "Brief was updated by another user. Reloading...",
+  "chat_brief_modal_title": "Project Brief",
+  "chat_brief_view_edit": "View / Edit Brief",
+  "chat_brief_section_goal": "Goal",
+  "chat_brief_section_stack": "Stack",
+  "chat_brief_section_conventions": "Conventions",
+  "chat_brief_section_phase": "Current Phase",
+  "chat_brief_section_notes": "Notes",
+  "chat_brief_placeholder_goal": "What is this project? What are you building and why?",
+  "chat_brief_placeholder_stack": "Languages, frameworks, databases, infrastructure",
+  "chat_brief_placeholder_conventions": "Naming patterns, code style, testing approach",
+  "chat_brief_placeholder_phase": "What are you working on right now?",
+  "chat_brief_placeholder_notes": "Anything else agents should know — constraints, pitfalls, links",
+  "chat_brief_ask_agent": "Ask Agent to Fill",
+  "chat_brief_readonly_hint": "Only room owners and leads can edit the brief"
 }

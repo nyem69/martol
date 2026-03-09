@@ -8,6 +8,7 @@
 	import MessageList from './MessageList.svelte';
 	import ChatInput from './ChatInput.svelte';
 	import MemberPanel from './MemberPanel.svelte';
+	import BriefModal from './BriefModal.svelte';
 	import AIDisclosureModal from './AIDisclosureModal.svelte';
 	import ReportModal from './ReportModal.svelte';
 	import OnlineBar from './OnlineBar.svelte';
@@ -43,6 +44,8 @@
 	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages);
 
 	let memberPanelOpen = $state(false);
+	let briefModalData = $state<{ brief: string; version: number } | null>(null);
+	let memberPanelRef: MemberPanel | undefined;
 	let pendingMention = $state<string | null>(null);
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
 	let reportTarget = $state<{ messageId: number; messageBody: string } | null>(null);
@@ -334,6 +337,7 @@
 	</div>
 
 	<MemberPanel
+		bind:this={memberPanelRef}
 		open={memberPanelOpen}
 		onClose={() => (memberPanelOpen = false)}
 		onlineUsers={store.onlineUsers}
@@ -341,6 +345,7 @@
 		{roomId}
 		invitations={roomInvitations}
 		{hmacSecret}
+		onShowBriefModal={(brief: string, version: number) => { briefModalData = { brief, version }; }}
 	/>
 </main>
 
@@ -361,4 +366,14 @@
 
 {#if showUpgradeModal}
 	<UpgradeModal wasCanceled={upgradeWasCanceled} onClose={() => (showUpgradeModal = false)} />
+{/if}
+
+{#if briefModalData}
+	<BriefModal
+		orgId={roomId}
+		currentBrief={briefModalData.brief}
+		currentVersion={briefModalData.version}
+		canEdit={userRole === 'owner' || userRole === 'lead'}
+		onclose={() => { briefModalData = null; }}
+	/>
 {/if}
