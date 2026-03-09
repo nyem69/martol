@@ -33,6 +33,7 @@
 	let renameValue = $state('');
 	let renameLoading = $state(false);
 	let createLoading = $state(false);
+	let switchingTo = $state<string | null>(null);
 
 	function toggleDropdown() {
 		dropdownOpen = !dropdownOpen;
@@ -80,13 +81,18 @@
 	}
 
 	async function switchRoom(orgId: string) {
-		if (orgId === roomId) {
+		if (orgId === roomId || switchingTo) {
 			closeDropdown();
 			return;
 		}
-		await organization.setActive({ organizationId: orgId });
-		closeDropdown();
-		await invalidateAll();
+		switchingTo = orgId;
+		try {
+			await organization.setActive({ organizationId: orgId });
+			closeDropdown();
+			await invalidateAll();
+		} finally {
+			switchingTo = null;
+		}
 	}
 
 	async function createRoom() {
@@ -147,7 +153,10 @@
 			aria-haspopup="listbox"
 			data-testid="room-switcher"
 		>
-			<span class="truncate" style="color: var(--text);">{displayName}</span>
+			{#if switchingTo}
+				<Loader size={12} class="shrink-0 animate-spin" style="color: var(--accent);" />
+			{/if}
+			<span class="truncate" style="color: var(--text);">{switchingTo ? rooms.find(r => r.id === switchingTo)?.name ?? displayName : displayName}</span>
 			<span
 				class="transition-transform duration-150"
 				style="color: var(--text-muted); transform: rotate({dropdownOpen ? '180' : '0'}deg);"
@@ -195,13 +204,16 @@
 					{:else}
 						<button
 							class="room-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-							style="color: {room.id === roomId ? 'var(--accent)' : 'var(--text)'};"
+							style="color: {room.id === roomId ? 'var(--accent)' : 'var(--text)'}; opacity: {switchingTo && switchingTo !== room.id ? 0.5 : 1};"
 							onclick={() => switchRoom(room.id)}
+							disabled={!!switchingTo}
 							role="option"
 							aria-selected={room.id === roomId}
 							data-testid="room-option"
 						>
-							{#if room.id === roomId}
+							{#if switchingTo === room.id}
+								<Loader size={12} class="shrink-0 animate-spin" style="color: var(--accent);" />
+							{:else if room.id === roomId}
 								<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--accent);"></span>
 							{:else}
 								<span class="inline-block h-1.5 w-1.5 shrink-0"></span>
