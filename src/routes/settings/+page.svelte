@@ -331,16 +331,12 @@
 	}
 
 	// ── Billing state ──
-	// svelte-ignore state_referenced_locally
-	const billing = data.billing;
-	// svelte-ignore state_referenced_locally
-	const roomCount = data.roomCount;
-	// svelte-ignore state_referenced_locally
-	const isOwnerOrLead = data.isOwnerOrLead;
-	// svelte-ignore state_referenced_locally
-	const team = data.team;
-	// svelte-ignore state_referenced_locally
-	const hasTeamPro = data.hasTeamPro;
+	// Reactive — updates when invalidateAll() re-runs the server loader
+	let billing = $derived(data.billing);
+	let roomCount = $derived(data.roomCount);
+	let isOwnerOrLead = $derived(data.isOwnerOrLead);
+	let team = $derived(data.team);
+	let hasTeamPro = $derived(data.hasTeamPro);
 	let upgrading = $state(false);
 	let managing = $state(false);
 	let billingError = $state('');
@@ -357,6 +353,10 @@
 			const url = new URL(window.location.href);
 			url.searchParams.delete('billing');
 			window.history.replaceState({}, '', url.toString());
+			// Re-fetch billing data — webhook may have arrived by now
+			invalidateAll();
+			// Retry after a short delay in case webhook is still in-flight
+			setTimeout(() => invalidateAll(), 2000);
 		}
 	});
 
