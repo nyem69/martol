@@ -233,7 +233,7 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 - [x] Add search input to DocumentPanel — `00ced5c`
 - [x] Create `GET /api/rooms/[roomId]/documents/search?q=...` endpoint using existing `searchDocuments()` — `00ced5c`
 - [x] Search results with snippet preview, score, filename, char range — `00ced5c`
-- [ ] AI usage metering for user searches (same `vector_query` counter)
+- [x] AI usage metering for user searches (same `vector_query` counter) — `1f1fc1b`
 - [x] Debounced search-as-you-type — `00ced5c`
 
 ### Phase 5: Citation Rendering
@@ -244,7 +244,7 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 - [x] Update `doc_search` MCP tool response to include `citation` field + `citation_instructions` — `7f5e410`
 - [x] Add citation link renderer in `markdown.ts` — detect `[📄 ...]` patterns, render as styled badges — `7f5e410`
 - [x] Citation click: opens DocumentPanel with search pre-filled via custom event — `7f5e410`
-- [ ] Update agent system prompt to instruct citation formatting when using doc_search results (client-side config)
+- [x] Update agent system prompt + tool definitions in martol-client to include doc_search with citation instructions
 
 ### Phase 6: Image OCR (Opt-in)
 
