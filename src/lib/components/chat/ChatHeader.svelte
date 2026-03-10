@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check, BriefcaseBusiness } from '@lucide/svelte';
+	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check, BriefcaseBusiness, FileText } from '@lucide/svelte';
 	import { organization, signOut } from '$lib/auth-client';
 	import { invalidateAll, goto } from '$app/navigation';
 
@@ -12,7 +12,8 @@
 		userRole,
 		onlineCount,
 		onToggleMembers,
-		onShowBrief
+		onShowBrief,
+		onToggleDocuments
 	}: {
 		roomName: string;
 		roomId: string;
@@ -22,6 +23,7 @@
 		onlineCount: number;
 		onToggleMembers: () => void;
 		onShowBrief: () => void;
+		onToggleDocuments: () => void;
 	} = $props();
 
 	// Derive displayed name from rooms array so it updates after rename + invalidateAll
@@ -302,6 +304,17 @@
 			<BriefcaseBusiness size={15} />
 			<span class="hidden sm:inline md:hidden" style="font-family: var(--font-mono);">{m.chat_brief()}</span>
 			<span class="hidden md:inline" style="font-family: var(--font-mono);">{m.chat_brief_modal_title()}</span>
+		</button>
+		<button
+			class="brief-btn flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-opacity hover:opacity-70 active:scale-95"
+			style="color: var(--text-muted);"
+			onclick={onToggleDocuments}
+			aria-label="Documents"
+			title="Documents"
+			data-testid="header-docs-btn"
+		>
+			<FileText size={15} />
+			<span class="hidden md:inline" style="font-family: var(--font-mono);">Docs</span>
 		</button>
 		{#if onlineCount > 0}
 			<div class="flex items-center gap-1 sm:gap-1.5" aria-live="polite">

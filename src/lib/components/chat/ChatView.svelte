@@ -8,6 +8,7 @@
 	import MessageList from './MessageList.svelte';
 	import ChatInput from './ChatInput.svelte';
 	import MemberPanel from './MemberPanel.svelte';
+	import DocumentPanel from './DocumentPanel.svelte';
 	import BriefModal from './BriefModal.svelte';
 	import AIDisclosureModal from './AIDisclosureModal.svelte';
 	import ReportModal from './ReportModal.svelte';
@@ -44,6 +45,7 @@
 	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages);
 
 	let memberPanelOpen = $state(false);
+	let documentPanelOpen = $state(false);
 	let briefModalData = $state<{ brief: string; version: number } | null>(null);
 	let memberPanelRef: MemberPanel | undefined;
 	let pendingMention = $state<string | null>(null);
@@ -293,6 +295,7 @@
 			onlineCount={store.onlineUsers.size}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
 			onShowBrief={openBriefModal}
+			onToggleDocuments={() => (documentPanelOpen = !documentPanelOpen)}
 		/>
 
 		<OnlineBar
@@ -366,6 +369,13 @@
 		invitations={roomInvitations}
 		{hmacSecret}
 		onShowBriefModal={(brief: string, version: number) => { briefModalData = { brief, version }; }}
+	/>
+
+	<DocumentPanel
+		open={documentPanelOpen}
+		onClose={() => (documentPanelOpen = false)}
+		{roomId}
+		{userRole}
 	/>
 </main>
 
