@@ -32,12 +32,18 @@ export async function briefUpdate(
 	const current = await getActiveBrief(db, agent.orgId, kv);
 	const sections: BriefSections = parseBriefContent(current.content);
 
-	// Merge provided fields
-	if (params.goal !== undefined) sections.goal = params.goal;
-	if (params.stack !== undefined) sections.stack = params.stack;
-	if (params.conventions !== undefined) sections.conventions = params.conventions;
-	if (params.phase !== undefined) sections.phase = params.phase;
-	if (params.notes !== undefined) sections.notes = params.notes;
+	// Merge provided fields (skip empty strings — they would erase content)
+	let changed = false;
+	for (const key of ['goal', 'stack', 'conventions', 'phase', 'notes'] as const) {
+		const val = params[key];
+		if (val !== undefined && val.trim() !== '') {
+			sections[key] = val;
+			changed = true;
+		}
+	}
+	if (!changed) {
+		return { ok: false, error: 'No non-empty fields provided', code: 'empty_update' };
+	}
 
 	const serialized = serializeBriefSections(sections);
 	if (serialized.length > MAX_BRIEF_LENGTH) {
