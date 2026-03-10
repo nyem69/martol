@@ -12,7 +12,7 @@ import { subscriptions } from '$lib/server/db/schema';
 import { member } from '$lib/server/db/auth-schema';
 import { eq, and, sql } from 'drizzle-orm';
 
-export const POST: RequestHandler = async ({ locals, platform, url }) => {
+export const POST: RequestHandler = async ({ request, locals, platform, url }) => {
 	if (!locals.user || !locals.session) error(401, 'Authentication required');
 	if (!locals.db) error(503, 'Database unavailable');
 
@@ -44,6 +44,21 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 	if (memberRecord.role !== 'owner' && memberRecord.role !== 'lead') {
 		error(403, 'Only owner or lead can manage billing');
 	}
+
+	// Parse interval from request body (default: monthly)
+	let interval: 'monthly' | 'annual' = 'monthly';
+	try {
+		const body = (await request.json()) as Record<string, unknown>;
+		if (body?.interval === 'annual') interval = 'annual';
+	} catch {
+		// body is optional — ignore parse errors
+	}
+
+	// Select price ID based on interval
+	const priceId =
+		interval === 'annual' && env.STRIPE_PRO_ANNUAL_PRICE_ID
+			? env.STRIPE_PRO_ANNUAL_PRICE_ID
+			: env.STRIPE_PRO_PRICE_ID;
 
 	const stripe = createStripe(env.STRIPE_SECRET_KEY);
 	const origin = url.origin;
@@ -88,16 +103,16 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 		allow_promotion_codes: true,
 		line_items: [
 			{
-				price: env.STRIPE_PRO_PRICE_ID,
+				price: priceId,
 				quantity: memberCount
 			}
 		],
 		success_url: `${origin}/settings?billing=success`,
 		cancel_url: `${origin}/settings?billing=cancel`,
 		subscription_data: {
-			metadata: { org_id: orgId }
+			metadata: { org_id: orgId, type: 'pro' }
 		},
-		metadata: { org_id: orgId }
+		metadata: { org_id: orgId, type: 'pro' }
 	});
 
 	return json({ url: session.url });
