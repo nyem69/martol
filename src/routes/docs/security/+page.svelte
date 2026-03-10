@@ -312,7 +312,7 @@
 	}
 
 	.page-subtitle {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: clamp(15px, 2.5vw, 18px);
 		color: var(--text-muted);
 		line-height: 1.6;
@@ -322,7 +322,7 @@
 
 	/* ── Lead text ── */
 	.lead {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 18px;
 		color: var(--text);
 		line-height: 1.6;
@@ -344,7 +344,7 @@
 	.comparison-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 13px;
 	}
 
@@ -471,7 +471,7 @@
 	}
 
 	.timeline-desc {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 14px;
 		color: var(--text-muted);
 		line-height: 1.6;
@@ -514,7 +514,7 @@
 		border-left: 2px solid var(--accent-muted);
 		background: oklch(0.75 0.15 65 / 0.04);
 		border-radius: 0 4px 4px 0;
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 14px;
 		color: var(--text-muted);
 		line-height: 1.6;
@@ -565,7 +565,7 @@
 	}
 
 	.infra-text {
-		font-family: var(--font-sans);
+		font-family: var(--font-serif);
 		font-size: 14px;
 		color: var(--text);
 		line-height: 1.6;
