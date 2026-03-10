@@ -673,3 +673,25 @@ export const projectBrief = pgTable(
 		foreignKey({ columns: [table.createdBy], foreignColumns: [user.id] }).onDelete('restrict')
 	]
 );
+
+// ── Contact Form ────────────────────────────────────────────────────
+
+/**
+ * Contact Submissions — public contact form entries.
+ * No auth required; rate-limited by IP. Forwarded to EMAIL_FROM on submit.
+ */
+export const contactSubmissions = pgTable(
+	'contact_submissions',
+	{
+		id: bigserial('id', { mode: 'number' }).primaryKey(),
+		name: text('name').notNull(),
+		email: text('email').notNull(),
+		subject: text('subject').notNull(),
+		message: text('message').notNull(),
+		ip: text('ip'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_contact_submissions_created').on(table.createdAt)
+	]
+);

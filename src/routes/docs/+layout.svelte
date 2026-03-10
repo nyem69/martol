@@ -12,7 +12,8 @@
 		{ href: '/docs/client', label: 'Agent Client' },
 		{ href: '/docs/security', label: 'Security' },
 		{ href: '/docs/pricing', label: 'Pricing' },
-		{ href: '/docs/credits', label: 'Credits' }
+		{ href: '/docs/credits', label: 'Credits' },
+		{ href: '/docs/contact', label: 'Contact' }
 	];
 
 	const currentPath = $derived(page.url.pathname);

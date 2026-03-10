@@ -708,7 +708,7 @@
 			</p>
 			<p>
 				If you are a maintainer of any project listed here and have concerns about attribution,
-				please <a href="mailto:nyem69@gmail.com">contact us</a>.
+				please <a href="/docs/contact">contact us</a>.
 			</p>
 		</section>
 	</main>
