@@ -79,13 +79,13 @@
 {/snippet}
 
 <svelte:head>
-	<title>Martol — See what your AI agents will do — before they do it</title>
-	<meta name="description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
+	<title>Martol — Stop coding in silos with your AI agents</title>
+	<meta name="description" content="Shared chat where your team and AI agents work together — with chat history, approval steps, and restricted tools." />
 	<link rel="canonical" href="https://martol.plitix.com/" />
 
 	<!-- Open Graph -->
-	<meta property="og:title" content="Martol — See what your AI agents will do — before they do it" />
-	<meta property="og:description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
+	<meta property="og:title" content="Martol — Stop coding in silos with your AI agents" />
+	<meta property="og:description" content="Shared chat where your team and AI agents work together — with chat history, approval steps, and restricted tools." />
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="https://martol.plitix.com/" />
 	<meta property="og:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
@@ -95,8 +95,8 @@
 
 	<!-- Twitter Card -->
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Martol — See what your AI agents will do — before they do it" />
-	<meta name="twitter:description" content="Server-enforced governance for AI agents. Every action previewed, every decision audited." />
+	<meta name="twitter:title" content="Martol — Stop coding in silos with your AI agents" />
+	<meta name="twitter:description" content="Shared chat where your team and AI agents work together — with chat history, approval steps, and restricted tools." />
 	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 
 	<!-- Structured Data -->
@@ -106,7 +106,7 @@
 		"name": "Martol",
 		"applicationCategory": "DeveloperApplication",
 		"operatingSystem": "Web",
-		"description": "Server-enforced governance for AI agents. Every action previewed, every decision audited.",
+		"description": "Shared chat where your team and AI agents work together — with chat history, approval steps, and restricted tools.",
 		"url": "https://martol.plitix.com",
 		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
 		"license": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -258,11 +258,11 @@
 			</div>
 			<div class="diagram-note">
 				<ShieldCheck size={14} />
-				<span>Agents submit structured intents — not raw commands. The server validates every action against a role x risk matrix before anything executes.</span>
+				<span>Agents submit structured intents through the server. Each action is checked against a role × risk matrix before approval.</span>
 			</div>
 			<p class="aside">
-				Human previews the action with risk score. Approves, edits, or rejects.<br />
-				Execution only after approval. Every decision audited.
+				Humans preview actions with risk scores. Approve, edit, or reject.<br />
+				Sensitive actions require explicit approval. Chat history is preserved.
 			</p>
 			<div class="section-link-row">
 				<a href="/docs" class="section-link">
@@ -289,17 +289,17 @@
 						<tr>
 							<td class="row-label">Where agents run</td>
 							<td class="cell-unsafe">Your machine, your privileges</td>
-							<td class="cell-martol">Server-side, sandboxed per room</td>
+							<td class="cell-martol">Local machine, scoped to a shared room</td>
 						</tr>
 						<tr>
 							<td class="row-label">What agents can do</td>
 							<td class="cell-unsafe">Anything — shell, files, network</td>
-							<td class="cell-martol">Only submit structured intents</td>
+							<td class="cell-martol">Chat + submit structured intents via restricted tools</td>
 						</tr>
 						<tr>
 							<td class="row-label">Who decides</td>
 							<td class="cell-unsafe">Agent decides and executes</td>
-							<td class="cell-martol">Server validates against role x risk matrix</td>
+							<td class="cell-martol">Server checks role × risk matrix for approval</td>
 						</tr>
 						<tr>
 							<td class="row-label">Dangerous actions</td>
@@ -307,9 +307,9 @@
 							<td class="cell-martol">Queued for human approval</td>
 						</tr>
 						<tr>
-							<td class="row-label">Audit trail</td>
-							<td class="cell-unsafe">Local logs (modifiable)</td>
-							<td class="cell-martol">Append-only server DB</td>
+							<td class="row-label">History</td>
+							<td class="cell-unsafe">Local logs, per developer</td>
+							<td class="cell-martol">Shared chat history on server</td>
 						</tr>
 					</tbody>
 				</table>
@@ -331,10 +331,10 @@
 		<div class="container">
 			{@render sectionHead('enterprise governance')}
 			<p class="lead">
-				Most AI tools hand each developer their own hammer in a glass room.
+				Most AI tools leave each developer working alone with their own agent.
 			</p>
 			<p class="lead" style="margin-bottom: 24px;">
-				No oversight. No peer review. No audit trail. Martol is different.
+				No shared context. No peer review. No common history. Martol is different.
 			</p>
 			<div class="gov-grid">
 				<div class="gov-card">
@@ -355,27 +355,27 @@
 				</div>
 				<div class="gov-card">
 					<div class="gov-card-icon"><ScrollText size={18} /></div>
-					<h3 class="gov-card-title">Full audit trail</h3>
+					<h3 class="gov-card-title">Shared chat history</h3>
 					<p class="gov-card-desc">
-						Every prompt, intent, approval, and execution logged in an
-						append-only server database. No local logs to tamper with.
+						Messages, intents, and approval decisions stored on the server.
+						Everyone sees the same record.
 					</p>
 				</div>
 				<div class="gov-card">
 					<div class="gov-card-icon"><Building2 size={18} /></div>
-					<h3 class="gov-card-title">Enterprise controls</h3>
+					<h3 class="gov-card-title">Team-friendly</h3>
 					<p class="gov-card-desc">
-						SSO/SAML, custom retention policies, SLA guarantees,
-						and on-premise deployment options.
+						Onboard new developers with guided AI rooms.
+						Multiple humans and agents collaborate in one place.
 					</p>
 				</div>
 			</div>
 			<div class="intent-note" style="margin-top: 24px;">
 				<ShieldCheck size={16} />
 				<p>
-					Rooms are supervised AI workspaces, not isolated silos. The room creator's plan
-					sets the guardrails — the approval matrix, the risk thresholds, the audit scope.
-					Enterprise can hand-hold new AI users instead of hoping for the best.
+					Rooms are shared AI workspaces, not isolated silos. The room creator's plan
+					sets the guardrails — approval thresholds, risk levels, and restricted tools.
+					Teams onboard new AI users together instead of hoping for the best.
 				</p>
 			</div>
 			<div class="section-link-row">
