@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { FileText, X, Trash2, RefreshCw, Download, Search, FileSpreadsheet, FileImage, Mail, Archive, Code, File } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages';
+	import ConfirmDialog from './ConfirmDialog.svelte';
 
 	let {
 		open,
@@ -32,6 +33,7 @@
 	let searching = $state(false);
 	let deleting = $state<number | null>(null);
 	let retrying = $state<number | null>(null);
+	let deleteConfirmId = $state<number | null>(null);
 	let ocrEnabled = $state(false);
 	let ocrLoading = $state(false);
 	let reindexing = $state(false);
@@ -70,8 +72,12 @@
 		loading = false;
 	}
 
+	function confirmDelete(id: number) {
+		deleteConfirmId = id;
+	}
+
 	async function deleteFile(id: number) {
-		if (!confirm('Delete this file? This cannot be undone.')) return;
+		deleteConfirmId = null;
 		deleting = id;
 		try {
 			const res = await fetch('/api/upload/files', {
@@ -361,7 +367,7 @@
 							<button
 								class="rounded p-1 transition-opacity hover:opacity-70"
 								style="color: var(--danger);"
-								onclick={() => deleteFile(file.id)}
+								onclick={() => confirmDelete(file.id)}
 								disabled={deleting === file.id}
 								aria-label="Delete"
 								title="Delete file"
@@ -418,3 +424,13 @@
 		</div>
 	{/if}
 </aside>
+
+<ConfirmDialog
+	open={deleteConfirmId !== null}
+	title="Delete File"
+	message="Delete this file? This cannot be undone."
+	confirmLabel="Delete"
+	variant="danger"
+	onConfirm={() => { if (deleteConfirmId) deleteFile(deleteConfirmId); }}
+	onCancel={() => { deleteConfirmId = null; }}
+/>
