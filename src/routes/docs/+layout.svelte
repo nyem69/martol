@@ -11,7 +11,8 @@
 		{ href: '/docs/chat', label: 'Chat' },
 		{ href: '/docs/client', label: 'Agent Client' },
 		{ href: '/docs/security', label: 'Security' },
-		{ href: '/docs/pricing', label: 'Pricing' }
+		{ href: '/docs/pricing', label: 'Pricing' },
+		{ href: '/docs/credits', label: 'Credits' }
 	];
 
 	const currentPath = $derived(page.url.pathname);
