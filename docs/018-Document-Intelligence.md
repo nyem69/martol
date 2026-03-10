@@ -240,11 +240,11 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 
 **Goal:** Agent responses show interactive document citations.
 
-- [ ] Define citation format convention for agents (e.g., `[filename.ext]` or `[📄 filename.ext, p.N]`)
-- [ ] Update `doc_search` MCP tool response to include a suggested citation string per result
-- [ ] Add citation link renderer in `markdown.ts` — detect citation patterns, render as interactive links
-- [ ] Citation click: scroll to document in panel, show chunk preview tooltip
-- [ ] Update agent system prompt to instruct citation formatting when using doc_search results
+- [x] Define citation format convention: `[📄 filename.ext]` — `7f5e410`
+- [x] Update `doc_search` MCP tool response to include `citation` field + `citation_instructions` — `7f5e410`
+- [x] Add citation link renderer in `markdown.ts` — detect `[📄 ...]` patterns, render as styled badges — `7f5e410`
+- [x] Citation click: opens DocumentPanel with search pre-filled via custom event — `7f5e410`
+- [ ] Update agent system prompt to instruct citation formatting when using doc_search results (client-side config)
 
 ### Phase 6: Image OCR (Opt-in)
 
