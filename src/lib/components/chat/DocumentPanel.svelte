@@ -230,7 +230,7 @@
 	style="
 		width: 100%;
 		max-width: 22rem;
-		background: var(--surface);
+		background: var(--bg-elevated);
 		border-left: 1px solid var(--border);
 		transform: translateX({open ? '0' : '100%'});
 		padding-top: env(safe-area-inset-top);
