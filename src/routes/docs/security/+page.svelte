@@ -1,25 +1,62 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import {
-		ArrowRight,
+		Menu,
+		X,
 		Lock,
 		CheckCircle,
+		ArrowRight,
 		ExternalLink
 	} from '@lucide/svelte';
 
-	function reveal(node: HTMLElement) {
-		node.classList.add('reveal');
-		const observer = new IntersectionObserver(
-			([entry]) => {
-				if (entry.isIntersecting) {
-					node.classList.add('revealed');
-					observer.unobserve(node);
-				}
-			},
-			{ threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
-		);
-		observer.observe(node);
-		return { destroy: () => observer.disconnect() };
+	let sidebarOpen = $state(false);
+	let activeSection = $state('problem');
+
+	const navGroups = [
+		{
+			label: 'Overview',
+			links: [
+				{ id: 'problem', text: 'The Problem' },
+				{ id: 'comparison', text: 'How Martol Is Different' }
+			]
+		},
+		{
+			label: 'Architecture',
+			links: [
+				{ id: 'approval-flow', text: 'The Approval Flow' },
+				{ id: 'roles', text: 'Role Authority Model' }
+			]
+		},
+		{
+			label: 'Infrastructure',
+			links: [
+				{ id: 'infra', text: 'Infrastructure Security' }
+			]
+		}
+	];
+
+	function scrollTrack(node: HTMLElement) {
+		const allIds = navGroups.flatMap((g) => g.links.map((l) => l.id));
+
+		function update() {
+			const scrollY = node.scrollTop + 120;
+			let current = allIds[0];
+			for (const id of allIds) {
+				const el = node.querySelector(`#${id}`) as HTMLElement | null;
+				if (el && el.offsetTop <= scrollY) current = id;
+			}
+			activeSection = current;
+		}
+
+		node.addEventListener('scroll', update, { passive: true });
+		update();
+		return { destroy: () => node.removeEventListener('scroll', update) };
+	}
+
+	function navClick(id: string) {
+		sidebarOpen = false;
+		const el = document.getElementById(id);
+		el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	}
 
 	const comparisonRows = [
@@ -91,29 +128,69 @@
 	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 </svelte:head>
 
-<div class="security-page">
+<div class="docs-layout" use:scrollTrack>
+	<!-- Mobile menu toggle -->
+	<button
+		type="button"
+		class="menu-toggle"
+		onclick={() => (sidebarOpen = !sidebarOpen)}
+		aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+	>
+		{#if sidebarOpen}
+			<X size={20} />
+		{:else}
+			<Menu size={20} />
+		{/if}
+	</button>
 
-	<!-- HEADER -->
-	<section class="section header-section">
-		<div class="container">
-			<h1 class="page-title">{m.security_title()}</h1>
-			<p class="page-subtitle">{m.security_subtitle()}</p>
-		</div>
-	</section>
+	<!-- Sidebar -->
+	<nav class="docs-sidebar {sidebarOpen ? 'open' : ''}">
+		{#each navGroups as group}
+			<div class="nav-group">
+				<div class="nav-group-label">{group.label}</div>
+				{#each group.links as link}
+					<button
+						type="button"
+						class="nav-link {activeSection === link.id ? 'active' : ''}"
+						onclick={() => navClick(link.id)}
+					>
+						{link.text}
+					</button>
+				{/each}
+			</div>
+		{/each}
+	</nav>
 
-	<!-- THE PROBLEM -->
-	<section class="section" use:reveal>
-		<div class="container">
+	<!-- Overlay for mobile sidebar -->
+	{#if sidebarOpen}
+		<button
+			type="button"
+			class="sidebar-overlay"
+			onclick={() => (sidebarOpen = false)}
+			aria-label="Close sidebar"
+		></button>
+	{/if}
+
+	<!-- Main content -->
+	<main class="docs-main">
+		<!-- Hero -->
+		<section class="docs-hero">
+			<h1 class="hero-title">{m.security_title()}</h1>
+			<p class="hero-tagline">{m.security_subtitle()}</p>
+		</section>
+
+		<hr class="section-divider" />
+
+		<!-- THE PROBLEM -->
+		<section class="page-section" id="problem">
 			{@render sectionHead(m.security_problem_title())}
-			<p class="lead">{m.security_problem_p1()}</p>
-			<p class="lead">{m.security_problem_p2()}</p>
-			<p class="lead">{m.security_problem_p3()}</p>
-		</div>
-	</section>
+			<p>{m.security_problem_p1()}</p>
+			<p>{m.security_problem_p2()}</p>
+			<p>{m.security_problem_p3()}</p>
+		</section>
 
-	<!-- HOW MARTOL IS DIFFERENT -->
-	<section class="section" use:reveal>
-		<div class="container">
+		<!-- HOW MARTOL IS DIFFERENT -->
+		<section class="page-section" id="comparison">
 			{@render sectionHead(m.security_comparison_title())}
 			<div class="comparison-table-wrap scrollbar-thin">
 				<table class="comparison-table">
@@ -135,12 +212,10 @@
 					</tbody>
 				</table>
 			</div>
-		</div>
-	</section>
+		</section>
 
-	<!-- THE APPROVAL FLOW -->
-	<section class="section" use:reveal>
-		<div class="container">
+		<!-- THE APPROVAL FLOW -->
+		<section class="page-section" id="approval-flow">
 			{@render sectionHead(m.security_flow_title())}
 			<div class="timeline">
 				{#each flowSteps as step, i}
@@ -155,12 +230,10 @@
 					</div>
 				{/each}
 			</div>
-		</div>
-	</section>
+		</section>
 
-	<!-- ROLE AUTHORITY MODEL -->
-	<section class="section" use:reveal>
-		<div class="container">
+		<!-- ROLE AUTHORITY MODEL -->
+		<section class="page-section" id="roles">
 			{@render sectionHead(m.security_roles_title())}
 			<div class="comparison-table-wrap scrollbar-thin">
 				<table class="comparison-table roles-table">
@@ -213,12 +286,10 @@
 				<span>{m.security_roles_note()}</span>
 			</div>
 			<p class="roles-footnote">* Destructive high-risk actions (delete, deploy, config change) are rejected outright for members.</p>
-		</div>
-	</section>
+		</section>
 
-	<!-- INFRASTRUCTURE SECURITY -->
-	<section class="section" use:reveal>
-		<div class="container">
+		<!-- INFRASTRUCTURE SECURITY -->
+		<section class="page-section" id="infra">
 			{@render sectionHead(m.security_infra_title())}
 			<ul class="infra-list">
 				{#each infraItems as item}
@@ -238,12 +309,10 @@
 					</li>
 				{/each}
 			</ul>
-		</div>
-	</section>
+		</section>
 
-	<!-- CTA -->
-	<section class="section" use:reveal>
-		<div class="container">
+		<!-- CTA -->
+		<section class="page-section">
 			<div class="cta-row">
 				<a href="/login" class="cta" data-testid="security-cta">
 					{m.security_cta()} <ArrowRight size={16} />
@@ -252,30 +321,132 @@
 					{m.security_cta_github()} <ExternalLink size={14} />
 				</a>
 			</div>
-		</div>
-	</section>
-
+		</section>
+	</main>
 </div>
 
 <style>
-	.security-page {
-		padding-top: 48px; /* docs topnav height */
+	/* ── Layout ── */
+	.docs-layout {
+		height: 100dvh;
+		overflow-y: auto;
+		overflow-x: hidden;
+		scroll-behavior: smooth;
+		scroll-padding-top: 80px;
 	}
 
-	/* ── Sections ── */
-	.section {
-		padding: 80px 0;
+	/* ── Sidebar ── */
+	.docs-sidebar {
+		position: fixed;
+		top: 48px;
+		left: 0;
+		width: 240px;
+		height: calc(100vh - 48px);
+		overflow-y: auto;
+		background: var(--bg-surface);
+		border-right: 1px solid var(--border);
+		padding: 20px 0;
+		z-index: 90;
 	}
 
-	.header-section {
-		padding-top: 48px;
-		padding-bottom: 40px;
+	.nav-group {
+		margin-bottom: 20px;
 	}
 
-	.container {
-		max-width: 896px;
-		margin: 0 auto;
-		padding: 0 24px;
+	.nav-group-label {
+		font-family: var(--font-mono-alt);
+		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+		padding: 6px 20px;
+	}
+
+	.nav-link {
+		display: block;
+		width: 100%;
+		text-align: left;
+		font-family: var(--font-serif);
+		font-size: 13.5px;
+		color: var(--text-muted);
+		padding: 5px 20px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: color 0.15s;
+		line-height: 1.4;
+	}
+
+	.nav-link:hover {
+		color: var(--text);
+	}
+
+	.nav-link.active {
+		color: var(--accent);
+		border-left: 2px solid var(--accent);
+		padding-left: 18px;
+	}
+
+	/* ── Menu toggle (mobile) ── */
+	.menu-toggle {
+		display: none;
+		position: fixed;
+		top: 56px;
+		left: 12px;
+		z-index: 100;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 6px;
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.sidebar-overlay {
+		display: none;
+	}
+
+	/* ── Main content ── */
+	.docs-main {
+		margin-left: 240px;
+		padding: 88px 48px 120px;
+		max-width: calc(240px + 820px);
+		font-family: var(--font-serif);
+		font-size: 16.5px;
+		line-height: 1.72;
+		color: var(--text);
+	}
+
+	.page-section {
+		margin-bottom: 72px;
+		padding-top: 8px;
+	}
+
+	/* ── Hero ── */
+	.hero-title {
+		font-family: var(--font-mono-alt);
+		font-size: 28px;
+		font-weight: 500;
+		color: var(--accent);
+		letter-spacing: -0.03em;
+		margin-bottom: 12px;
+		line-height: 1.2;
+	}
+
+	.hero-tagline {
+		font-family: var(--font-serif);
+		font-size: 17px;
+		color: var(--text-muted);
+		font-style: italic;
+		margin: 0;
+		line-height: 1.6;
+	}
+
+	.section-divider {
+		border: none;
+		border-top: 1px solid var(--border);
+		margin: 48px 0;
 	}
 
 	/* ── Section header ── */
@@ -283,7 +454,7 @@
 		display: flex;
 		align-items: center;
 		gap: 16px;
-		margin-bottom: 40px;
+		margin-bottom: 32px;
 	}
 
 	.section-label {
@@ -298,39 +469,6 @@
 		flex: 1;
 		height: 1px;
 		background: var(--border-subtle);
-	}
-
-	/* ── Page title ── */
-	.page-title {
-		font-family: var(--font-mono-alt);
-		font-size: clamp(32px, 6vw, 48px);
-		font-weight: 700;
-		color: var(--accent);
-		letter-spacing: 0.05em;
-		margin: 0 0 16px;
-		line-height: 1.1;
-	}
-
-	.page-subtitle {
-		font-family: var(--font-serif);
-		font-size: clamp(15px, 2.5vw, 18px);
-		color: var(--text-muted);
-		line-height: 1.6;
-		margin: 0;
-		max-width: 640px;
-	}
-
-	/* ── Lead text ── */
-	.lead {
-		font-family: var(--font-serif);
-		font-size: 18px;
-		color: var(--text);
-		line-height: 1.6;
-		margin: 0 0 12px;
-	}
-
-	.lead:last-child {
-		margin-bottom: 0;
 	}
 
 	/* ── Comparison table ── */
@@ -584,7 +722,6 @@
 	.cta-row {
 		display: flex;
 		align-items: center;
-		justify-content: center;
 		gap: 16px;
 		flex-wrap: wrap;
 	}
@@ -642,38 +779,39 @@
 		transform: translateY(0);
 	}
 
-	/* ── Scroll reveal ── */
-	.section:global(.reveal) {
-		opacity: 0;
-		transform: translateY(24px);
-		transition: opacity 0.7s ease, transform 0.7s ease;
-	}
-
-	.section:global(.revealed) {
-		opacity: 1;
-		transform: translateY(0);
-	}
-
-	/* ── Reduced motion ── */
-	@media (prefers-reduced-motion: reduce) {
-		.section:global(.reveal) {
-			opacity: 1 !important;
-			transform: none !important;
-			transition: none !important;
-		}
-	}
-
 	/* ── Mobile ── */
+	@media (max-width: 860px) {
+		.menu-toggle {
+			display: flex;
+		}
+
+		.docs-sidebar {
+			transform: translateX(-100%);
+			transition: transform 0.25s ease;
+			z-index: 95;
+		}
+
+		.docs-sidebar.open {
+			transform: translateX(0);
+		}
+
+		.sidebar-overlay {
+			display: block;
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.5);
+			z-index: 89;
+			border: none;
+			cursor: default;
+		}
+
+		.docs-main {
+			margin-left: 0;
+			padding: 84px 20px 80px;
+		}
+	}
+
 	@media (max-width: 640px) {
-		.section {
-			padding: 60px 0;
-		}
-
-		.header-section {
-			padding-top: 32px;
-			padding-bottom: 24px;
-		}
-
 		.comparison-table th:first-child {
 			width: auto;
 		}
@@ -691,6 +829,5 @@
 			width: 100%;
 			justify-content: center;
 		}
-
 	}
 </style>
