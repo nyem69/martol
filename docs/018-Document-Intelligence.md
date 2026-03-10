@@ -219,23 +219,22 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 
 **Goal:** Users can see and manage their room's documents.
 
-- [ ] Create `DocumentPanel.svelte` — slide-out sidebar listing room attachments
-- [ ] Add `GET /api/rooms/[roomId]/documents` endpoint — returns attachments with processing status
-- [ ] File type icons (by MIME type category)
-- [ ] Status badges: pending, processing, indexed, failed, skipped
-- [ ] Delete button (owner/lead role gated)
-- [ ] Retry button for failed extractions
-- [ ] Wire panel toggle into `ChatHeader.svelte` (document icon button)
+- [x] Create `DocumentPanel.svelte` — slide-out sidebar listing room attachments — `00ced5c`
+- [x] File type icons (by MIME type category) — `00ced5c`
+- [x] Status badges: pending, processing, indexed, failed, skipped — `00ced5c`
+- [x] Delete button (owner/lead role gated) — `00ced5c`
+- [x] Retry button for failed extractions + `POST /api/upload/files/retry` endpoint — `00ced5c`
+- [x] Wire panel toggle into `ChatHeader.svelte` (document icon button) — `00ced5c`
 
 ### Phase 4: User Search UI
 
 **Goal:** Users can semantically search room documents.
 
-- [ ] Add search input to DocumentPanel
-- [ ] Create `GET /api/rooms/[roomId]/documents/search?q=...` endpoint using existing `searchDocuments()`
-- [ ] Search results with snippet preview, score, filename, char range
+- [x] Add search input to DocumentPanel — `00ced5c`
+- [x] Create `GET /api/rooms/[roomId]/documents/search?q=...` endpoint using existing `searchDocuments()` — `00ced5c`
+- [x] Search results with snippet preview, score, filename, char range — `00ced5c`
 - [ ] AI usage metering for user searches (same `vector_query` counter)
-- [ ] Debounced search-as-you-type
+- [x] Debounced search-as-you-type — `00ced5c`
 
 ### Phase 5: Citation Rendering
 
