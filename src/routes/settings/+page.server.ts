@@ -86,7 +86,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	const billing = activeOrgId
-		? await checkOrgLimits(db, activeOrgId)
+		? await checkOrgLimits(db, activeOrgId, locals.user.id)
 		: null;
 
 	const roomCount = await checkUserRoomCount(db, locals.user.id);

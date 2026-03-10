@@ -6,7 +6,7 @@
  * Pro: unlimited (high caps)
  */
 
-import { subscriptions, messages, attachments } from '$lib/server/db/schema';
+import { subscriptions, messages, attachments, teams, teamMembers } from '$lib/server/db/schema';
 import { member } from '$lib/server/db/auth-schema';
 import { eq, and, gte, sql } from 'drizzle-orm';
 
@@ -51,8 +51,23 @@ export interface OrgLimitsResult {
 	quantity: number;
 }
 
+/**
+ * Check if a user has Pro via team membership.
+ * Returns true if the user is assigned to any active team.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsResult> {
+export async function checkUserTeamPro(db: any, userId: string): Promise<boolean> {
+	const [result] = await db
+		.select({ teamId: teamMembers.teamId })
+		.from(teamMembers)
+		.innerJoin(teams, eq(teams.id, teamMembers.teamId))
+		.where(and(eq(teamMembers.userId, userId), eq(teams.status, 'active')))
+		.limit(1);
+	return !!result;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function checkOrgLimits(db: any, orgId: string, userId?: string): Promise<OrgLimitsResult> {
 	// 1. Load subscription (default: free)
 	const [sub] = await db
 		.select({
@@ -67,8 +82,15 @@ export async function checkOrgLimits(db: any, orgId: string): Promise<OrgLimitsR
 		.where(eq(subscriptions.orgId, orgId))
 		.limit(1);
 
-	const plan: 'free' | 'pro' =
+	let plan: 'free' | 'pro' =
 		sub?.plan === 'pro' && sub?.status === 'active' ? 'pro' : 'free';
+
+	// If org is free but user has team Pro, upgrade to pro
+	if (plan === 'free' && userId) {
+		const hasTeamPro = await checkUserTeamPro(db, userId);
+		if (hasTeamPro) plan = 'pro';
+	}
+
 	const limits = plan === 'pro' ? PRO_LIMITS : FREE_LIMITS;
 
 	// 2. Count members
