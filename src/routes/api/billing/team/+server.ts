@@ -1,6 +1,7 @@
 /**
  * GET /api/billing/team — Get team info and members
  *
+ * Syncs team status from Stripe on each load (webhooks may be unreliable).
  * Auth: team owner only.
  */
 
@@ -9,12 +10,15 @@ import type { RequestHandler } from './$types';
 import { teams, teamMembers } from '$lib/server/db/schema';
 import { user } from '$lib/server/db/auth-schema';
 import { eq } from 'drizzle-orm';
+import { syncTeamSubscription } from '$lib/server/billing-sync';
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Authentication required');
 	if (!locals.db) error(503, 'Database unavailable');
 
-	const [team] = await locals.db
+	const db = locals.db;
+
+	let [team] = await db
 		.select()
 		.from(teams)
 		.where(eq(teams.ownerId, locals.user.id))
@@ -24,7 +28,19 @@ export const GET: RequestHandler = async ({ locals }) => {
 		return json({ team: null, members: [] });
 	}
 
-	const members = await locals.db
+	// Sync from Stripe if we have a customer ID
+	const stripeKey = platform?.env?.STRIPE_SECRET_KEY;
+	if (stripeKey && team.stripeCustomerId) {
+		await syncTeamSubscription(db, team.id, team.stripeCustomerId, stripeKey);
+		// Re-read after sync
+		[team] = await db
+			.select()
+			.from(teams)
+			.where(eq(teams.id, team.id))
+			.limit(1);
+	}
+
+	const members = await db
 		.select({
 			id: teamMembers.id,
 			userId: teamMembers.userId,

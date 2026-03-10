@@ -266,14 +266,18 @@
 						<div class="team-name-row">
 							<Crown size={16} />
 							<span class="team-name">{team.name}</span>
-							<span class="status-badge" class:active={isActive}>
-								{team.status}
+							<span class="status-badge" class:active={isActive} class:canceling={isActive && team.cancelAtPeriodEnd}>
+								{#if isActive && team.cancelAtPeriodEnd}
+									cancels {formatDate(team.currentPeriodEnd)}
+								{:else}
+									{team.status}
+								{/if}
 							</span>
 						</div>
 						<p class="seats-text">
 							{team.memberCount} / {team.seats} seats used
 						</p>
-						{#if team.currentPeriodEnd}
+						{#if team.currentPeriodEnd && !team.cancelAtPeriodEnd}
 							<p class="renewal-text">
 								Renews {formatDate(team.currentPeriodEnd)}
 							</p>
@@ -670,6 +674,11 @@
 	.status-badge.active {
 		background: color-mix(in oklch, var(--success) 15%, transparent);
 		color: var(--success);
+	}
+
+	.status-badge.canceling {
+		background: color-mix(in oklch, var(--warning) 15%, transparent);
+		color: var(--warning);
 	}
 
 	.seats-text {

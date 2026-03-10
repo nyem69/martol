@@ -10,9 +10,10 @@ import { user, member } from '$lib/server/db/auth-schema';
 import { usernameHistory, accountAudit, teams, teamMembers } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { checkOrgLimits, checkUserRoomCount, checkUserTeamPro } from '$lib/server/feature-gates';
+import { syncOrgSubscription, syncTeamSubscription } from '$lib/server/billing-sync';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, platform }) => {
 	if (!locals.user || !locals.session) redirect(302, '/login');
 
 	const db = locals.db;
@@ -85,6 +86,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			memberRecord?.role === 'owner' || memberRecord?.role === 'lead';
 	}
 
+	// Sync subscription state from Stripe before reading billing data
+	const stripeKey = platform?.env?.STRIPE_SECRET_KEY;
+	if (stripeKey && activeOrgId) {
+		await syncOrgSubscription(db, activeOrgId, stripeKey);
+	}
+
 	const billing = activeOrgId
 		? await checkOrgLimits(db, activeOrgId, locals.user.id)
 		: null;
@@ -92,7 +99,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const roomCount = await checkUserRoomCount(db, locals.user.id);
 
 	// Load team data if user owns a team
-	const [ownedTeam] = await db
+	let [ownedTeam] = await db
 		.select({
 			id: teams.id,
 			name: teams.name,
@@ -104,6 +111,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.from(teams)
 		.where(eq(teams.ownerId, locals.user.id))
 		.limit(1);
+
+	// Sync team subscription from Stripe
+	if (stripeKey && ownedTeam?.id) {
+		const [fullTeam] = await db.select().from(teams).where(eq(teams.id, ownedTeam.id)).limit(1);
+		if (fullTeam?.stripeCustomerId) {
+			await syncTeamSubscription(db, ownedTeam.id, fullTeam.stripeCustomerId, stripeKey);
+			// Re-read after sync
+			[ownedTeam] = await db
+				.select({
+					id: teams.id,
+					name: teams.name,
+					seats: teams.seats,
+					status: teams.status,
+					currentPeriodEnd: teams.currentPeriodEnd,
+					cancelAtPeriodEnd: teams.cancelAtPeriodEnd
+				})
+				.from(teams)
+				.where(eq(teams.id, ownedTeam.id))
+				.limit(1);
+		}
+	}
 
 	// Check if user has Pro via any team membership
 	const hasTeamPro = await checkUserTeamPro(db, locals.user.id);
