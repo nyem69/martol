@@ -43,7 +43,7 @@
 						<span class="price-amount">$0</span>
 						<span class="price-period">forever</span>
 					</div>
-					<p class="plan-desc">For solo developers and small experiments</p>
+					<p class="plan-desc">For startups, group projects, and students</p>
 				</div>
 				<ul class="plan-features">
 					<li class="plan-features-group">Your rooms</li>
