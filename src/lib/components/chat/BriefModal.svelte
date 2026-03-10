@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
-	import { X, Loader, Check, Bot, ChevronDown } from '@lucide/svelte';
+	import { X, Loader, Check, Bot, ChevronDown, Pencil, Eye } from '@lucide/svelte';
 	import {
 		type BriefSections,
 		SECTION_META,
@@ -36,11 +36,13 @@
 	let version = $state(currentVersion);
 	let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
 	let agentPickerOpen = $state(false);
+	let editing = $state(false);
 	let closeBtn: HTMLButtonElement | undefined;
 	let prevFocus: HTMLElement | null = null;
 	let dialogEl: HTMLDivElement | undefined;
 
 	const charCount = $derived(totalLength(sections));
+	const isEmpty = $derived(charCount === 0);
 
 	$effect(() => {
 		prevFocus = document.activeElement as HTMLElement;
@@ -48,7 +50,20 @@
 		return () => prevFocus?.focus();
 	});
 
-	// i18n label/placeholder resolvers keyed by section key
+	// Auto-resize textareas when content changes or mode switches
+	$effect(() => {
+		if (!editing) return;
+		// Touch sections to subscribe
+		void sections.goal, sections.stack, sections.conventions, sections.phase, sections.notes;
+		// Tick delay so DOM has rendered
+		requestAnimationFrame(() => {
+			dialogEl?.querySelectorAll<HTMLTextAreaElement>('.brief-edit-textarea').forEach((ta) => {
+				ta.style.height = 'auto';
+				ta.style.height = ta.scrollHeight + 'px';
+			});
+		});
+	});
+
 	const labelFn: Record<string, () => string> = {
 		goal: () => m.chat_brief_section_goal(),
 		stack: () => m.chat_brief_section_stack(),
@@ -65,6 +80,17 @@
 		notes: () => m.chat_brief_placeholder_notes(),
 	};
 
+	function enterEdit() {
+		if (!canEdit) return;
+		editing = true;
+	}
+
+	function cancelEdit() {
+		sections = parseBriefContent(currentBrief);
+		editing = false;
+		saveStatus = 'idle';
+	}
+
 	async function save() {
 		if (!canEdit || saveStatus === 'saving') return;
 		saveStatus = 'saving';
@@ -78,10 +104,10 @@
 			if (data.ok) {
 				version = data.version ?? version + 1;
 				saveStatus = 'saved';
+				editing = false;
 				setTimeout(() => { if (saveStatus === 'saved') saveStatus = 'idle'; }, 2000);
 			} else if (res.status === 409) {
 				saveStatus = 'conflict';
-				// Reload brief
 				try {
 					const reload = await fetch(`/api/rooms/${orgId}/brief`);
 					const reloaded: { ok?: boolean; brief?: string; version?: number } = await reload.json();
@@ -99,8 +125,17 @@
 		}
 	}
 
+	function autoResize(e: Event) {
+		const ta = e.target as HTMLTextAreaElement;
+		ta.style.height = 'auto';
+		ta.style.height = ta.scrollHeight + 'px';
+	}
+
 	function onKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') onclose();
+		if (e.key === 'Escape') {
+			if (editing) { cancelEdit(); return; }
+			onclose();
+		}
 		if (e.key === 'Tab' && dialogEl) {
 			const focusable = dialogEl.querySelectorAll<HTMLElement>(
 				'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -138,18 +173,36 @@
 
 	<div
 		bind:this={dialogEl}
-		class="relative z-10 flex w-full max-w-lg flex-col rounded-lg"
-		style="background: var(--bg-surface); border: 1px solid var(--border); max-height: 85vh;"
+		class="brief-dialog relative z-10 flex w-full max-w-2xl flex-col rounded-lg"
 	>
 		<!-- Header -->
-		<div class="flex items-center justify-between border-b px-5 py-3" style="border-color: var(--border);">
-			<div class="flex items-center gap-2">
-				<h2 class="text-sm font-bold" style="color: var(--text-primary); font-family: var(--font-mono);">
+		<div class="brief-header flex items-center justify-between px-5 py-3">
+			<div class="flex items-center gap-2.5">
+				<h2 class="brief-title">
 					{m.chat_brief_modal_title()}
 				</h2>
-				<span class="rounded px-1.5 py-0.5 text-[9px] font-bold" style="background: var(--bg-hover); color: var(--text-muted); font-family: var(--font-mono);">
+				<span class="brief-version-badge">
 					v{version}
 				</span>
+				{#if !editing && canEdit}
+					<button
+						class="brief-mode-btn"
+						onclick={enterEdit}
+						data-testid="brief-modal-edit"
+					>
+						<Pencil size={11} />
+						Edit
+					</button>
+				{/if}
+				{#if editing}
+					<button
+						class="brief-mode-btn brief-mode-active"
+						onclick={cancelEdit}
+					>
+						<Eye size={11} />
+						Read
+					</button>
+				{/if}
 			</div>
 			<button
 				bind:this={closeBtn}
@@ -163,54 +216,80 @@
 			</button>
 		</div>
 
-		<!-- Body — scrollable -->
-		<div class="flex-1 overflow-y-auto px-5 py-4" style="scrollbar-width: thin;">
-			<div class="flex flex-col gap-4">
-				{#each SECTION_META as sec}
-					<div>
-						<label
-							for="brief-{sec.key}"
-							class="mb-1 block text-[10px] font-bold uppercase tracking-wider"
-							style="color: var(--text-muted); font-family: var(--font-mono);"
-						>
-							{labelFn[sec.key]()}
-						</label>
-						<textarea
-							id="brief-{sec.key}"
-							bind:value={sections[sec.key]}
-							placeholder={placeholderFn[sec.key]()}
-							disabled={!canEdit}
-							rows={sec.rows}
-							class="brief-section-textarea"
-							data-testid="brief-section-{sec.key}"
-						></textarea>
+		<!-- Body — single scrollable area -->
+		<div class="brief-body flex-1 overflow-y-auto">
+			{#if editing}
+				<!-- ═══ EDIT MODE ═══ -->
+				<div class="brief-sections-edit">
+					{#each SECTION_META as sec}
+						<div class="brief-edit-section">
+							<label
+								for="brief-{sec.key}"
+								class="brief-label"
+							>
+								{labelFn[sec.key]()}
+							</label>
+							<textarea
+								id="brief-{sec.key}"
+								bind:value={sections[sec.key]}
+								placeholder={placeholderFn[sec.key]()}
+								rows={2}
+								class="brief-edit-textarea"
+								oninput={autoResize}
+								data-testid="brief-section-{sec.key}"
+							></textarea>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<!-- ═══ READ MODE ═══ -->
+				{#if isEmpty}
+					<div class="brief-empty">
+						<p class="brief-empty-text">No brief yet.</p>
+						<p class="brief-empty-hint">
+							{#if canEdit}
+								Click <strong>Edit</strong> to write one, or use <strong>Ask Agent to Fill</strong> below.
+							{:else}
+								{m.chat_brief_readonly_hint()}
+							{/if}
+						</p>
 					</div>
-				{/each}
-			</div>
+				{:else}
+					<div class="brief-sections-read">
+						{#each SECTION_META as sec}
+							{#if sections[sec.key].trim()}
+								<div class="brief-read-section">
+									<h3 class="brief-read-heading">{labelFn[sec.key]()}</h3>
+									<div class="brief-read-content">{sections[sec.key]}</div>
+								</div>
+							{/if}
+						{/each}
+					</div>
+				{/if}
+			{/if}
 		</div>
 
 		<!-- Footer -->
-		<div class="flex flex-col gap-2 border-t px-5 py-3" style="border-color: var(--border);">
+		<div class="brief-footer">
 			{#if saveStatus === 'error'}
-				<div class="rounded px-2 py-1.5 text-[10px]" style="background: var(--danger-bg, rgba(239,68,68,0.1)); color: var(--danger, #ef4444);" role="alert">
+				<div class="brief-alert brief-alert-error" role="alert">
 					{m.chat_brief_save_error()}
 				</div>
 			{:else if saveStatus === 'conflict'}
-				<div class="rounded px-2 py-1.5 text-[10px]" style="background: var(--warning-bg, rgba(234,179,8,0.1)); color: var(--warning, #eab308);" role="alert">
+				<div class="brief-alert brief-alert-warning" role="alert">
 					{m.chat_brief_conflict()}
 				</div>
 			{/if}
 			<div class="flex items-center justify-between">
-				<span
-					class="text-[9px]"
-					style="color: {charCount > MAX_TOTAL ? 'var(--danger, #ef4444)' : 'var(--text-muted)'}; font-family: var(--font-mono);"
-				>
-					{charCount.toLocaleString()}/{MAX_TOTAL.toLocaleString()}
+				<span class="brief-char-count" class:over-limit={charCount > MAX_TOTAL}>
+					{#if editing}
+						{charCount.toLocaleString()}/{MAX_TOTAL.toLocaleString()}
+					{/if}
 				</span>
 
 				<div class="flex items-center gap-2" aria-live="polite">
 					{#if !canEdit}
-						<span class="text-[9px]" style="color: var(--text-muted);">
+						<span class="brief-readonly-hint">
 							{m.chat_brief_readonly_hint()}
 						</span>
 					{/if}
@@ -236,8 +315,7 @@
 								<ChevronDown size={10} />
 							</button>
 							{#if agentPickerOpen}
-								<div
-									class="agent-picker absolute bottom-full left-0 z-10 mb-1 min-w-40 rounded-lg border py-1 shadow-xl"
+								<div class="agent-picker absolute bottom-full left-0 z-10 mb-1 min-w-40 rounded-lg border py-1 shadow-xl"
 									style="background: var(--bg-elevated); border-color: var(--border);"
 								>
 									{#each agents as agent}
@@ -255,14 +333,14 @@
 							{/if}
 						</div>
 					{/if}
-					<button
-						class="brief-btn brief-btn-secondary"
-						onclick={onclose}
-						data-testid="brief-modal-cancel"
-					>
-						{m.cancel()}
-					</button>
-					{#if canEdit}
+					{#if editing}
+						<button
+							class="brief-btn brief-btn-secondary"
+							onclick={cancelEdit}
+							data-testid="brief-modal-cancel"
+						>
+							{m.cancel()}
+						</button>
 						<button
 							class="brief-btn brief-btn-primary"
 							onclick={save}
@@ -278,6 +356,14 @@
 								{m.chat_brief_save()}
 							{/if}
 						</button>
+					{:else}
+						<button
+							class="brief-btn brief-btn-secondary"
+							onclick={onclose}
+							data-testid="brief-modal-cancel"
+						>
+							{m.chat_close()}
+						</button>
 					{/if}
 				</div>
 			</div>
@@ -286,35 +372,220 @@
 </div>
 
 <style>
-	.brief-section-textarea {
+	/* ── Dialog shell ─────────────────────────────────── */
+	.brief-dialog {
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
+		max-height: 85vh;
+	}
+
+	/* ── Header ───────────────────────────────────────── */
+	.brief-header {
+		border-bottom: 1px solid var(--border);
+	}
+
+	.brief-title {
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		color: var(--text-primary);
+		font-family: var(--font-mono);
+	}
+
+	.brief-version-badge {
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-size: 9px;
+		font-weight: 700;
+		font-family: var(--font-mono);
+		background: var(--bg-hover);
+		color: var(--text-muted);
+	}
+
+	.brief-mode-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px 8px;
+		border-radius: 4px;
+		font-size: 10px;
+		font-weight: 600;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
+		border: 1px solid var(--border);
+		background: transparent;
+		cursor: pointer;
+		transition: all 150ms ease;
+	}
+
+	.brief-mode-btn:hover {
+		color: var(--text-primary);
+		border-color: var(--text-muted);
+	}
+
+	.brief-mode-active {
+		background: var(--accent-muted, oklch(0.55 0.10 65));
+		color: var(--bg);
+		border-color: transparent;
+	}
+
+	.brief-mode-active:hover {
+		color: var(--bg);
+		opacity: 0.85;
+	}
+
+	/* ── Body ─────────────────────────────────────────── */
+	.brief-body {
+		scrollbar-width: thin;
+		scrollbar-color: var(--border) transparent;
+	}
+
+	/* ── Read mode ────────────────────────────────────── */
+	.brief-sections-read {
+		padding: 20px 24px;
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+
+	.brief-read-section {
+		position: relative;
+	}
+
+	.brief-read-heading {
+		font-size: 9px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--accent);
+		font-family: var(--font-mono);
+		margin-bottom: 6px;
+		padding-bottom: 4px;
+		border-bottom: 1px solid var(--border-subtle, var(--border));
+	}
+
+	.brief-read-content {
+		font-size: 12.5px;
+		line-height: 1.65;
+		color: var(--text-primary);
+		font-family: var(--font-mono);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	/* ── Empty state ──────────────────────────────────── */
+	.brief-empty {
+		padding: 48px 24px;
+		text-align: center;
+	}
+
+	.brief-empty-text {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		margin-bottom: 8px;
+	}
+
+	.brief-empty-hint {
+		font-size: 11px;
+		color: var(--text-muted);
+		opacity: 0.7;
+		font-family: var(--font-mono);
+		line-height: 1.6;
+	}
+
+	/* ── Edit mode ────────────────────────────────────── */
+	.brief-sections-edit {
+		padding: 16px 24px 20px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.brief-edit-section {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.brief-label {
+		font-size: 9px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		margin-bottom: 6px;
+	}
+
+	.brief-edit-textarea {
 		width: 100%;
-		resize: vertical;
+		resize: none;
+		overflow: hidden;
 		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 8px 10px;
 		font-size: 12px;
-		line-height: 1.5;
+		line-height: 1.6;
 		font-family: var(--font-mono);
 		background: var(--bg-input, var(--bg-surface));
 		color: var(--text-primary);
 		outline: none;
 		transition: border-color 150ms ease;
+		min-height: 40px;
 	}
 
-	.brief-section-textarea:focus {
+	.brief-edit-textarea:focus {
 		border-color: var(--accent);
 	}
 
-	.brief-section-textarea::placeholder {
+	.brief-edit-textarea::placeholder {
 		color: var(--text-muted);
-		opacity: 0.6;
+		opacity: 0.5;
 	}
 
-	.brief-section-textarea:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
+	/* ── Footer ───────────────────────────────────────── */
+	.brief-footer {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		border-top: 1px solid var(--border);
+		padding: 10px 20px;
 	}
 
+	.brief-char-count {
+		font-size: 9px;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
+		min-height: 14px;
+	}
+
+	.brief-char-count.over-limit {
+		color: var(--danger, #ef4444);
+	}
+
+	.brief-readonly-hint {
+		font-size: 9px;
+		color: var(--text-muted);
+	}
+
+	.brief-alert {
+		border-radius: 4px;
+		padding: 6px 10px;
+		font-size: 10px;
+	}
+
+	.brief-alert-error {
+		background: var(--danger-bg, rgba(239, 68, 68, 0.1));
+		color: var(--danger, #ef4444);
+	}
+
+	.brief-alert-warning {
+		background: var(--warning-bg, rgba(234, 179, 8, 0.1));
+		color: var(--warning, #eab308);
+	}
+
+	/* ── Buttons ──────────────────────────────────────── */
 	.brief-btn {
 		display: inline-flex;
 		align-items: center;
