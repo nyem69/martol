@@ -708,7 +708,7 @@
 			</p>
 			<p>
 				If you are a maintainer of any project listed here and have concerns about attribution,
-				please <a href="mailto:azmi@plitix.com">contact us</a>.
+				please <a href="mailto:nyem69@gmail.com">contact us</a>.
 			</p>
 		</section>
 	</main>
