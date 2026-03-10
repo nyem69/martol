@@ -15,7 +15,8 @@ export async function briefUpdate(
 	params: { goal?: string; stack?: string; conventions?: string; phase?: string; notes?: string },
 	agent: AgentContext,
 	db: any,
-	kv?: KVNamespace
+	kv?: KVNamespace,
+	platform?: App.Platform
 ): Promise<McpResponse<BriefUpdateResult>> {
 	// Verify agent has member role or higher
 	const [memberRecord] = await db
@@ -99,6 +100,24 @@ export async function briefUpdate(
 
 	// Invalidate cache
 	await invalidateBriefCache(kv, agent.orgId);
+
+	// Broadcast brief_changed to connected WebSocket clients
+	if (platform?.env?.CHAT_ROOM && platform?.env?.HMAC_SIGNING_SECRET) {
+		try {
+			const doId = platform.env.CHAT_ROOM.idFromName(agent.orgId);
+			const stub = platform.env.CHAT_ROOM.get(doId);
+			await stub.fetch(new Request('https://do/notify-brief', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET
+				},
+				body: JSON.stringify({ version: newVersion, changedBy: agent.agentUserId })
+			}));
+		} catch {
+			// Non-critical — client will see update on next modal open
+		}
+	}
 
 	return { ok: true, data: { version: newVersion } };
 }

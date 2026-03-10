@@ -118,7 +118,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				result = await briefGetActive(agent, locals.db, kv);
 				break;
 			case 'brief_update':
-				result = await briefUpdate(req.params, agent, locals.db, kv);
+				result = await briefUpdate(req.params, agent, locals.db, kv, platform);
 				break;
 			default: {
 				const _exhaustive: never = req;

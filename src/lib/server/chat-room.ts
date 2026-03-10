@@ -153,6 +153,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return this.handleRestEdit(request);
 		}
 
+		// REST brief-changed broadcast — used by brief update endpoints
+		if (request.method === 'POST' && url.pathname.endsWith('/notify-brief')) {
+			return this.handleNotifyBrief(request);
+		}
+
 		if (request.headers.get('Upgrade') !== 'websocket') {
 			return new Response('Expected WebSocket upgrade', { status: 426 });
 		}
@@ -838,6 +843,33 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 		return new Response(
 			JSON.stringify({ ok: true, editedAt }),
+			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
+	// ── REST Brief Notification ──────────────────────────────────────
+
+	private async handleNotifyBrief(request: Request): Promise<Response> {
+		const internalSecret = request.headers.get('X-Internal-Secret');
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
+			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
+		}
+
+		let payload: { version: number; changedBy: string };
+		try {
+			payload = await request.json();
+		} catch {
+			return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
+		}
+
+		await this.broadcast({
+			type: 'brief_changed',
+			version: payload.version,
+			changedBy: payload.changedBy
+		});
+
+		return new Response(
+			JSON.stringify({ ok: true }),
 			{ status: 200, headers: { 'Content-Type': 'application/json' } }
 		);
 	}

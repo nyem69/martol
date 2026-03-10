@@ -36,6 +36,7 @@ export type ServerMessage =
 	| { type: 'id_map'; mappings: Array<{ localId: string; serverSeqId: number; dbId: number }> }
 	| { type: 'edit'; serverSeqId: number; body: string; editedAt: string; senderId: string }
 	| { type: 'clear'; clearedBy: string }
+	| { type: 'brief_changed'; version: number; changedBy: string }
 	| { type: 'error'; code: ErrorCode; message: string };
 
 export type ErrorCode =

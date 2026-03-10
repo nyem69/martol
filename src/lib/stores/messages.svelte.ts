@@ -42,6 +42,7 @@ export class MessagesStore {
 	lastServerSeqId = $state(0);
 	systemEvents = $state<SystemEvent[]>([]);
 	error = $state<string | null>(null);
+	briefVersion = $state(0);
 
 	readonly ws: WebSocketStore;
 
@@ -110,6 +111,9 @@ export class MessagesStore {
 				break;
 			case 'clear':
 				this.handleClear(msg.clearedBy);
+				break;
+			case 'brief_changed':
+				this.briefVersion = msg.version;
 				break;
 			case 'error':
 				this.error = msg.message;

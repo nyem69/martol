@@ -174,5 +174,23 @@ export const PUT: RequestHandler = async ({ params, request, locals, platform })
 	// Invalidate KV cache after successful write
 	await invalidateBriefCache(kv, orgId);
 
+	// Broadcast brief_changed to connected WebSocket clients
+	if (platform?.env?.CHAT_ROOM && platform?.env?.HMAC_SIGNING_SECRET) {
+		try {
+			const doId = platform.env.CHAT_ROOM.idFromName(orgId);
+			const stub = platform.env.CHAT_ROOM.get(doId);
+			await stub.fetch(new Request('https://do/notify-brief', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET
+				},
+				body: JSON.stringify({ version: newVersion, changedBy: locals.user!.id })
+			}));
+		} catch {
+			// Non-critical — client will see update on next modal open
+		}
+	}
+
 	return json({ ok: true, version: newVersion });
 };

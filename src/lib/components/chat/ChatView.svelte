@@ -58,6 +58,14 @@
 			}
 		} catch { /* silent */ }
 	}
+	// Auto-refresh brief modal when brief_changed arrives via WebSocket
+	$effect(() => {
+		const v = store.briefVersion;
+		if (v > 0 && briefModalData) {
+			openBriefModal();
+		}
+	});
+
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
 	let reportTarget = $state<{ messageId: number; messageBody: string } | null>(null);
 	let recentActions = $state<PendingAction[]>([]);
