@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check, FileText } from '@lucide/svelte';
+	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check, BriefcaseBusiness } from '@lucide/svelte';
 	import { organization, signOut } from '$lib/auth-client';
 	import { invalidateAll, goto } from '$app/navigation';
 
@@ -291,6 +291,18 @@
 		{/if}
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5 sm:gap-3">
+		<button
+			class="brief-btn flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-opacity hover:opacity-70 active:scale-95"
+			style="color: var(--text-muted);"
+			onclick={onShowBrief}
+			aria-label={m.chat_brief()}
+			title={m.chat_brief()}
+			data-testid="header-brief-btn"
+		>
+			<BriefcaseBusiness size={15} />
+			<span class="hidden sm:inline md:hidden" style="font-family: var(--font-mono);">{m.chat_brief()}</span>
+			<span class="hidden md:inline" style="font-family: var(--font-mono);">{m.chat_brief_modal_title()}</span>
+		</button>
 		{#if onlineCount > 0}
 			<div class="flex items-center gap-1 sm:gap-1.5" aria-live="polite">
 				<span
@@ -306,16 +318,6 @@
 				</span>
 			</div>
 		{/if}
-		<button
-			class="header-icon-btn rounded p-1.5 transition-opacity hover:opacity-70 active:scale-95"
-			style="color: var(--text-muted);"
-			onclick={onShowBrief}
-			aria-label={m.chat_brief()}
-			title={m.chat_brief()}
-			data-testid="header-brief-btn"
-		>
-			<FileText size={16} />
-		</button>
 		<div class="relative">
 			<button
 				class="user-btn flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
@@ -376,6 +378,10 @@
 </header>
 
 <style>
+	.brief-btn:hover {
+		background: color-mix(in oklch, var(--bg-surface) 50%, transparent);
+	}
+
 	.room-switcher-btn:hover {
 		background: color-mix(in oklch, var(--bg-surface) 50%, transparent);
 	}
