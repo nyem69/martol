@@ -1,7 +1,8 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { page } from '$app/state';
-	import { ArrowLeft } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import { ArrowLeft, ChevronDown } from '@lucide/svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { children } = $props();
@@ -17,6 +18,12 @@
 	];
 
 	const currentPath = $derived(page.url.pathname);
+	const currentLabel = $derived(tabs.find((t) => t.href === currentPath)?.label ?? 'Docs');
+
+	function onSelectChange(e: Event) {
+		const value = (e.target as HTMLSelectElement).value;
+		if (value) goto(value);
+	}
 </script>
 
 <div class="docs-shell">
@@ -40,6 +47,14 @@
 					{tab.label}
 				</a>
 			{/each}
+		</div>
+		<div class="topnav-select">
+			<select value={currentPath} onchange={onSelectChange} aria-label="Navigate docs">
+				{#each tabs as tab}
+					<option value={tab.href}>{tab.label}</option>
+				{/each}
+			</select>
+			<ChevronDown size={12} class="select-icon" />
 		</div>
 	</nav>
 	{@render children()}
@@ -139,6 +154,7 @@
 		padding: 6px 12px;
 		border-radius: 5px;
 		transition: all 0.12s;
+		white-space: nowrap;
 	}
 
 	.topnav-tab:hover {
@@ -151,14 +167,51 @@
 		background: color-mix(in oklch, var(--accent) 12%, transparent);
 	}
 
-	@media (max-width: 640px) {
+	/* ── Mobile dropdown ──────────────────────────────── */
+	.topnav-select {
+		display: none;
+		position: relative;
+		margin-left: auto;
+	}
+
+	.topnav-select select {
+		appearance: none;
+		-webkit-appearance: none;
+		font-family: var(--font-mono-alt);
+		font-size: 12.5px;
+		color: var(--accent);
+		background: color-mix(in oklch, var(--accent) 12%, transparent);
+		border: 1px solid color-mix(in oklch, var(--accent) 25%, transparent);
+		border-radius: 5px;
+		padding: 5px 28px 5px 10px;
+		cursor: pointer;
+	}
+
+	.topnav-select select:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.topnav-select :global(.select-icon) {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--accent);
+		pointer-events: none;
+	}
+
+	@media (max-width: 768px) {
 		.topnav-title {
 			display: none;
 		}
 
-		.topnav-tab {
-			font-size: 11.5px;
-			padding: 5px 8px;
+		.topnav-tabs {
+			display: none;
+		}
+
+		.topnav-select {
+			display: block;
 		}
 	}
 </style>
