@@ -184,7 +184,7 @@ export async function actionSubmit(
 			riskFactors: params.simulation?.risk_factors ?? null,
 			estimatedImpact: params.simulation?.impact ?? null,
 			status,
-			approvedBy: outcome === 'direct' ? 'system' : null,
+			approvedBy: null,
 			approvedAt: outcome === 'direct' ? new Date() : null
 		})
 		.returning({ id: pendingActions.id });

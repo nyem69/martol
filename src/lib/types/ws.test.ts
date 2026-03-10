@@ -103,7 +103,7 @@ describe('WebSocket protocol types', () => {
 		it('validates id_map type', () => {
 			const msg: ServerMessage = {
 				type: 'id_map',
-				mappings: [{ localId: 'abc', dbId: 1 }]
+				mappings: [{ localId: 'abc', serverSeqId: 42, dbId: 1 }]
 			};
 			expect(msg.mappings).toHaveLength(1);
 		});

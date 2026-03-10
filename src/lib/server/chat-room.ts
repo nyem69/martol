@@ -538,7 +538,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	}
 
 	// ── REST Ingest (for MCP chat_send) ──────────────────────────────
-	// Trust boundary: verified via X-Internal-Secret header (shared BETTER_AUTH_SECRET).
+	// Trust boundary: verified via X-Internal-Secret header (shared HMAC_SIGNING_SECRET).
 	// The calling code authenticates the agent via API key before invoking this endpoint.
 
 	private async handleRestIngest(request: Request): Promise<Response> {
@@ -878,7 +878,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		try {
 			// [C6] Individual inserts — no wrapping transaction so one poison
 			// message (bad FK, constraint violation) doesn't block the entire batch.
-			const mappings: Array<{ localId: string; dbId: number }> = [];
+			const mappings: Array<{ localId: string; serverSeqId: number; dbId: number }> = [];
 			const updates: Record<string, StoredMessage> = {};
 			const failed: number[] = [];
 
@@ -933,7 +933,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 					stored.dbId = inserted.id;
 					seqToDbId.set(seqId, inserted.id); // Update map for later replyTo lookups
 					updates[storageKey(seqId)] = stored;
-					mappings.push({ localId: stored.localId, dbId: inserted.id });
+					mappings.push({ localId: stored.localId, serverSeqId: seqId, dbId: inserted.id });
 				} catch (insertErr) {
 					// Drizzle wraps PG errors: code may be on err.code or err.cause.code
 					const pgCode =
@@ -970,7 +970,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							stored.dbId = retried.id;
 							seqToDbId.set(seqId, retried.id);
 							updates[storageKey(seqId)] = stored;
-							mappings.push({ localId: stored.localId, dbId: retried.id });
+							mappings.push({ localId: stored.localId, serverSeqId: seqId, dbId: retried.id });
 							continue;
 						} catch (retryErr) {
 							// Retry also failed — fall through to skip logic

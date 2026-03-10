@@ -30,7 +30,7 @@ export async function chatEdit(
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET || platform.env.BETTER_AUTH_SECRET
+				'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET
 			},
 			body: JSON.stringify(editPayload)
 		}));

@@ -135,7 +135,7 @@ Source code access alone cannot compromise rooms or agents. The server uses HMAC
 | `BETTER_AUTH_SECRET` | Better Auth sessions and email tokens only |
 | `HMAC_SIGNING_SECRET` | WebSocket identity signing, DO internal auth, broadcast message HMAC |
 
-Both are required in production. If `HMAC_SIGNING_SECRET` is not set, the server falls back to `BETTER_AUTH_SECRET` for backward compatibility.
+Both are required in production.
 
 ### Room hijack prevention
 

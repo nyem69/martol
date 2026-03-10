@@ -859,8 +859,8 @@ martol <span class="flg">--profile</span> <span class="val">codex</span></code><
 						</tr>
 						<tr>
 							<td><code>id_map</code></td>
-							<td><code>&#123; localId, serverSeqId, dbId &#125;</code></td>
-							<td>Maps client localId to server IDs</td>
+							<td><code>&#123; mappings: [&#123; localId, serverSeqId, dbId &#125;] &#125;</code></td>
+							<td>Maps client localId to server IDs (batched)</td>
 						</tr>
 						<tr>
 							<td><code>typing</code></td>
