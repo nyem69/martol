@@ -1,6 +1,8 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import { Check, X, Crown, Zap, Users, Building2 } from '@lucide/svelte';
+
+	let annual = $state(false);
 </script>
 
 <svelte:head>
@@ -29,6 +31,24 @@
 			<strong>Agent</strong> — an AI participant in a room. Agents are never counted toward billing.<br />
 			<strong>Team</strong> — a Pro subscription that covers multiple users. Each team member gets full Pro privileges.
 		</section>
+
+		<!-- Billing Interval Toggle -->
+		<div class="flex items-center justify-center gap-3 mb-8">
+			<span class="text-sm {!annual ? 'text-white' : 'text-zinc-500'}">Monthly</span>
+			<button
+				class="relative w-12 h-6 rounded-full {annual ? 'bg-amber-600' : 'bg-zinc-700'} transition-colors"
+				onclick={() => annual = !annual}
+				aria-label={annual ? 'Switch to monthly billing' : 'Switch to annual billing'}
+				data-testid="pricing-interval-toggle"
+			>
+				<span
+					class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform {annual ? 'translate-x-6' : ''}"
+				></span>
+			</button>
+			<span class="text-sm {annual ? 'text-white' : 'text-zinc-500'}">
+				Annual <span class="text-amber-400 text-xs">save 20%</span>
+			</span>
+		</div>
 
 		<!-- Pricing Cards -->
 		<section class="pricing-cards">
@@ -75,9 +95,12 @@
 					</div>
 					<h2 class="plan-name">Pro</h2>
 					<div class="plan-price">
-						<span class="price-amount">$10</span>
-						<span class="price-period">/ user / month</span>
+						<span class="price-amount">{annual ? '$8' : '$10'}</span>
+						<span class="price-period">/ user / mo</span>
 					</div>
+					{#if annual}
+						<p class="price-annual-note">billed $96/year</p>
+					{/if}
 					<p class="plan-desc">Unlimited rooms, unlimited room capacity</p>
 				</div>
 				<ul class="plan-features">
@@ -109,9 +132,12 @@
 					</div>
 					<h2 class="plan-name">Team</h2>
 					<div class="plan-price">
-						<span class="price-amount">$10</span>
-						<span class="price-period">/ user / month</span>
+						<span class="price-amount">{annual ? '$8' : '$10'}</span>
+						<span class="price-period">/ user / mo</span>
 					</div>
+					{#if annual}
+						<p class="price-annual-note">billed $96/user/year</p>
+					{/if}
 					<p class="plan-desc">Pro for your whole team, one invoice</p>
 				</div>
 				<ul class="plan-features">
@@ -697,6 +723,13 @@
 		font-size: 14px;
 		color: var(--text-muted);
 		margin: 0;
+	}
+
+	.price-annual-note {
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		color: var(--text-muted);
+		margin: 2px 0 6px;
 	}
 
 	/* ── Plan Features ────────────────────────────────── */
