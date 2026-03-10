@@ -7,9 +7,9 @@
 
 import { redirect, error } from '@sveltejs/kit';
 import { user, member } from '$lib/server/db/auth-schema';
-import { usernameHistory, accountAudit } from '$lib/server/db/schema';
+import { usernameHistory, accountAudit, teams, teamMembers } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { checkOrgLimits, checkUserRoomCount } from '$lib/server/feature-gates';
+import { checkOrgLimits, checkUserRoomCount, checkUserTeamPro } from '$lib/server/feature-gates';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -91,6 +91,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const roomCount = await checkUserRoomCount(db, locals.user.id);
 
+	// Load team data if user owns a team
+	const [ownedTeam] = await db
+		.select({
+			id: teams.id,
+			name: teams.name,
+			seats: teams.seats,
+			status: teams.status,
+			currentPeriodEnd: teams.currentPeriodEnd,
+			cancelAtPeriodEnd: teams.cancelAtPeriodEnd
+		})
+		.from(teams)
+		.where(eq(teams.ownerId, locals.user.id))
+		.limit(1);
+
+	// Check if user has Pro via any team membership
+	const hasTeamPro = await checkUserTeamPro(db, locals.user.id);
+
 	return {
 		profile: {
 			id: userData.id,
@@ -103,6 +120,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 		lastEmailChange: lastEmailChange?.changedAt?.toISOString() ?? null,
 		billing,
 		roomCount,
-		isOwnerOrLead
+		isOwnerOrLead,
+		team: ownedTeam
+			? {
+					id: ownedTeam.id,
+					name: ownedTeam.name,
+					seats: ownedTeam.seats,
+					status: ownedTeam.status,
+					currentPeriodEnd: ownedTeam.currentPeriodEnd?.toISOString() ?? null,
+					cancelAtPeriodEnd: ownedTeam.cancelAtPeriodEnd
+				}
+			: null,
+		hasTeamPro
 	};
 };
