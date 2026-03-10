@@ -9,8 +9,14 @@
 	import UploadProgress from './UploadProgress.svelte';
 
 	const ALLOWED_TYPES = new Set([
-		'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-		'application/pdf', 'text/plain'
+		'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/tiff',
+		'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'text/html',
+		'application/json', 'text/yaml', 'application/x-yaml', 'application/xml', 'text/xml',
+		'message/rfc822', 'application/zip', 'application/gzip',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+		'application/vnd.oasis.opendocument.text'
 	]);
 	const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -450,7 +456,7 @@
 			<input
 				bind:this={fileInput}
 				type="file"
-				accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain"
+				accept="image/jpeg,image/png,image/gif,image/webp,image/tiff,application/pdf,text/plain,text/markdown,text/csv,text/html,application/json,text/yaml,application/xml,message/rfc822,application/zip,application/gzip,.docx,.xlsx,.pptx,.odt,.eml,.md,.csv,.json,.yaml,.yml"
 				class="hidden"
 				onchange={onFileSelect}
 				data-testid="file-input"

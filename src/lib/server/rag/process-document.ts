@@ -9,10 +9,15 @@
 
 import { eq, sql } from 'drizzle-orm';
 import { attachments, documentChunks, aiUsage, ingestionJobs } from '$lib/server/db/schema';
-import { extractText } from './parser';
+import { extractText, registerProvider } from './parser';
+import { kreuzbergProvider } from './kreuzberg-provider';
 import { chunkText } from './chunker';
 import { embedAndIndex, getEmbeddingModel, getEmbeddingDim } from './embedder';
 import { isAiCapReached } from '$lib/server/ai-billing';
+
+// Register Kreuzberg as the primary provider for PDF, Office, HTML, etc.
+// Prepended to the registry so it takes priority over the built-in PDF stub.
+registerProvider(kreuzbergProvider);
 
 export async function processDocument(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any

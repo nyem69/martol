@@ -29,6 +29,9 @@ importers:
       '@inlang/paraglide-js':
         specifier: ^2.6.0
         version: 2.13.0
+      '@kreuzberg/wasm':
+        specifier: ^4.4.4
+        version: 4.4.4
       '@lucide/svelte':
         specifier: ^0.575.0
         version: 0.575.0(svelte@5.53.5)
@@ -1208,6 +1211,10 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
+  '@kreuzberg/wasm@4.4.4':
+    resolution: {integrity: sha512-48wmdJVhXwYRawh9rN3EgCJpLc/tQQZV2XtC4QYafItqrFU/VvJI60r0X4ONFITRAkcKy33+KWIAZo0UNY/TJg==}
+    engines: {node: '>= 16'}
+
   '@levischuck/tiny-cbor@0.2.11':
     resolution: {integrity: sha512-llBRm4dT4Z89aRsm6u2oEZ8tfwL/2l6BwpZ7JcyieouniDECM5AqNgr/y08zalEIvW3RSK4upYyybDcmjXqAow==}
 
@@ -2255,6 +2262,9 @@ packages:
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
+  comlink@4.4.2:
+    resolution: {integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==}
+
   commander@11.1.0:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
     engines: {node: '>=16'}
@@ -3162,6 +3172,9 @@ packages:
   tar@7.5.9:
     resolution: {integrity: sha512-BTLcK0xsDh2+PUe9F6c2TlRp4zOOBMTkoQHQIWSIzI0R7KG46uEwq4OPk2W7bZcprBMsuaeFsqwYr7pjh6CuHg==}
     engines: {node: '>=18'}
+
+  tesseract-wasm@0.11.0:
+    resolution: {integrity: sha512-a6TTRXTRKL6/zVa7lijMWEglLipqY10n7kG9QWr7rckknHkox+5PAzLbSluk+MfpbLgeXm6uoDI9ytezmJJr7Q==}
 
   through2@4.0.2:
     resolution: {integrity: sha512-iOqSav00cVxEEICeD7TjLB1sueEL+81Wpzp2bY17uZjZN0pWZPuo4suZ/61VujxmqSGFfgOcNuTZ85QJwNZQpw==}
@@ -4307,6 +4320,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@kreuzberg/wasm@4.4.4':
+    optionalDependencies:
+      tesseract-wasm: 0.11.0
+
   '@levischuck/tiny-cbor@0.2.11': {}
 
   '@lix-js/sdk@0.4.7':
@@ -5400,6 +5417,9 @@ snapshots:
 
   color-name@1.1.4: {}
 
+  comlink@4.4.2:
+    optional: true
+
   commander@11.1.0: {}
 
   commander@12.1.0: {}
@@ -6293,6 +6313,11 @@ snapshots:
       minipass: 7.1.3
       minizlib: 3.1.0
       yallist: 5.0.0
+
+  tesseract-wasm@0.11.0:
+    dependencies:
+      comlink: 4.4.2
+    optional: true
 
   through2@4.0.2:
     dependencies:

@@ -14,15 +14,58 @@ import { attachments, subscriptions } from '$lib/server/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB (documents can be larger than images)
 const ALLOWED_TYPES = new Set([
+	// Images
 	'image/jpeg',
 	'image/png',
 	'image/gif',
 	'image/webp',
+	'image/tiff',
 	// SVG intentionally excluded — can contain embedded scripts (stored XSS)
+	// Documents
 	'application/pdf',
-	'text/plain'
+	'text/plain',
+	'text/markdown',
+	'text/csv',
+	// Office
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+	'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+	'application/vnd.oasis.opendocument.text', // .odt
+	// Web / data
+	'text/html',
+	'application/json',
+	'text/yaml',
+	'application/x-yaml',
+	'application/xml',
+	'text/xml',
+	// Email
+	'message/rfc822', // .eml
+	// Archives
+	'application/zip',
+	'application/gzip',
+]);
+
+/** Types that Kreuzberg can extract text from (triggers async RAG pipeline). */
+const PARSEABLE_TYPES = new Set([
+	'application/pdf',
+	'text/plain',
+	'text/markdown',
+	'text/csv',
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+	'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+	'application/vnd.oasis.opendocument.text',
+	'text/html',
+	'application/json',
+	'text/yaml',
+	'application/x-yaml',
+	'application/xml',
+	'text/xml',
+	'message/rfc822',
+	'application/zip',
+	'application/gzip',
 ]);
 
 // Strict key format: orgId/timestamp-filename (no path traversal)
@@ -34,7 +77,16 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 	'image/gif': [[0x47, 0x49, 0x46, 0x38]],
 	// WebP: RIFF header (bytes 0-3) + WEBP signature (bytes 8-11)
 	'image/webp': [[0x52, 0x49, 0x46, 0x46]],
-	'application/pdf': [[0x25, 0x50, 0x44, 0x46]]
+	'image/tiff': [[0x49, 0x49, 0x2A, 0x00], [0x4D, 0x4D, 0x00, 0x2A]],
+	'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
+	// ZIP-based formats (DOCX, XLSX, PPTX, ODT, ZIP)
+	'application/zip': [[0x50, 0x4B, 0x03, 0x04]],
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [[0x50, 0x4B, 0x03, 0x04]],
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [[0x50, 0x4B, 0x03, 0x04]],
+	'application/vnd.openxmlformats-officedocument.presentationml.presentation': [[0x50, 0x4B, 0x03, 0x04]],
+	'application/vnd.oasis.opendocument.text': [[0x50, 0x4B, 0x03, 0x04]],
+	// Gzip
+	'application/gzip': [[0x1F, 0x8B]],
 };
 
 // Patterns that indicate HTML/script injection in text/plain files
@@ -149,8 +201,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	});
 
-	// Determine if file is parseable for RAG
-	const isParseable = file.type === 'application/pdf' || file.type === 'text/plain' || file.type === 'text/markdown';
+	// Determine if file is parseable for RAG (text extraction + embedding)
+	const isParseable = PARSEABLE_TYPES.has(file.type);
 
 	// Record in attachments table (message_id backfilled when message is persisted)
 	// Compensate on DB failure: delete the R2 object to prevent orphans

@@ -31,6 +31,7 @@
     "@capacitor/core": "^8.0.2",
     "@capacitor/ios": "^8.1.0",
     "@inlang/paraglide-js": "^2.6.0",
+    "@kreuzberg/wasm": "^4.4.4",
     "@lucide/svelte": "^0.575.0",
     "@sentry/cloudflare": "^10.42.0",
     "@sentry/sveltekit": "^10.42.0",
