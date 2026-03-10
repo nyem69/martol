@@ -51,6 +51,15 @@
 		lightboxAlt = img.getAttribute('alt') || '';
 	}
 
+	function handleCitationClick(e: MouseEvent) {
+		const citation = (e.target as HTMLElement).closest('.doc-citation') as HTMLElement | null;
+		if (!citation) return;
+		const filename = citation.dataset.filename;
+		if (filename) {
+			document.dispatchEvent(new CustomEvent('martol:open-document', { detail: { filename } }));
+		}
+	}
+
 	function scrollToParent() {
 		if (!replyParent?.dbId) return;
 		const target = document.querySelector(`[data-dbid="${replyParent.dbId}"]`);
@@ -104,8 +113,8 @@
 			class="prose text-sm"
 			style="color: {message.isOwn ? 'var(--bubble-own-text)' : 'var(--text)'};"
 			role="presentation"
-			onclick={handleImageClick}
-			onkeydown={(e) => { if (e.key === 'Enter') handleImageClick(e as unknown as MouseEvent); }}
+			onclick={(e) => { handleImageClick(e); handleCitationClick(e); }}
+			onkeydown={(e) => { if (e.key === 'Enter') { handleImageClick(e as unknown as MouseEvent); handleCitationClick(e as unknown as MouseEvent); } }}
 		>
 			{@html htmlBody}
 		</article>
@@ -225,5 +234,43 @@
 		display: block;
 		margin: 0.5rem 0;
 		cursor: zoom-in;
+	}
+
+	:global(article.prose .r2-file) {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.125rem 0.5rem;
+		border-radius: 0.25rem;
+		background: color-mix(in oklch, var(--accent) 10%, transparent);
+		color: var(--accent);
+		font-size: 0.75rem;
+		font-family: var(--font-mono);
+		text-decoration: none;
+		transition: background 150ms;
+	}
+
+	:global(article.prose .r2-file:hover) {
+		background: color-mix(in oklch, var(--accent) 20%, transparent);
+	}
+
+	:global(article.prose .doc-citation) {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.125rem;
+		padding: 0.0625rem 0.375rem;
+		border-radius: 0.25rem;
+		background: color-mix(in oklch, var(--accent) 8%, transparent);
+		border: 1px solid color-mix(in oklch, var(--accent) 20%, transparent);
+		color: var(--accent);
+		font-size: 0.675rem;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		transition: background 150ms;
+		vertical-align: baseline;
+	}
+
+	:global(article.prose .doc-citation:hover) {
+		background: color-mix(in oklch, var(--accent) 18%, transparent);
 	}
 </style>

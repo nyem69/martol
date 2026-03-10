@@ -263,11 +263,13 @@ export interface DocSearchResultItem {
 	score: number;
 	char_start: number | null;
 	char_end: number | null;
+	citation: string;
 }
 
 export interface DocSearchResult {
 	results: DocSearchResultItem[];
 	total: number;
+	citation_instructions: string;
 }
 
 export interface TicketDetail extends TicketListItem {

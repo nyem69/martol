@@ -76,7 +76,21 @@ purify.addHook('afterSanitizeAttributes', (node) => {
 	}
 });
 
+/**
+ * Match citation markers like [📄 filename.pdf] in rendered HTML text nodes.
+ * Renders them as styled, clickable citation badges.
+ */
+const CITATION_RE = /\[📄\s+([^\]]+?)\]/g;
+
+function renderCitations(html: string): string {
+	return html.replace(CITATION_RE, (_match, filename: string) => {
+		const safe = esc(filename.trim());
+		return `<span class="doc-citation" data-filename="${safe}" title="Source: ${safe}">📄 ${safe}</span>`;
+	});
+}
+
 export function renderMarkdown(input: string): string {
 	const raw = marked.parse(input) as string;
-	return purify.sanitize(raw, PURIFY_CONFIG) as string;
+	const sanitized = purify.sanitize(raw, PURIFY_CONFIG) as string;
+	return renderCitations(sanitized);
 }

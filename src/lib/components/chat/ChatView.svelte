@@ -46,6 +46,7 @@
 
 	let memberPanelOpen = $state(false);
 	let documentPanelOpen = $state(false);
+	let documentSearchQuery = $state('');
 	let briefModalData = $state<{ brief: string; version: number } | null>(null);
 	let memberPanelRef: MemberPanel | undefined;
 	let pendingMention = $state<string | null>(null);
@@ -264,6 +265,13 @@
 		}
 	}
 
+	function handleOpenDocument(e: Event) {
+		const { filename } = (e as CustomEvent<{ filename: string }>).detail;
+		documentPanelOpen = true;
+		// Set search query in DocumentPanel via a reactive prop
+		documentSearchQuery = filename;
+	}
+
 	onMount(() => {
 		store.connect();
 		loadRecentActions();
@@ -271,7 +279,11 @@
 		if (hasAgents && !localStorage.getItem(`ai-disclosed-${roomId}`)) {
 			showAIDisclosure = true;
 		}
-		return () => store.disconnect();
+		document.addEventListener('martol:open-document', handleOpenDocument);
+		return () => {
+			store.disconnect();
+			document.removeEventListener('martol:open-document', handleOpenDocument);
+		};
 	});
 
 	// [I3] Refresh actions when new agent messages arrive (debounced 2s)
@@ -373,9 +385,10 @@
 
 	<DocumentPanel
 		open={documentPanelOpen}
-		onClose={() => (documentPanelOpen = false)}
+		onClose={() => { documentPanelOpen = false; documentSearchQuery = ''; }}
 		{roomId}
 		{userRole}
+		initialSearch={documentSearchQuery}
 	/>
 </main>
 

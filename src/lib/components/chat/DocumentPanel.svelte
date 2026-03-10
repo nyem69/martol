@@ -6,12 +6,14 @@
 		open,
 		onClose,
 		roomId,
-		userRole
+		userRole,
+		initialSearch = ''
 	}: {
 		open: boolean;
 		onClose: () => void;
 		roomId: string;
 		userRole: string;
+		initialSearch?: string;
 	} = $props();
 
 	interface DocFile {
@@ -41,6 +43,14 @@
 
 	$effect(() => {
 		if (open) loadFiles();
+	});
+
+	// When opened via citation click, pre-fill search
+	$effect(() => {
+		if (initialSearch && open) {
+			searchQuery = initialSearch;
+			doSearch();
+		}
 	});
 
 	async function loadFiles() {

@@ -43,8 +43,10 @@ export async function docSearch(
 				score: r.score,
 				char_start: r.charStart,
 				char_end: r.charEnd,
+				citation: `[📄 ${r.filename}]`,
 			})),
 			total: results.length,
+			citation_instructions: 'When referencing search results in your response, include the citation marker (e.g. [📄 filename.pdf]) after the relevant statement. These will render as interactive links for the user.',
 		},
 	};
 }
