@@ -8,8 +8,10 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
-import { eq, and } from 'drizzle-orm';
+import { aiUsage } from '$lib/server/db/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { searchDocuments } from '$lib/server/rag/search';
+import { isAiCapReached } from '$lib/server/ai-billing';
 
 export const GET: RequestHandler = async ({ url, params, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
@@ -36,8 +38,24 @@ export const GET: RequestHandler = async ({ url, params, locals, platform }) => 
 		return json({ ok: true, data: [] });
 	}
 
+	// Check AI usage cap
+	if (await isAiCapReached(locals.db, orgId)) {
+		return json({ ok: false, error: 'Monthly AI processing cap reached.' }, { status: 429 });
+	}
+
 	try {
 		const results = await searchDocuments(locals.db, ai, vectorize, orgId, query, 10);
+
+		// Track usage (same counter as agent doc_search)
+		const today = new Date().toISOString().slice(0, 10);
+		await locals.db
+			.insert(aiUsage)
+			.values({ orgId, operation: 'vector_query', count: 1, periodStart: today })
+			.onConflictDoUpdate({
+				target: [aiUsage.orgId, aiUsage.operation, aiUsage.periodStart],
+				set: { count: sql`${aiUsage.count} + 1` },
+			});
+
 		return json({
 			ok: true,
 			data: results.map((r) => ({
