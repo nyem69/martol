@@ -61,11 +61,23 @@
 			}
 		} catch { /* silent */ }
 	}
+
+	async function refreshBriefModal() {
+		// Same as openBriefModal but only updates if modal is still open
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/brief`);
+			const data: { ok?: boolean; brief?: string; version?: number } = await res.json();
+			if (data.ok && briefModalData) {
+				briefModalData = { brief: data.brief ?? '', version: data.version ?? 0 };
+			}
+		} catch { /* silent */ }
+	}
+
 	// Auto-refresh brief modal when brief_changed arrives via WebSocket
 	$effect(() => {
 		const v = store.briefVersion;
 		if (v > 0 && briefModalData) {
-			openBriefModal();
+			refreshBriefModal();
 		}
 	});
 
