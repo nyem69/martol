@@ -26,7 +26,8 @@
 			label: 'Modes',
 			links: [
 				{ id: 'provider-mode', text: 'Provider Mode' },
-				{ id: 'claude-code-mode', text: 'Claude Code Mode' }
+				{ id: 'claude-code-mode', text: 'Claude Code Mode' },
+				{ id: 'codex-mode', text: 'Codex Mode' }
 			]
 		},
 		{
@@ -145,7 +146,7 @@
 				A Python agent wrapper that bridges language models to
 				<a href="https://github.com/nyem69/martol" target="_blank" rel="noopener">Martol</a>
 				collaborative workspaces. Supports Anthropic Claude, OpenAI, any OpenAI-compatible API
-				(Ollama, Groq, vLLM), and Claude Code as a subprocess.
+				(Ollama, Groq, vLLM), Claude Code, and OpenAI Codex as subprocesses.
 			</p>
 			<div class="arch-diagram">
 				<pre>                      CLI / .env
@@ -187,9 +188,9 @@
 				room.
 			</p>
 			<p>
-				Two operational modes are available: <strong>Provider Mode</strong> (direct LLM API calls)
-				and
-				<strong>Claude Code Mode</strong> (Claude Code subprocess with project access).
+				Three operational modes are available: <strong>Provider Mode</strong> (direct LLM API calls),
+				<strong>Claude Code Mode</strong> (Claude Code subprocess with project access), and
+				<strong>Codex Mode</strong> (OpenAI Codex subprocess via MCP server).
 			</p>
 		</section>
 
@@ -247,8 +248,9 @@
 				<li>Parse CLI flags / load <code>.env</code> (or <code>.env.&lt;profile&gt;</code>)</li>
 				<li>Warn if <code>.env</code> has overly permissive file permissions</li>
 				<li>
-					Create wrapper — <code>AgentWrapper</code> (provider) or
-					<code>ClaudeCodeWrapper</code> (claude-code)
+					Create wrapper — <code>AgentWrapper</code> (provider),
+					<code>ClaudeCodeWrapper</code> (claude-code), or
+					<code>CodexWrapper</code> (codex)
 				</li>
 				<li>Connect WebSocket with TLS validation and API key auth</li>
 				<li>
@@ -426,7 +428,7 @@
 							<td><code>AGENT_MODE</code></td>
 							<td><code>--mode</code></td>
 							<td><code>provider</code></td>
-							<td><code>provider</code> or <code>claude-code</code></td>
+							<td><code>provider</code>, <code>claude-code</code>, or <code>codex</code></td>
 						</tr>
 					</tbody>
 				</table>
@@ -706,6 +708,108 @@ martol <span class="flg">--profile</span> <span class="val">claude-code</span></
 				<span class="flow-arrow">&rarr;</span>
 				<span class="flow-node">Allow / Deny</span>
 			</div>
+		</section>
+
+		<hr />
+
+		<!-- Codex Mode -->
+		<section class="page-section" id="codex-mode">
+			<h2>Codex Mode</h2>
+			<p>
+				Runs <a href="https://github.com/openai/codex" target="_blank" rel="noopener">OpenAI Codex</a>
+				as an MCP server subprocess. Chat messages become prompts; Codex has full access to
+				the local project directory within its configured sandbox.
+			</p>
+
+			<div class="callout callout-info">
+				<span class="callout-label">Prerequisites</span>
+				<code>codex</code> CLI in PATH (<code>npm install -g @openai/codex</code>) and
+				authenticated (<code>codex login</code> or <code>OPENAI_API_KEY</code> env var).
+				No extra Python dependencies needed.
+			</div>
+
+			<pre><code><span class="cmt"># Run against a project directory</span>
+cd /path/to/your/project
+martol <span class="flg">--profile</span> <span class="val">codex</span></code></pre>
+
+			<h3>Sandbox Modes</h3>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>Mode</th><th>Behavior</th></tr></thead>
+					<tbody>
+						<tr>
+							<td><code>read-only</code></td>
+							<td>Can read files but not write or execute shell commands</td>
+						</tr>
+						<tr>
+							<td><code>workspace-write</code></td>
+							<td>Can read and write files in the project directory</td>
+						</tr>
+						<tr>
+							<td><code>danger-full-access</code></td>
+							<td>Unrestricted filesystem and shell access</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h3>Approval Policies</h3>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>Policy</th><th>Behavior</th></tr></thead>
+					<tbody>
+						<tr>
+							<td><code>on-failure</code></td>
+							<td>Auto-approve commands; ask on failure (default)</td>
+						</tr>
+						<tr>
+							<td><code>on-request</code></td>
+							<td>Ask before each shell command</td>
+						</tr>
+						<tr>
+							<td><code>untrusted</code></td>
+							<td>Commands treated as untrusted; extra sandboxing</td>
+						</tr>
+						<tr>
+							<td><code>never</code></td>
+							<td>Never ask; auto-approve all commands</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h3>Codex Configuration</h3>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>Variable</th><th>CLI Flag</th><th>Default</th><th>Description</th></tr></thead>
+					<tbody>
+						<tr>
+							<td><code>CODEX_MODEL</code></td>
+							<td><code>--codex-model</code></td>
+							<td>Codex default</td>
+							<td>Model override (e.g. <code>o3</code>, <code>o4-mini</code>)</td>
+						</tr>
+						<tr>
+							<td><code>CODEX_SANDBOX</code></td>
+							<td><code>--codex-sandbox</code></td>
+							<td><code>read-only</code></td>
+							<td>Sandbox mode for file/shell access</td>
+						</tr>
+						<tr>
+							<td><code>CODEX_APPROVAL_POLICY</code></td>
+							<td><code>--codex-approval-policy</code></td>
+							<td><code>on-failure</code></td>
+							<td>Shell command approval policy</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h3>Example Profile</h3>
+			<pre><code><span class="cmt"># .env.codex</span>
+<span class="env">AGENT_MODE</span>=<span class="str">codex</span>
+<span class="env">CODEX_SANDBOX</span>=<span class="str">read-only</span>
+<span class="env">CODEX_APPROVAL_POLICY</span>=<span class="str">on-failure</span></code></pre>
 		</section>
 
 		<hr />
