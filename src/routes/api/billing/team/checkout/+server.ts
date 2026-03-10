@@ -2,6 +2,7 @@
  * POST /api/billing/team/checkout — Create Stripe Checkout for Team subscription
  *
  * Auth: any authenticated user can create a team.
+ * Reuses existing team records and Stripe customers when possible.
  */
 
 import { json, error } from '@sveltejs/kit';
@@ -27,9 +28,13 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 		error(400, 'Team name is required (1-100 characters)');
 	}
 
-	// Check if user already owns a team
+	// Check if user already owns a team (select full record for reuse)
 	const [existingTeam] = await locals.db
-		.select({ id: teams.id, status: teams.status })
+		.select({
+			id: teams.id,
+			status: teams.status,
+			stripeCustomerId: teams.stripeCustomerId
+		})
 		.from(teams)
 		.where(eq(teams.ownerId, locals.user.id))
 		.limit(1);
@@ -41,13 +46,17 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 	const stripe = createStripe(env.STRIPE_SECRET_KEY);
 	const origin = url.origin;
 
-	// Create Stripe customer for team billing
-	const customer = await stripe.customers.create({
-		email: locals.user.email,
-		metadata: { type: 'team', owner_id: locals.user.id }
-	});
+	// Reuse existing Stripe customer or create new one
+	let stripeCustomerId = existingTeam?.stripeCustomerId;
+	if (!stripeCustomerId) {
+		const customer = await stripe.customers.create({
+			email: locals.user.email,
+			metadata: { type: 'team', owner_id: locals.user.id }
+		});
+		stripeCustomerId = customer.id;
+	}
 
-	// Create team record (incomplete until checkout succeeds)
+	// Create or reuse team record (incomplete until checkout succeeds)
 	const teamId = crypto.randomUUID();
 
 	if (existingTeam) {
@@ -57,7 +66,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 			.set({
 				name,
 				seats,
-				stripeCustomerId: customer.id,
+				stripeCustomerId,
 				status: 'incomplete' as const,
 				updatedAt: new Date()
 			})
@@ -67,7 +76,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 			id: teamId,
 			ownerId: locals.user.id,
 			name,
-			stripeCustomerId: customer.id,
+			stripeCustomerId,
 			seats,
 			status: 'incomplete' as const
 		});
@@ -82,7 +91,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 		: env.STRIPE_PRO_PRICE_ID;
 
 	const session = await stripe.checkout.sessions.create({
-		customer: customer.id,
+		customer: stripeCustomerId,
 		mode: 'subscription',
 		allow_promotion_codes: true,
 		line_items: [

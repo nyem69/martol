@@ -3,6 +3,10 @@
  *
  * Handles Stripe lifecycle events. Called by Stripe, NOT the browser.
  * Auth: Stripe signature verification only (no locals.user).
+ *
+ * NOTE: Webhooks may be unreliable in sandbox/test mode. The billing-sync
+ * utilities provide a safety net by syncing from Stripe on page load.
+ * This handler is still important for production and real-time updates.
  */
 
 import { json, error } from '@sveltejs/kit';
@@ -16,6 +20,71 @@ import type Stripe from 'stripe';
 function getPeriodEnd(sub: Stripe.Subscription): Date | null {
 	const periodEnd = sub.items.data[0]?.current_period_end;
 	return periodEnd ? new Date(periodEnd * 1000) : null;
+}
+
+/** Map Stripe subscription status to our simplified status set */
+function mapStripeStatus(
+	status: Stripe.Subscription.Status
+): 'active' | 'past_due' | 'canceled' | 'incomplete' {
+	switch (status) {
+		case 'active':
+		case 'trialing':
+			return 'active';
+		case 'past_due':
+			return 'past_due';
+		case 'canceled':
+		case 'unpaid':
+			return 'canceled';
+		default:
+			return 'incomplete';
+	}
+}
+
+/**
+ * Extract subscription ID from an invoice object.
+ * Handles both newer (parent.subscription_details) and older (subscription) API shapes.
+ */
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+	// Newer API: parent.subscription_details.subscription
+	const parentSub = invoice.parent?.subscription_details?.subscription;
+	if (parentSub) {
+		return typeof parentSub === 'string' ? parentSub : parentSub.id;
+	}
+	// Older API: direct subscription field
+	if ('subscription' in invoice && invoice.subscription) {
+		const sub = invoice.subscription;
+		return typeof sub === 'string' ? sub : (sub as { id: string }).id;
+	}
+	return null;
+}
+
+/**
+ * Find and update subscription status by stripeSubscriptionId.
+ * Tries subscriptions table first, then teams table.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function updateStatusBySubId(db: any, subId: string, status: 'active' | 'past_due' | 'canceled' | 'incomplete') {
+	const [existingSub] = await db
+		.select({ id: subscriptions.id })
+		.from(subscriptions)
+		.where(eq(subscriptions.stripeSubscriptionId, subId))
+		.limit(1);
+
+	if (existingSub) {
+		await db
+			.update(subscriptions)
+			.set({ status, updatedAt: new Date() })
+			.where(eq(subscriptions.stripeSubscriptionId, subId));
+		return true;
+	}
+
+	// Fall back to teams table
+	const result = await db
+		.update(teams)
+		.set({ status, updatedAt: new Date() })
+		.where(eq(teams.stripeSubscriptionId, subId));
+
+	return (result?.rowCount ?? 0) > 0;
 }
 
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
@@ -59,9 +128,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			const periodEnd = getPeriodEnd(sub);
 
 			if (session.metadata?.type === 'team') {
-				// Team subscription — update teams table by stripeSubscriptionId
 				const teamId = session.metadata?.team_id;
-				if (!teamId) break;
+				if (!teamId) {
+					console.error('[Stripe] checkout.session.completed: missing team_id metadata', event.id);
+					break;
+				}
 
 				await db
 					.update(teams)
@@ -76,9 +147,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 					})
 					.where(eq(teams.id, teamId));
 			} else {
-				// Default pro subscription — update subscriptions table
 				const orgId = session.metadata?.org_id;
-				if (!orgId) break;
+				if (!orgId) {
+					console.error('[Stripe] checkout.session.completed: missing org_id metadata', event.id);
+					break;
+				}
 
 				// Check founding member eligibility (< 100 pro subscriptions)
 				const [{ count: proCount }] = await db
@@ -132,7 +205,21 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 			if (sub.metadata?.type === 'team') {
 				const teamId = sub.metadata?.team_id;
-				if (!teamId) break;
+				if (!teamId) {
+					console.warn('[Stripe] subscription.updated: missing team_id metadata, falling back to stripeSubscriptionId', event.id);
+					// Fallback: find by subscription ID
+					await db
+						.update(teams)
+						.set({
+							status: mapStripeStatus(sub.status),
+							seats: sub.items.data[0]?.quantity ?? 5,
+							currentPeriodEnd: getPeriodEnd(sub),
+							cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+							updatedAt: new Date()
+						})
+						.where(eq(teams.stripeSubscriptionId, sub.id));
+					break;
+				}
 
 				await db
 					.update(teams)
@@ -146,7 +233,21 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 					.where(eq(teams.id, teamId));
 			} else {
 				const orgId = sub.metadata?.org_id;
-				if (!orgId) break;
+				if (!orgId) {
+					console.warn('[Stripe] subscription.updated: missing org_id metadata, falling back to stripeSubscriptionId', event.id);
+					// Fallback: find by subscription ID
+					await db
+						.update(subscriptions)
+						.set({
+							status: mapStripeStatus(sub.status),
+							quantity: sub.items.data[0]?.quantity ?? 1,
+							currentPeriodEnd: getPeriodEnd(sub),
+							cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+							updatedAt: new Date()
+						})
+						.where(eq(subscriptions.stripeSubscriptionId, sub.id));
+					break;
+				}
 
 				await db
 					.update(subscriptions)
@@ -167,63 +268,58 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 			if (sub.metadata?.type === 'team') {
 				const teamId = sub.metadata?.team_id;
-				if (!teamId) break;
-
-				await db
-					.update(teams)
-					.set({
-						status: 'canceled',
-						cancelAtPeriodEnd: false,
-						updatedAt: new Date()
-					})
-					.where(eq(teams.id, teamId));
+				if (teamId) {
+					await db
+						.update(teams)
+						.set({ status: 'canceled', cancelAtPeriodEnd: false, updatedAt: new Date() })
+						.where(eq(teams.id, teamId));
+				} else {
+					// Fallback: find by subscription ID
+					await db
+						.update(teams)
+						.set({ status: 'canceled', cancelAtPeriodEnd: false, updatedAt: new Date() })
+						.where(eq(teams.stripeSubscriptionId, sub.id));
+				}
 			} else {
 				const orgId = sub.metadata?.org_id;
-				if (!orgId) break;
-
-				await db
-					.update(subscriptions)
-					.set({
-						status: 'canceled',
-						cancelAtPeriodEnd: false,
-						updatedAt: new Date()
-					})
-					.where(eq(subscriptions.orgId, orgId));
+				if (orgId) {
+					await db
+						.update(subscriptions)
+						.set({ status: 'canceled', cancelAtPeriodEnd: false, updatedAt: new Date() })
+						.where(eq(subscriptions.orgId, orgId));
+				} else {
+					// Fallback: find by subscription ID
+					await db
+						.update(subscriptions)
+						.set({ status: 'canceled', cancelAtPeriodEnd: false, updatedAt: new Date() })
+						.where(eq(subscriptions.stripeSubscriptionId, sub.id));
+				}
 			}
+			break;
+		}
+
+		case 'invoice.payment_succeeded': {
+			// Recover from past_due → active when payment succeeds
+			const invoice = event.data.object as Stripe.Invoice;
+			const subId = getInvoiceSubscriptionId(invoice);
+			if (!subId) {
+				console.warn('[Stripe] invoice.payment_succeeded: no subscription ID found', event.id);
+				break;
+			}
+			await updateStatusBySubId(db, subId, 'active');
 			break;
 		}
 
 		case 'invoice.payment_failed': {
 			const invoice = event.data.object as Stripe.Invoice;
-			// In newer Stripe API, subscription is under parent.subscription_details
-			const parentSub = invoice.parent?.subscription_details?.subscription;
-			const subId = typeof parentSub === 'string' ? parentSub : parentSub?.id;
-			if (!subId) break;
-
-			// Try subscriptions table first, then teams table
-			const [existingSub] = await db
-				.select({ id: subscriptions.id })
-				.from(subscriptions)
-				.where(eq(subscriptions.stripeSubscriptionId, subId))
-				.limit(1);
-
-			if (existingSub) {
-				await db
-					.update(subscriptions)
-					.set({
-						status: 'past_due',
-						updatedAt: new Date()
-					})
-					.where(eq(subscriptions.stripeSubscriptionId, subId));
-			} else {
-				// Fall back to teams table
-				await db
-					.update(teams)
-					.set({
-						status: 'past_due',
-						updatedAt: new Date()
-					})
-					.where(eq(teams.stripeSubscriptionId, subId));
+			const subId = getInvoiceSubscriptionId(invoice);
+			if (!subId) {
+				console.error('[Stripe] invoice.payment_failed: no subscription ID found', event.id);
+				break;
+			}
+			const found = await updateStatusBySubId(db, subId, 'past_due');
+			if (!found) {
+				console.error('[Stripe] invoice.payment_failed: subscription not found in DB', subId, event.id);
 			}
 			break;
 		}
@@ -231,21 +327,3 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 	return json({ received: true });
 };
-
-/** Map Stripe subscription status to our simplified status set */
-function mapStripeStatus(
-	status: Stripe.Subscription.Status
-): 'active' | 'past_due' | 'canceled' | 'incomplete' {
-	switch (status) {
-		case 'active':
-		case 'trialing':
-			return 'active';
-		case 'past_due':
-			return 'past_due';
-		case 'canceled':
-		case 'unpaid':
-			return 'canceled';
-		default:
-			return 'incomplete';
-	}
-}

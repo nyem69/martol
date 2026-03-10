@@ -35,6 +35,11 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		expand: ['subscription']
 	});
 
+	// Validate session is a subscription checkout
+	if (session.mode !== 'subscription') {
+		error(400, 'Invalid session mode — expected subscription');
+	}
+
 	if (session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required') {
 		error(402, 'Payment not completed');
 	}
@@ -56,7 +61,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		const teamId = session.metadata?.team_id;
 		if (!teamId) error(400, 'Missing team_id in session metadata');
 
-		// Verify user owns this team
+		// Verify user owns this team AND session metadata matches
 		const [teamRecord] = await db
 			.select({ id: teams.id })
 			.from(teams)
