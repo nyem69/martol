@@ -8,7 +8,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createStripe } from '$lib/server/stripe';
-import { subscriptions } from '$lib/server/db/schema';
+import { subscriptions, teams } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
@@ -45,8 +45,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	switch (event.type) {
 		case 'checkout.session.completed': {
 			const session = event.data.object as Stripe.Checkout.Session;
-			const orgId = session.metadata?.org_id;
-			if (!orgId || !session.subscription || !session.customer) break;
+			if (!session.subscription || !session.customer) break;
 
 			const stripeSubscriptionId =
 				typeof session.subscription === 'string'
@@ -57,27 +56,63 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 			// Fetch subscription details for period end
 			const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-
-			// Check founding member eligibility (< 100 pro subscriptions)
-			const [{ count: proCount }] = await db
-				.select({ count: sql<number>`count(*)::int` })
-				.from(subscriptions)
-				.where(eq(subscriptions.plan, 'pro'));
-			const isFoundingMember = (proCount ?? 0) < 100;
-
 			const periodEnd = getPeriodEnd(sub);
 
-			// Upsert subscription (idempotent — handles duplicate webhook deliveries)
-			const [existing] = await db
-				.select({ id: subscriptions.id })
-				.from(subscriptions)
-				.where(eq(subscriptions.orgId, orgId))
-				.limit(1);
+			if (session.metadata?.type === 'team') {
+				// Team subscription — update teams table by stripeSubscriptionId
+				const teamId = session.metadata?.team_id;
+				if (!teamId) break;
 
-			if (existing) {
 				await db
-					.update(subscriptions)
+					.update(teams)
 					.set({
+						stripeCustomerId,
+						stripeSubscriptionId,
+						status: 'active',
+						seats: sub.items.data[0]?.quantity ?? 5,
+						currentPeriodEnd: periodEnd,
+						cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+						updatedAt: new Date()
+					})
+					.where(eq(teams.id, teamId));
+			} else {
+				// Default pro subscription — update subscriptions table
+				const orgId = session.metadata?.org_id;
+				if (!orgId) break;
+
+				// Check founding member eligibility (< 100 pro subscriptions)
+				const [{ count: proCount }] = await db
+					.select({ count: sql<number>`count(*)::int` })
+					.from(subscriptions)
+					.where(eq(subscriptions.plan, 'pro'));
+				const isFoundingMember = (proCount ?? 0) < 100;
+
+				// Upsert subscription (idempotent — handles duplicate webhook deliveries)
+				const [existing] = await db
+					.select({ id: subscriptions.id })
+					.from(subscriptions)
+					.where(eq(subscriptions.orgId, orgId))
+					.limit(1);
+
+				if (existing) {
+					await db
+						.update(subscriptions)
+						.set({
+							stripeCustomerId,
+							stripeSubscriptionId,
+							plan: 'pro',
+							status: 'active',
+							quantity: sub.items.data[0]?.quantity ?? 1,
+							foundingMember: isFoundingMember,
+							currentPeriodEnd: periodEnd,
+							cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+							updatedAt: new Date()
+						})
+						.where(eq(subscriptions.orgId, orgId));
+				} else {
+					await db.insert(subscriptions).values({
+						id: crypto.randomUUID(),
+						orgId,
 						stripeCustomerId,
 						stripeSubscriptionId,
 						plan: 'pro',
@@ -85,58 +120,76 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 						quantity: sub.items.data[0]?.quantity ?? 1,
 						foundingMember: isFoundingMember,
 						currentPeriodEnd: periodEnd,
-						cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-						updatedAt: new Date()
-					})
-					.where(eq(subscriptions.orgId, orgId));
-			} else {
-				await db.insert(subscriptions).values({
-					id: crypto.randomUUID(),
-					orgId,
-					stripeCustomerId,
-					stripeSubscriptionId,
-					plan: 'pro',
-					status: 'active',
-					quantity: sub.items.data[0]?.quantity ?? 1,
-					foundingMember: isFoundingMember,
-					currentPeriodEnd: periodEnd,
-					cancelAtPeriodEnd: sub.cancel_at_period_end ?? false
-				});
+						cancelAtPeriodEnd: sub.cancel_at_period_end ?? false
+					});
+				}
 			}
 			break;
 		}
 
 		case 'customer.subscription.updated': {
 			const sub = event.data.object as Stripe.Subscription;
-			const orgId = sub.metadata?.org_id;
-			if (!orgId) break;
 
-			await db
-				.update(subscriptions)
-				.set({
-					status: mapStripeStatus(sub.status),
-					quantity: sub.items.data[0]?.quantity ?? 1,
-					currentPeriodEnd: getPeriodEnd(sub),
-					cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-					updatedAt: new Date()
-				})
-				.where(eq(subscriptions.orgId, orgId));
+			if (sub.metadata?.type === 'team') {
+				const teamId = sub.metadata?.team_id;
+				if (!teamId) break;
+
+				await db
+					.update(teams)
+					.set({
+						status: mapStripeStatus(sub.status),
+						seats: sub.items.data[0]?.quantity ?? 5,
+						currentPeriodEnd: getPeriodEnd(sub),
+						cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+						updatedAt: new Date()
+					})
+					.where(eq(teams.id, teamId));
+			} else {
+				const orgId = sub.metadata?.org_id;
+				if (!orgId) break;
+
+				await db
+					.update(subscriptions)
+					.set({
+						status: mapStripeStatus(sub.status),
+						quantity: sub.items.data[0]?.quantity ?? 1,
+						currentPeriodEnd: getPeriodEnd(sub),
+						cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+						updatedAt: new Date()
+					})
+					.where(eq(subscriptions.orgId, orgId));
+			}
 			break;
 		}
 
 		case 'customer.subscription.deleted': {
 			const sub = event.data.object as Stripe.Subscription;
-			const orgId = sub.metadata?.org_id;
-			if (!orgId) break;
 
-			await db
-				.update(subscriptions)
-				.set({
-					status: 'canceled',
-					cancelAtPeriodEnd: false,
-					updatedAt: new Date()
-				})
-				.where(eq(subscriptions.orgId, orgId));
+			if (sub.metadata?.type === 'team') {
+				const teamId = sub.metadata?.team_id;
+				if (!teamId) break;
+
+				await db
+					.update(teams)
+					.set({
+						status: 'canceled',
+						cancelAtPeriodEnd: false,
+						updatedAt: new Date()
+					})
+					.where(eq(teams.id, teamId));
+			} else {
+				const orgId = sub.metadata?.org_id;
+				if (!orgId) break;
+
+				await db
+					.update(subscriptions)
+					.set({
+						status: 'canceled',
+						cancelAtPeriodEnd: false,
+						updatedAt: new Date()
+					})
+					.where(eq(subscriptions.orgId, orgId));
+			}
 			break;
 		}
 
@@ -147,13 +200,31 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			const subId = typeof parentSub === 'string' ? parentSub : parentSub?.id;
 			if (!subId) break;
 
-			await db
-				.update(subscriptions)
-				.set({
-					status: 'past_due',
-					updatedAt: new Date()
-				})
-				.where(eq(subscriptions.stripeSubscriptionId, subId));
+			// Try subscriptions table first, then teams table
+			const [existingSub] = await db
+				.select({ id: subscriptions.id })
+				.from(subscriptions)
+				.where(eq(subscriptions.stripeSubscriptionId, subId))
+				.limit(1);
+
+			if (existingSub) {
+				await db
+					.update(subscriptions)
+					.set({
+						status: 'past_due',
+						updatedAt: new Date()
+					})
+					.where(eq(subscriptions.stripeSubscriptionId, subId));
+			} else {
+				// Fall back to teams table
+				await db
+					.update(teams)
+					.set({
+						status: 'past_due',
+						updatedAt: new Date()
+					})
+					.where(eq(teams.stripeSubscriptionId, subId));
+			}
 			break;
 		}
 	}
