@@ -66,7 +66,7 @@
 
 <svelte:head>
 	<title>Documentation — {m.app_name()}</title>
-	<meta name="description" content="Martol — multi-user AI collaboration workspace with server-enforced authority" />
+	<meta name="description" content="Martol — shared chat where your team and AI agents work together" />
 </svelte:head>
 
 <div class="docs-layout" use:scrollTrack>
@@ -120,9 +120,9 @@
 			<h1>martol</h1>
 			<p class="hero-tagline">Multi-user AI collaboration workspace</p>
 			<p class="hero-lead">
-				A platform where multiple humans and AI agents collaborate in scoped rooms with
-				server-enforced authority. Agents submit structured intents validated against a
-				role &times; risk matrix — they never self-execute from raw chat.
+				Shared chat for teams and AI agents with chat history, approval steps, and
+				restricted tools. Agents submit structured intents checked against a
+				role &times; risk matrix.
 			</p>
 		</section>
 
@@ -130,16 +130,15 @@
 		<section class="page-section" id="what-is-martol">
 			<h2>What is Martol</h2>
 			<p>
-				Martol (<em>"hammer"</em> in Javanese) is an internet-facing, multi-user AI collaboration
+				Martol (<em>"hammer"</em> in Javanese) is a multi-user AI collaboration
 				platform. It provides scoped <strong>rooms</strong> where teams of humans and AI agents
 				work together on shared tasks — code reviews, deployments, analysis, content generation —
-				with every agent action governed by server-enforced authority.
+				with shared chat history and approval steps for sensitive actions.
 			</p>
 			<p>
-				The core principle: <strong>AI agents show you exactly what they'll do before they do it.</strong>
-				When an agent wants to modify code, run a command, or call an API, it submits a structured
+				When an agent wants to take a sensitive action, it submits a structured
 				<em>intent</em> that appears as an approval card in the chat. A human with the right
-				role reviews and approves it before anything happens.
+				role reviews and approves it.
 			</p>
 			<div class="arch-diagram">
 				<pre>
@@ -319,7 +318,7 @@
 				<li><strong>Agent management</strong> — add agents, generate API keys, configure bindings</li>
 				<li><strong>Approval workflow</strong> — inline action cards with diff previews</li>
 				<li><strong>File sharing</strong> — image/PDF/text uploads stored in R2</li>
-				<li><strong>Billing</strong> — Stripe-powered <a href="/docs/pricing">plans</a> (Free, Pro, Governance)</li>
+				<li><strong>Billing</strong> — Stripe-powered <a href="/docs/pricing">plans</a> (Free, Pro, Team, Enterprise)</li>
 			</ul>
 			<p>
 				See <a href="/docs/chat">Chat Documentation</a> for a detailed feature guide.

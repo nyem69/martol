@@ -1,13 +1,11 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
 	import {
-		ArrowLeft,
 		ArrowRight,
 		Lock,
 		CheckCircle,
 		ExternalLink
 	} from '@lucide/svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	function reveal(node: HTMLElement) {
 		node.classList.add('reveal');
@@ -25,15 +23,15 @@
 	}
 
 	const comparisonRows = [
-		{ dim: 'Where agents run', unsafe: 'Your machine, your privileges', martol: 'Server-supervised, scoped per room' },
-		{ dim: 'What agents can do', unsafe: 'Anything — shell, files, network', martol: 'Only submit structured intents' },
-		{ dim: 'Who decides', unsafe: 'Agent decides and executes', martol: 'Server validates against role x risk matrix' },
-		{ dim: 'Trust model', unsafe: 'Trust the agent, hope for the best', martol: 'Zero trust — every action gated by server' },
-		{ dim: 'Dangerous actions', unsafe: 'Execute immediately', martol: 'Queued in pending_actions, require human approval' },
+		{ dim: 'Where agents run', unsafe: 'Your machine, your privileges', martol: 'Local machine, scoped to a shared room' },
+		{ dim: 'What agents can do', unsafe: 'Anything — shell, files, network', martol: 'Chat + submit structured intents via restricted tools' },
+		{ dim: 'Who decides', unsafe: 'Agent decides and executes', martol: 'Server checks role × risk matrix for approval' },
+		{ dim: 'Trust model', unsafe: 'Trust the agent, hope for the best', martol: 'Approval steps for sensitive actions' },
+		{ dim: 'Dangerous actions', unsafe: 'Execute immediately', martol: 'Queued for human approval' },
 		{ dim: 'WebSocket security', unsafe: 'Localhost, no auth', martol: 'HMAC-signed identity, org-scoped, signature-expiring' },
 		{ dim: 'Plugins/skills', unsafe: 'Unvetted marketplace', martol: 'No marketplace — agents connect via authenticated MCP' },
 		{ dim: 'Multi-user', unsafe: 'Single user, local', martol: 'Multi-user with hierarchical roles' },
-		{ dim: 'Audit trail', unsafe: 'Local logs (modifiable)', martol: 'Append-only server DB with role audit' }
+		{ dim: 'History', unsafe: 'Local logs, per developer', martol: 'Shared chat history on server' }
 	];
 
 	const flowSteps = [
@@ -74,13 +72,13 @@
 <svelte:head>
 	<title>Security Architecture — Martol</title>
 	<meta name="description" content={m.security_subtitle()} />
-	<link rel="canonical" href="https://martol.plitix.com/security" />
+	<link rel="canonical" href="https://martol.plitix.com/docs/security" />
 
 	<!-- Open Graph -->
 	<meta property="og:title" content="Security Architecture — Martol" />
 	<meta property="og:description" content={m.security_subtitle()} />
 	<meta property="og:type" content="website" />
-	<meta property="og:url" content="https://martol.plitix.com/security" />
+	<meta property="og:url" content="https://martol.plitix.com/docs/security" />
 	<meta property="og:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
@@ -93,19 +91,11 @@
 	<meta name="twitter:image" content="https://martol.plitix.com/images/martol-hero-2.png" />
 </svelte:head>
 
-<div class="theme-toggle-fixed">
-	<ThemeToggle />
-</div>
-
-<div class="landing scrollbar-thin">
+<div class="security-page">
 
 	<!-- HEADER -->
 	<section class="section header-section">
 		<div class="container">
-			<a href="/" class="back-link">
-				<ArrowLeft size={14} />
-				{m.security_back()}
-			</a>
 			<h1 class="page-title">{m.security_title()}</h1>
 			<p class="page-subtitle">{m.security_subtitle()}</p>
 		</div>
@@ -265,41 +255,11 @@
 		</div>
 	</section>
 
-	<!-- FOOTER -->
-	<footer class="landing-footer">
-		<div class="container footer-inner">
-			<div class="footer-brand">
-				<span class="footer-logo">MARTOL</span>
-				<span class="footer-tagline">hammer, in Javanese</span>
-			</div>
-			<nav class="footer-links" aria-label="Footer navigation">
-				<a href="https://github.com/nyem69/martol" target="_blank" rel="noopener">GitHub</a>
-				<a href="/security">Security</a>
-				<a href="/legal/terms">Terms</a>
-				<a href="/legal/privacy">Privacy</a>
-				<a href="/legal/aup">Acceptable Use</a>
-			</nav>
-			<p class="footer-copy">
-				&copy; 2026 nyem &middot; AGPL-3.0
-			</p>
-		</div>
-	</footer>
-
 </div>
 
 <style>
-	.theme-toggle-fixed {
-		position: fixed;
-		top: 16px;
-		right: 16px;
-		z-index: 120;
-	}
-
-	/* ── Scrollable wrapper ── */
-	.landing {
-		height: 100dvh;
-		overflow-y: auto;
-		overflow-x: hidden;
+	.security-page {
+		padding-top: 48px; /* docs topnav height */
 	}
 
 	/* ── Sections ── */
@@ -327,7 +287,7 @@
 	}
 
 	.section-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--accent-muted);
 		white-space: nowrap;
@@ -340,26 +300,9 @@
 		background: var(--border-subtle);
 	}
 
-	/* ── Back link ── */
-	.back-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		font-family: var(--font-mono);
-		font-size: 13px;
-		color: var(--text-muted);
-		text-decoration: none;
-		margin-bottom: 32px;
-		transition: color 200ms ease;
-	}
-
-	.back-link:hover {
-		color: var(--accent);
-	}
-
 	/* ── Page title ── */
 	.page-title {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: clamp(32px, 6vw, 48px);
 		font-weight: 700;
 		color: var(--accent);
@@ -411,7 +354,7 @@
 
 	.comparison-table th {
 		padding: 12px 16px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		font-weight: 600;
 		letter-spacing: 0.5px;
@@ -443,7 +386,7 @@
 	}
 
 	.row-label {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 12px;
 		color: var(--text-muted);
 		font-weight: 500;
@@ -507,7 +450,7 @@
 		border-radius: 50%;
 		background: var(--accent);
 		color: var(--bg);
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 13px;
 		font-weight: 700;
 		flex-shrink: 0;
@@ -520,7 +463,7 @@
 	}
 
 	.timeline-title {
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 15px;
 		font-weight: 700;
 		color: var(--text);
@@ -650,7 +593,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		letter-spacing: 0.5px;
@@ -676,7 +619,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		font-size: 14px;
 		font-weight: 600;
 		letter-spacing: 0.5px;
@@ -697,66 +640,6 @@
 
 	.cta-secondary:active {
 		transform: translateY(0);
-	}
-
-	/* ── Footer ── */
-	.landing-footer {
-		padding: 40px 0;
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.footer-inner {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
-		gap: 16px;
-	}
-
-	.footer-brand {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-	}
-
-	.footer-logo {
-		font-family: var(--font-mono);
-		font-size: 14px;
-		font-weight: 700;
-		color: var(--accent);
-		letter-spacing: 0.1em;
-	}
-
-	.footer-tagline {
-		font-family: var(--font-mono);
-		font-size: 11px;
-		color: var(--text-muted);
-		font-style: italic;
-	}
-
-	.footer-links {
-		display: flex;
-		gap: 20px;
-	}
-
-	.footer-links a {
-		font-family: var(--font-mono);
-		font-size: 12px;
-		color: var(--text-muted);
-		text-decoration: none;
-	}
-
-	.footer-links a:hover {
-		color: var(--accent);
-	}
-
-	.footer-copy {
-		width: 100%;
-		text-align: center;
-		font-family: var(--font-mono);
-		font-size: 11px;
-		color: oklch(0.40 0.01 260);
-		margin: 8px 0 0;
 	}
 
 	/* ── Scroll reveal ── */
@@ -809,13 +692,5 @@
 			justify-content: center;
 		}
 
-		.footer-inner {
-			flex-direction: column;
-			text-align: center;
-		}
-
-		.footer-links {
-			justify-content: center;
-		}
 	}
 </style>

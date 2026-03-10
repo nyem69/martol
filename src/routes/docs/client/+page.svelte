@@ -1588,7 +1588,7 @@ action_type, risk_level, description, payload, trigger_message_id</code></pre>
 				<a href="/" class="footer-logo">MARTOL</a>
 				<nav class="footer-links" aria-label="Footer links">
 					<a href="https://github.com/nyem69/martol-client" target="_blank" rel="noopener">GitHub</a>
-					<a href="/security">Security</a>
+					<a href="/docs/security">Security</a>
 					<a href="/chat">Chat</a>
 				</nav>
 				<p class="footer-copy">&copy; 2026 nyem &middot; AGPL-3.0</p>

@@ -50,7 +50,7 @@
 		font-size: 1.5rem;
 		font-weight: 700;
 		color: var(--accent);
-		font-family: var(--font-mono);
+		font-family: var(--font-mono-alt);
 		letter-spacing: 0.05em;
 		margin-bottom: 0.25rem;
 	}
@@ -64,6 +64,7 @@
 	:global(.legal-content h2) {
 		font-size: 1rem;
 		font-weight: 600;
+		font-family: var(--font-mono-alt);
 		color: var(--text);
 		margin-top: 1.5rem;
 		margin-bottom: 0.5rem;

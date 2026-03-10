@@ -10,6 +10,7 @@
 		{ href: '/docs', label: 'Overview' },
 		{ href: '/docs/chat', label: 'Chat' },
 		{ href: '/docs/client', label: 'Agent Client' },
+		{ href: '/docs/security', label: 'Security' },
 		{ href: '/docs/pricing', label: 'Pricing' }
 	];
 

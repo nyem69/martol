@@ -144,12 +144,13 @@
 					<li><Check size={14} class="feat-yes" /> Everything in Team</li>
 					<li><Check size={14} class="feat-yes" /> Supervised AI workspaces</li>
 					<li><Check size={14} class="feat-yes" /> Graduated autonomy controls</li>
-					<li><Check size={14} class="feat-yes" /> SSO / SAML integration</li>
-					<li><Check size={14} class="feat-yes" /> Advanced audit logging</li>
-					<li><Check size={14} class="feat-yes" /> Custom retention policies</li>
-					<li><Check size={14} class="feat-yes" /> Dedicated support + SLA</li>
-					<li><Check size={14} class="feat-yes" /> On-premise deployment option</li>
+					<li><Check size={14} class="feat-yes" /> SSO / SAML integration *</li>
+					<li><Check size={14} class="feat-yes" /> Advanced audit logging *</li>
+					<li><Check size={14} class="feat-yes" /> Custom retention policies *</li>
+					<li><Check size={14} class="feat-yes" /> Dedicated support + SLA *</li>
+					<li><Check size={14} class="feat-yes" /> On-premise deployment *</li>
 				</ul>
+				<p class="plan-note">* Available on request</p>
 				<div class="plan-cta">
 					<a href="mailto:hello@martol.app" class="btn-plan btn-enterprise">Contact Sales</a>
 				</div>
@@ -400,7 +401,7 @@
 							<td><Check size={14} class="feat-yes" /></td>
 						</tr>
 						<tr>
-							<td>SLA guarantee</td>
+							<td>SLA guarantee *</td>
 							<td><X size={14} class="feat-no" /></td>
 							<td><X size={14} class="feat-no" /></td>
 							<td><X size={14} class="feat-no" /></td>
@@ -733,6 +734,14 @@
 
 	:global(.feat-yes) { color: var(--success); flex-shrink: 0; }
 	:global(.feat-no) { color: var(--text-muted); opacity: 0.4; flex-shrink: 0; }
+
+	.plan-note {
+		font-size: 11px;
+		color: var(--text-muted);
+		text-align: center;
+		margin: 8px 0 0;
+		font-style: italic;
+	}
 
 	/* ── CTA Buttons ──────────────────────────────────── */
 	.plan-cta { text-align: center; }

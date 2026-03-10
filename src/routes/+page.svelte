@@ -137,7 +137,7 @@
 			<p class="tagline">
 				{m.hero_tagline()}
 			</p>
-			<p class="subtitle">
+			<p class="subtitle max-w-[300px]">
 				{m.hero_subtitle()}<span class="cursor">_</span>
 			</p>
 			<a href="/login" class="cta" data-testid="hero-cta">
@@ -151,7 +151,7 @@
 		<div class="container">
 			{@render sectionHead('what is martol')}
 			<p class="lead-xl">
-				A multi-user AI collaboration workspace where humans and AI agents work together in scoped rooms with server-enforced authority.
+				Shared chat where your team and AI agents work together — with chat history, approval steps, and restricted tools.
 			</p>
 			<div class="intent-note">
 				<ShieldCheck size={16} />
@@ -319,17 +319,17 @@
 				<span>{m.section_security_summary()}</span>
 			</p>
 			<div class="security-cta-row">
-				<a href="/security" class="security-link">
+				<a href="/docs/security" class="security-link">
 					{m.section_security_cta()} <ArrowRight size={14} />
 				</a>
 			</div>
 		</div>
 	</section>
 
-	<!-- GOVERNANCE -->
+	<!-- TEAMS -->
 	<section class="section" use:reveal>
 		<div class="container">
-			{@render sectionHead('enterprise governance')}
+			{@render sectionHead('built for teams')}
 			<p class="lead">
 				Most AI tools leave each developer working alone with their own agent.
 			</p>
@@ -490,7 +490,7 @@
 			<nav class="footer-links" aria-label="Footer navigation">
 				<a href="https://github.com/nyem69/martol" target="_blank" rel="noopener">GitHub</a>
 				<a href="/docs">Docs</a>
-				<a href="/security">Security</a>
+				<a href="/docs/security">Security</a>
 				<a href="/legal/terms">Terms</a>
 				<a href="/legal/privacy">Privacy</a>
 				<a href="/legal/aup">Acceptable Use</a>
