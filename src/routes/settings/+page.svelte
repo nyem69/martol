@@ -347,16 +347,31 @@
 	$effect(() => {
 		const params = new URLSearchParams(window.location.search);
 		if (params.get('billing') === 'success') {
+			// Clean URL immediately
+			const url = new URL(window.location.href);
+			const sessionId = params.get('session_id');
+			url.searchParams.delete('billing');
+			url.searchParams.delete('session_id');
+			window.history.replaceState({}, '', url.toString());
+
+			// Verify checkout with Stripe and activate subscription in DB
+			// (webhook may be delayed or misconfigured — this ensures activation)
+			if (sessionId) {
+				fetch('/api/billing/verify', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ session_id: sessionId })
+				}).then(() => invalidateAll()).catch(() => {
+					// Fallback: webhook might have handled it
+					invalidateAll();
+				});
+			} else {
+				// No session_id — fall back to hoping webhook arrived
+				invalidateAll();
+			}
+
 			billingSuccess = m.billing_success();
 			setTimeout(() => (billingSuccess = ''), 5000);
-			// Clean URL
-			const url = new URL(window.location.href);
-			url.searchParams.delete('billing');
-			window.history.replaceState({}, '', url.toString());
-			// Re-fetch billing data — webhook may have arrived by now
-			invalidateAll();
-			// Retry after a short delay in case webhook is still in-flight
-			setTimeout(() => invalidateAll(), 2000);
 		}
 	});
 

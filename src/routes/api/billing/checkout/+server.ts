@@ -107,7 +107,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 				quantity: memberCount
 			}
 		],
-		success_url: `${origin}/settings?billing=success`,
+		success_url: `${origin}/settings?billing=success&session_id={CHECKOUT_SESSION_ID}`,
 		cancel_url: `${origin}/settings?billing=cancel`,
 		subscription_data: {
 			metadata: { org_id: orgId, type: 'pro' }
