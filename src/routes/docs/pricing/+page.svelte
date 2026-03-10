@@ -178,7 +178,7 @@
 				</ul>
 				<p class="plan-note">* Available on request</p>
 				<div class="plan-cta">
-					<a href="mailto:hello@martol.app" class="btn-plan btn-enterprise">Contact Sales</a>
+					<a href="/docs/contact" class="btn-plan btn-enterprise">Contact Sales</a>
 				</div>
 			</div>
 		</section>
