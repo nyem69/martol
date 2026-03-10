@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import * as m from '$lib/paraglide/messages';
-	import { X, Loader, Check, Bot } from '@lucide/svelte';
+	import { X, Loader, Check, Bot, ChevronDown } from '@lucide/svelte';
 	import {
 		type BriefSections,
 		SECTION_META,
@@ -16,6 +16,7 @@
 		currentVersion,
 		canEdit,
 		onclose,
+		agents,
 		onAskAgent
 	}: {
 		orgId: string;
@@ -23,7 +24,8 @@
 		currentVersion: number;
 		canEdit: boolean;
 		onclose: () => void;
-		onAskAgent: (() => void) | null;
+		agents: Array<{ name: string }>;
+		onAskAgent: (agentName: string) => void;
 	} = $props();
 
 	const MAX_TOTAL = 10_000;
@@ -33,6 +35,7 @@
 	// svelte-ignore state_referenced_locally
 	let version = $state(currentVersion);
 	let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
+	let agentPickerOpen = $state(false);
 	let closeBtn: HTMLButtonElement | undefined;
 	let prevFocus: HTMLElement | null = null;
 	let dialogEl: HTMLDivElement | undefined;
@@ -211,15 +214,46 @@
 							{m.chat_brief_readonly_hint()}
 						</span>
 					{/if}
-					{#if onAskAgent}
+					{#if agents.length === 1}
 						<button
 							class="brief-btn brief-btn-secondary"
-							onclick={() => { onAskAgent?.(); onclose(); }}
+							onclick={() => { onAskAgent(agents[0].name); onclose(); }}
 							data-testid="brief-modal-ask-agent"
 						>
 							<Bot size={12} />
 							{m.chat_brief_ask_agent()}
 						</button>
+					{:else if agents.length > 1}
+						<div class="relative">
+							<button
+								class="brief-btn brief-btn-secondary"
+								onclick={() => { agentPickerOpen = !agentPickerOpen; }}
+								aria-expanded={agentPickerOpen}
+								data-testid="brief-modal-ask-agent"
+							>
+								<Bot size={12} />
+								{m.chat_brief_ask_agent()}
+								<ChevronDown size={10} />
+							</button>
+							{#if agentPickerOpen}
+								<div
+									class="agent-picker absolute bottom-full left-0 z-10 mb-1 min-w-40 rounded-lg border py-1 shadow-xl"
+									style="background: var(--bg-elevated); border-color: var(--border);"
+								>
+									{#each agents as agent}
+										<button
+											class="agent-picker-item flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors"
+											style="color: var(--text); font-family: var(--font-mono);"
+											onclick={() => { onAskAgent(agent.name); onclose(); }}
+											data-testid="brief-modal-agent-option"
+										>
+											<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--success);"></span>
+											{agent.name}
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
 					{/if}
 					<button
 						class="brief-btn brief-btn-secondary"
@@ -313,5 +347,9 @@
 	.brief-btn-secondary {
 		background: transparent;
 		color: var(--text-muted);
+	}
+
+	.agent-picker-item:hover {
+		background: color-mix(in oklch, var(--bg-surface) 60%, transparent);
 	}
 </style>
