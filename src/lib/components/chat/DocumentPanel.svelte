@@ -32,8 +32,12 @@
 	let searching = $state(false);
 	let deleting = $state<number | null>(null);
 	let retrying = $state<number | null>(null);
+	let ocrEnabled = $state(false);
+	let ocrLoading = $state(false);
+	let reindexing = $state(false);
 
 	const canDelete = $derived(userRole === 'owner' || userRole === 'lead');
+	const canManage = $derived(userRole === 'owner' || userRole === 'lead');
 
 	const filteredFiles = $derived(
 		searchQuery.trim() && !searchResults.length
@@ -42,7 +46,10 @@
 	);
 
 	$effect(() => {
-		if (open) loadFiles();
+		if (open) {
+			loadFiles();
+			loadOcrStatus();
+		}
 	});
 
 	// When opened via citation click, pre-fill search
@@ -116,6 +123,47 @@
 		} catch { /* silent */ }
 		searching = false;
 	}
+
+	async function loadOcrStatus() {
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/ocr`);
+			const json: { ok?: boolean; ocrEnabled?: boolean } = await res.json();
+			if (json.ok) ocrEnabled = json.ocrEnabled ?? false;
+		} catch { /* silent */ }
+	}
+
+	async function toggleOcr() {
+		ocrLoading = true;
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/ocr`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ enabled: !ocrEnabled })
+			});
+			const json: { ok?: boolean; ocrEnabled?: boolean } = await res.json();
+			if (json.ok) ocrEnabled = json.ocrEnabled ?? false;
+		} catch { /* silent */ }
+		ocrLoading = false;
+	}
+
+	async function reindexImages() {
+		reindexing = true;
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/ocr`, {
+				method: 'POST'
+			});
+			const json: { ok?: boolean; queued?: number } = await res.json();
+			if (json.ok && json.queued && json.queued > 0) {
+				// Refresh file list to show updated statuses
+				await loadFiles();
+			}
+		} catch { /* silent */ }
+		reindexing = false;
+	}
+
+	const skippedImageCount = $derived(
+		files.filter((f) => f.processing_status === 'skipped' && f.content_type.startsWith('image/')).length
+	);
 
 	function formatSize(bytes: number): string {
 		if (bytes < 1024) return `${bytes} B`;
@@ -326,4 +374,47 @@
 			{/each}
 		{/if}
 	</div>
+
+	<!-- OCR Settings (owner/lead only) -->
+	{#if canManage}
+		<div class="shrink-0 border-t px-4 py-3" style="border-color: var(--border);">
+			<div class="flex items-center justify-between">
+				<div>
+					<span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
+						Image OCR
+					</span>
+					<p class="mt-0.5 text-[10px]" style="color: var(--text-muted);">
+						Extract text from images via OCR
+					</p>
+				</div>
+				<button
+					class="relative h-5 w-9 rounded-full transition-colors"
+					style="background: {ocrEnabled ? 'var(--accent)' : 'var(--border)'};"
+					onclick={toggleOcr}
+					disabled={ocrLoading}
+					aria-label="Toggle OCR"
+					title={ocrEnabled ? 'Disable OCR' : 'Enable OCR'}
+				>
+					<span
+						class="absolute top-0.5 left-0.5 h-4 w-4 rounded-full transition-transform"
+						style="background: var(--bg); transform: translateX({ocrEnabled ? '1rem' : '0'});"
+					></span>
+				</button>
+			</div>
+			{#if ocrEnabled && skippedImageCount > 0}
+				<button
+					class="mt-2 w-full rounded px-2 py-1 text-[10px] transition-opacity hover:opacity-80"
+					style="background: color-mix(in oklch, var(--accent) 15%, transparent); color: var(--accent); font-family: var(--font-mono);"
+					onclick={reindexImages}
+					disabled={reindexing}
+				>
+					{#if reindexing}
+						Processing...
+					{:else}
+						Index {skippedImageCount} existing image{skippedImageCount === 1 ? '' : 's'}
+					{/if}
+				</button>
+			{/if}
+		</div>
+	{/if}
 </aside>

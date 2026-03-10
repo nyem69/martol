@@ -9,7 +9,7 @@
 
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { member } from '$lib/server/db/auth-schema';
+import { member, organization } from '$lib/server/db/auth-schema';
 import { attachments, subscriptions } from '$lib/server/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkOrgLimits } from '$lib/server/feature-gates';
@@ -202,7 +202,22 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	});
 
 	// Determine if file is parseable for RAG (text extraction + embedding)
-	const isParseable = PARSEABLE_TYPES.has(file.type);
+	let isParseable = PARSEABLE_TYPES.has(file.type);
+
+	// Images are parseable only when OCR is enabled for the org
+	if (!isParseable && file.type.startsWith('image/')) {
+		try {
+			const [org] = await locals.db
+				.select({ metadata: organization.metadata })
+				.from(organization)
+				.where(eq(organization.id, activeOrgId))
+				.limit(1);
+			if (org?.metadata) {
+				const meta = typeof org.metadata === 'string' ? JSON.parse(org.metadata) : org.metadata;
+				if (meta?.ocrEnabled === true) isParseable = true;
+			}
+		} catch { /* non-critical — default to skipped */ }
+	}
 
 	// Record in attachments table (message_id backfilled when message is persisted)
 	// Compensate on DB failure: delete the R2 object to prevent orphans
