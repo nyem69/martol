@@ -337,10 +337,15 @@
 	const roomCount = data.roomCount;
 	// svelte-ignore state_referenced_locally
 	const isOwnerOrLead = data.isOwnerOrLead;
+	// svelte-ignore state_referenced_locally
+	const team = data.team;
+	// svelte-ignore state_referenced_locally
+	const hasTeamPro = data.hasTeamPro;
 	let upgrading = $state(false);
 	let managing = $state(false);
 	let billingError = $state('');
 	let billingSuccess = $state('');
+	let upgradeInterval = $state<'month' | 'year'>('month');
 
 	// Check URL params for billing redirect result
 	$effect(() => {
@@ -359,7 +364,11 @@
 		upgrading = true;
 		billingError = '';
 		try {
-			const res = await fetch('/api/billing/checkout', { method: 'POST' });
+			const res = await fetch('/api/billing/checkout', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ interval: upgradeInterval })
+			});
 			const result: { url?: string; error?: { message?: string } } = await res.json();
 			if (res.ok && result.url) {
 				window.location.href = result.url;
@@ -1283,6 +1292,29 @@
 				<!-- Action buttons (owner/lead only) -->
 				{#if isOwnerOrLead}
 					{#if billing.plan === 'free'}
+						<!-- Interval toggle -->
+						<div class="mb-3 flex items-center gap-1 rounded-md p-1" style="background: var(--bg); border: 1px solid var(--border); width: fit-content;">
+							<button
+								onclick={() => (upgradeInterval = 'month')}
+								data-testid="interval-monthly-btn"
+								class="rounded px-3 py-1 text-xs font-semibold transition-all"
+								style="background: {upgradeInterval === 'month' ? 'var(--accent)' : 'transparent'}; color: {upgradeInterval === 'month' ? 'var(--bg)' : 'var(--text-muted)'}; font-family: var(--font-mono);"
+							>
+								$10 / mo
+							</button>
+							<button
+								onclick={() => (upgradeInterval = 'year')}
+								data-testid="interval-annual-btn"
+								class="inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-semibold transition-all"
+								style="background: {upgradeInterval === 'year' ? 'var(--accent)' : 'transparent'}; color: {upgradeInterval === 'year' ? 'var(--bg)' : 'var(--text-muted)'}; font-family: var(--font-mono);"
+							>
+								$96 / yr
+								<span
+									class="rounded px-1 py-0.5 text-[9px] font-bold uppercase"
+									style="background: {upgradeInterval === 'year' ? 'color-mix(in oklch, var(--bg) 25%, transparent)' : 'color-mix(in oklch, var(--success) 20%, transparent)'}; color: {upgradeInterval === 'year' ? 'var(--bg)' : 'var(--success)'};"
+								>save 20%</span>
+							</button>
+						</div>
 						<button
 							onclick={handleUpgrade}
 							disabled={upgrading}
@@ -1318,6 +1350,85 @@
 				{/if}
 			</section>
 		{/if}
+
+		<!-- ═══ TEAM SECTION ═══ -->
+		<section
+			class="mb-6 rounded-lg p-5"
+			style="background: var(--bg-surface); border: 1px solid var(--border);"
+		>
+			<div class="mb-4 flex items-center gap-2">
+				<Users size={16} style="color: var(--accent);" />
+				<h2
+					class="text-sm font-bold uppercase tracking-wider"
+					style="color: var(--text); font-family: var(--font-mono);"
+				>
+					Team
+				</h2>
+			</div>
+
+			{#if team}
+				<!-- User owns a team -->
+				<div class="mb-4 space-y-2">
+					<div>
+						<span class="mb-1 block text-xs" style="color: var(--text-muted);">Team name</span>
+						<span class="text-sm font-semibold" style="color: var(--text);">{team.name}</span>
+					</div>
+					<div class="flex flex-wrap gap-3 text-xs" style="color: var(--text-muted);">
+						<span
+							class="inline-flex items-center gap-1 rounded px-2 py-1"
+							style="background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--accent); font-family: var(--font-mono);"
+						>
+							<Crown size={11} />
+							{team.status === 'active' ? 'Active' : team.status}
+						</span>
+						<span class="inline-flex items-center gap-1">
+							<Users size={11} />
+							{team.seats} seat{team.seats === 1 ? '' : 's'}
+						</span>
+						{#if team.currentPeriodEnd}
+							<span>Renews {new Date(team.currentPeriodEnd).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+						{/if}
+					</div>
+				</div>
+				<a
+					href="/settings/team"
+					data-testid="manage-team-btn"
+					class="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80"
+					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+				>
+					<Users size={14} />
+					Manage Team Members
+				</a>
+			{:else if hasTeamPro}
+				<!-- User is a member of a team (Pro via Team) -->
+				<div class="flex items-center gap-3">
+					<span
+						class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-bold uppercase tracking-wider"
+						style="background: color-mix(in oklch, var(--accent) 15%, transparent); border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent); color: var(--accent); font-family: var(--font-mono);"
+					>
+						<Crown size={14} />
+						Pro via Team
+					</span>
+					<span class="text-xs" style="color: var(--text-muted);">
+						Your Pro access is provided by a team subscription.
+					</span>
+				</div>
+			{:else}
+				<!-- No team — CTA to create one -->
+				<p class="mb-4 text-xs" style="color: var(--text-muted);">
+					Collaborate with your organization. A team subscription gives everyone on your team Pro access under one invoice.
+				</p>
+				<a
+					href="/settings/team"
+					data-testid="create-team-btn"
+					class="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80"
+					style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+				>
+					<Users size={14} />
+					Create a Team
+				</a>
+			{/if}
+		</section>
 
 		<!-- ═══ DANGER ZONE ═══ -->
 		<section
