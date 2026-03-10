@@ -343,14 +343,18 @@
 	let billingSuccess = $state('');
 	let upgradeInterval = $state<'month' | 'year'>('month');
 
-	// Check URL params for billing redirect result
+	// Check URL params for billing/team redirect result
 	$effect(() => {
 		const params = new URLSearchParams(window.location.search);
-		if (params.get('billing') === 'success') {
+		const billingParam = params.get('billing');
+		const teamParam = params.get('team');
+		const sessionId = params.get('session_id');
+
+		if (billingParam === 'success' || teamParam === 'success') {
 			// Clean URL immediately
 			const url = new URL(window.location.href);
-			const sessionId = params.get('session_id');
 			url.searchParams.delete('billing');
+			url.searchParams.delete('team');
 			url.searchParams.delete('session_id');
 			window.history.replaceState({}, '', url.toString());
 
@@ -362,15 +366,15 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ session_id: sessionId })
 				}).then(() => invalidateAll()).catch(() => {
-					// Fallback: webhook might have handled it
 					invalidateAll();
 				});
 			} else {
-				// No session_id — fall back to hoping webhook arrived
 				invalidateAll();
 			}
 
-			billingSuccess = m.billing_success();
+			billingSuccess = teamParam === 'success'
+				? m.billing_success()
+				: m.billing_success();
 			setTimeout(() => (billingSuccess = ''), 5000);
 		}
 	});

@@ -91,7 +91,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 				quantity: seats
 			}
 		],
-		success_url: `${origin}/settings?team=success`,
+		success_url: `${origin}/settings?team=success&session_id={CHECKOUT_SESSION_ID}`,
 		cancel_url: `${origin}/settings?team=cancel`,
 		subscription_data: {
 			metadata: { type: 'team', team_id: resolvedTeamId, owner_id: locals.user.id }
