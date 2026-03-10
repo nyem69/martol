@@ -18,6 +18,7 @@ import {
 	contentReports
 } from '$lib/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { stripSecrets } from '$lib/server/sanitize-secrets';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user || !locals.session) {
@@ -102,6 +103,21 @@ export const GET: RequestHandler = async ({ locals }) => {
 		error(404, 'User not found');
 	}
 
+	// Sanitize secrets from user-generated text fields
+	const sanitizedMessages = messagesData.map((msg: typeof messagesData[number]) => ({
+		...msg,
+		body: stripSecrets(msg.body)
+	}));
+
+	const sanitizedAudit = auditData.map((entry: typeof auditData[number]) => {
+		const rec = entry as Record<string, unknown>;
+		return {
+			...entry,
+			...(typeof rec.oldValue === 'string' ? { oldValue: stripSecrets(rec.oldValue) } : {}),
+			...(typeof rec.newValue === 'string' ? { newValue: stripSecrets(rec.newValue) } : {}),
+		};
+	});
+
 	const exportData = {
 		exportedAt: new Date().toISOString(),
 		profile: {
@@ -117,10 +133,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 		sessions: sessionsData,
 		accounts: accountsData,
 		memberships: membershipsData,
-		messages: messagesData,
+		messages: sanitizedMessages,
 		usernameHistory: usernameHistoryData,
 		termsAcceptances: termsData,
-		auditLog: auditData,
+		auditLog: sanitizedAudit,
 		reports: reportsData
 	};
 

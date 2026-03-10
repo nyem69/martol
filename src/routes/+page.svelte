@@ -137,7 +137,7 @@
 			<p class="tagline">
 				{m.hero_tagline()}
 			</p>
-			<p class="subtitle max-w-[300px]">
+			<p class="subtitle max-w-[300px] text-center">
 				{m.hero_subtitle()}<span class="cursor">_</span>
 			</p>
 			<a href="/login" class="cta" data-testid="hero-cta">

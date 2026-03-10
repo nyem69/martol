@@ -25,6 +25,7 @@ interface CloudflareEnv {
 	STRIPE_PRICE_ID: string;
 	STRIPE_PUBLISHABLE_KEY: string;
 	STRIPE_PRO_PRICE_ID: string;
+	EXPORT_TOKEN_SECRET: string;
 }
 
 declare global {

@@ -29,7 +29,8 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	const sig = tokenParam.slice(dotIndex + 1);
 
 	// Verify HMAC signature
-	const tokenSecret = platform?.env?.RESEND_API_KEY || 'export-fallback-secret';
+	const tokenSecret = platform?.env?.EXPORT_TOKEN_SECRET || platform?.env?.RESEND_API_KEY;
+	if (!tokenSecret) error(500, 'Export signing secret not configured');
 	let payload: string;
 	try {
 		payload = atob(payloadB64);
