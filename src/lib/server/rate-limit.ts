@@ -58,7 +58,7 @@ export async function checkRateLimit(
 				await kv.put(
 					kvKey,
 					JSON.stringify({ count: newCount, windowStart: data.windowStart }),
-					{ expirationTtl: Math.max(remainingTtl, 1) }
+					{ expirationTtl: Math.max(remainingTtl, 60) }
 				);
 
 				return { allowed: true, remaining: config.maxRequests - newCount };

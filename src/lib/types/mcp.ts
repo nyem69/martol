@@ -148,7 +148,7 @@ export const briefUpdateSchema = z.object({
 		conventions: z.string().max(5000).optional(),
 		phase: z.string().max(5000).optional(),
 		notes: z.string().max(5000).optional(),
-	}),
+	}).default({}),
 });
 
 export const mcpRequestSchema = z.discriminatedUnion('tool', [
