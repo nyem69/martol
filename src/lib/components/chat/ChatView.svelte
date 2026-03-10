@@ -47,6 +47,17 @@
 	let briefModalData = $state<{ brief: string; version: number } | null>(null);
 	let memberPanelRef: MemberPanel | undefined;
 	let pendingMention = $state<string | null>(null);
+
+	async function openBriefModal() {
+		// Fetch fresh brief from server and open modal
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/brief`);
+			const data: { ok?: boolean; brief?: string; version?: number } = await res.json();
+			if (data.ok) {
+				briefModalData = { brief: data.brief ?? '', version: data.version ?? 0 };
+			}
+		} catch { /* silent */ }
+	}
 	let replyTo = $state<{ dbId: number; senderName: string; body: string } | null>(null);
 	let reportTarget = $state<{ messageId: number; messageBody: string } | null>(null);
 	let recentActions = $state<PendingAction[]>([]);
@@ -273,6 +284,7 @@
 			{userRole}
 			onlineCount={store.onlineUsers.size}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
+			onShowBrief={openBriefModal}
 		/>
 
 		<OnlineBar

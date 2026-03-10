@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check } from '@lucide/svelte';
+	import { Menu, ChevronDown, Plus, Loader, User, Settings, LogOut, Pencil, Check, FileText } from '@lucide/svelte';
 	import { organization, signOut } from '$lib/auth-client';
 	import { invalidateAll, goto } from '$app/navigation';
 
@@ -11,7 +11,8 @@
 		userName,
 		userRole,
 		onlineCount,
-		onToggleMembers
+		onToggleMembers,
+		onShowBrief
 	}: {
 		roomName: string;
 		roomId: string;
@@ -20,6 +21,7 @@
 		userRole: string;
 		onlineCount: number;
 		onToggleMembers: () => void;
+		onShowBrief: () => void;
 	} = $props();
 
 	// Derive displayed name from rooms array so it updates after rename + invalidateAll
@@ -304,6 +306,16 @@
 				</span>
 			</div>
 		{/if}
+		<button
+			class="header-icon-btn rounded p-1.5 transition-opacity hover:opacity-70 active:scale-95"
+			style="color: var(--text-muted);"
+			onclick={onShowBrief}
+			aria-label={m.chat_brief()}
+			title={m.chat_brief()}
+			data-testid="header-brief-btn"
+		>
+			<FileText size={16} />
+		</button>
 		<div class="relative">
 			<button
 				class="user-btn flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
