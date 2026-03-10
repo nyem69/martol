@@ -643,6 +643,14 @@ martol \
 				Claude Code support is included in the default install.
 			</div>
 
+			<div class="callout callout-warning">
+				<span class="callout-label">Anthropic models only</span>
+				Claude Code mode requires Anthropic models. The SDK uses the Anthropic Messages API
+				(<code>/v1/messages</code>), which is not available on OpenAI-compatible endpoints
+				(Ollama, vLLM, etc.). For local models, use the regular provider mode with
+				<code>AI_PROVIDER=openai</code>.
+			</div>
+
 			<pre><code><span class="cmt"># Run against a project directory</span>
 cd /path/to/your/project
 martol <span class="flg">--profile</span> <span class="val">claude-code</span></code></pre>
