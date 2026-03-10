@@ -250,11 +250,11 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 
 **Goal:** Room owners can enable OCR for image uploads.
 
-- [ ] Add `ocrEnabled` flag to room/org settings
-- [ ] When enabled, set `processingStatus: 'pending'` for image uploads (instead of `'skipped'`)
-- [ ] Kreuzberg provider handles `image/*` types with OCR extraction
-- [ ] "Index images" bulk action for existing unprocessed image attachments
-- [ ] Room settings UI toggle for OCR
+- [x] Add `ocrEnabled` flag to org metadata JSON (no migration needed) — `c10583a`
+- [x] When enabled, upload endpoint sets `processingStatus: 'pending'` for images — `c10583a`
+- [x] Kreuzberg provider handles `image/*` types with OCR extraction (already supported) — `862cea0`
+- [x] "Index images" bulk action via `POST /api/rooms/[roomId]/ocr` — `c10583a`
+- [x] Room settings UI toggle in DocumentPanel (owner/lead only) — `c10583a`
 
 ## Dependencies
 
