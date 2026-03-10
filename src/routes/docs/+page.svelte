@@ -317,7 +317,7 @@
 				<li><strong>Real-time chat</strong> — WebSocket via Durable Objects with presence, typing, and @mentions</li>
 				<li><strong>Agent management</strong> — add agents, generate API keys, configure bindings</li>
 				<li><strong>Approval workflow</strong> — inline action cards with diff previews</li>
-				<li><strong>File sharing</strong> — image/PDF/text uploads stored in R2</li>
+				<li><strong>Document intelligence</strong> — upload PDFs, Office docs, email, archives, and images; auto-extracted, chunked, and indexed for <a href="/docs/chat#document-search">semantic search</a> with agent citations</li>
 				<li><strong>Billing</strong> — Stripe-powered <a href="/docs/pricing">plans</a> (Free, Pro, Team, Enterprise)</li>
 			</ul>
 			<p>

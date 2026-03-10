@@ -19,6 +19,10 @@
 			label: 'Features',
 			links: [
 				{ id: 'file-upload', text: 'File Upload' },
+				{ id: 'document-intelligence', text: 'Document Intelligence' },
+				{ id: 'document-search', text: 'Document Search' },
+				{ id: 'citations', text: 'Citations' },
+				{ id: 'image-ocr', text: 'Image OCR' },
 				{ id: 'slash-commands', text: 'Slash Commands' },
 				{ id: 'presence', text: 'Presence & Members' }
 			]
@@ -223,14 +227,14 @@
 		<section class="page-section" id="file-upload">
 			<h2>File Upload</h2>
 			<p>
-				Share files directly in the chat. Supported formats:
+				Share files directly in the chat. Martol supports a wide range of document types beyond images:
 			</p>
 
 			<div class="table-wrap">
 				<table>
 					<thead>
 						<tr>
-							<th>Type</th>
+							<th>Category</th>
 							<th>Formats</th>
 							<th>Display</th>
 						</tr>
@@ -238,34 +242,215 @@
 					<tbody>
 						<tr>
 							<td>Images</td>
-							<td>JPEG, PNG, GIF, WEBP</td>
+							<td>JPEG, PNG, GIF, WEBP, TIFF</td>
 							<td>Inline thumbnail with lightbox</td>
 						</tr>
 						<tr>
 							<td>Documents</td>
-							<td>PDF</td>
-							<td>Download link</td>
+							<td>PDF, DOCX, PPTX, ODT</td>
+							<td>Download link + text extraction</td>
+						</tr>
+						<tr>
+							<td>Spreadsheets</td>
+							<td>XLSX, CSV</td>
+							<td>Download link + text extraction</td>
+						</tr>
+						<tr>
+							<td>Web / Data</td>
+							<td>HTML, JSON, YAML, XML</td>
+							<td>Download link + text extraction</td>
+						</tr>
+						<tr>
+							<td>Email</td>
+							<td>EML (RFC 822)</td>
+							<td>Download link + text extraction</td>
+						</tr>
+						<tr>
+							<td>Archives</td>
+							<td>ZIP, GZIP</td>
+							<td>Download link + contents extraction</td>
 						</tr>
 						<tr>
 							<td>Text</td>
-							<td>Plain text, code files</td>
-							<td>Download link</td>
+							<td>Plain text, Markdown</td>
+							<td>Download link + text extraction</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 
 			<ul>
-				<li><strong>Max size</strong> — 10 MB per file</li>
+				<li><strong>Max size</strong> — 25 MB per file</li>
 				<li><strong>Drag and drop</strong> — drag files onto the chat input</li>
 				<li><strong>Upload progress</strong> — shown inline while uploading</li>
 				<li><strong>Storage</strong> — files stored in Cloudflare R2, namespaced per organization</li>
+				<li><strong>Auto-indexing</strong> — text is extracted, chunked, and embedded for semantic search (see <a href="#document-intelligence">Document Intelligence</a>)</li>
 			</ul>
 
 			<div class="callout callout-info">
 				<span class="callout-label">Plan limits</span>
 				Free plan includes 10 file uploads (100 MB storage). Pro plan has unlimited uploads (5 GB storage).
 				See <a href="/docs/pricing">Pricing</a> for full details.
+			</div>
+		</section>
+
+		<!-- Document Intelligence -->
+		<section class="page-section" id="document-intelligence">
+			<h2>Document Intelligence</h2>
+			<p>
+				Uploaded documents are automatically processed through a RAG (Retrieval-Augmented Generation) pipeline.
+				Text is extracted, split into chunks, embedded as vectors, and indexed for semantic search.
+			</p>
+
+			<h3>How It Works</h3>
+			<ol class="steps-list">
+				<li>A file is uploaded to the room via chat or the document panel</li>
+				<li>Text is extracted using Kreuzberg (supports PDF, Office, HTML, email, archives, and more)</li>
+				<li>Extracted text is split into 500-word chunks with 50-word overlap</li>
+				<li>Each chunk is embedded using BGE-base-en-v1.5 (768-dimensional vectors)</li>
+				<li>Vectors are stored in Cloudflare Vectorize for fast similarity search</li>
+			</ol>
+
+			<h3>Processing Status</h3>
+			<p>
+				Each document shows its processing status in the document panel:
+			</p>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Status</th>
+							<th>Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><span class="status-dot green"></span> Indexed</td>
+							<td>Text extracted, chunked, and searchable</td>
+						</tr>
+						<tr>
+							<td><span class="status-dot yellow"></span> Pending</td>
+							<td>Queued for processing</td>
+						</tr>
+						<tr>
+							<td><span class="status-dot yellow"></span> Processing</td>
+							<td>Currently being extracted and indexed</td>
+						</tr>
+						<tr>
+							<td><span class="status-dot red"></span> Failed</td>
+							<td>Extraction failed — can be retried</td>
+						</tr>
+						<tr>
+							<td><span class="status-dot gray"></span> Skipped</td>
+							<td>Not processed (e.g., images without OCR enabled)</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h3>Document Panel</h3>
+			<p>
+				Open the document panel from the chat header (document icon). It shows all files uploaded to the room with:
+			</p>
+			<ul>
+				<li><strong>File type icon</strong> — visual category (PDF, spreadsheet, image, email, archive, code)</li>
+				<li><strong>Processing status</strong> — color-coded badge showing indexing progress</li>
+				<li><strong>File size and timestamp</strong> — relative time since upload</li>
+				<li><strong>Download</strong> — click to download the original file</li>
+				<li><strong>Delete</strong> — owner/lead only, removes file, chunks, and vectors</li>
+				<li><strong>Retry</strong> — re-run extraction on failed documents</li>
+			</ul>
+		</section>
+
+		<!-- Document Search -->
+		<section class="page-section" id="document-search">
+			<h2>Document Search</h2>
+			<p>
+				Search across all indexed documents in the room using semantic search. The search bar
+				in the document panel finds content by meaning, not just keywords.
+			</p>
+
+			<h3>How Search Works</h3>
+			<p>
+				Your query is embedded into the same vector space as the document chunks, then
+				matched against all indexed content in the room. Results are ranked by semantic similarity.
+			</p>
+			<ul>
+				<li><strong>Debounced input</strong> — results update as you type (400ms debounce)</li>
+				<li><strong>Snippet preview</strong> — each result shows a text excerpt from the matching chunk</li>
+				<li><strong>Relevance score</strong> — percentage match displayed per result</li>
+				<li><strong>Source attribution</strong> — filename shown for each match</li>
+			</ul>
+
+			<h3>Agent Search</h3>
+			<p>
+				AI agents can search documents using the <code>doc_search</code> MCP tool. This gives
+				agents access to all indexed room documents, enabling them to answer questions about
+				uploaded files, reference specific passages, and include citations in their responses.
+			</p>
+
+			<div class="callout callout-info">
+				<span class="callout-label">Usage metering</span>
+				Both user and agent searches count against the monthly vector search quota.
+				Pro plans include 500 queries/month; additional queries are metered.
+			</div>
+		</section>
+
+		<!-- Citations -->
+		<section class="page-section" id="citations">
+			<h2>Citations</h2>
+			<p>
+				When agents use document search and reference results in their responses, citations
+				are rendered as interactive badges in the chat.
+			</p>
+
+			<h3>Citation Format</h3>
+			<p>
+				Agents include citations as <code>[filename.ext]</code> markers in their messages.
+				These are automatically rendered as styled, clickable badges.
+			</p>
+
+			<h3>Interacting with Citations</h3>
+			<ul>
+				<li><strong>Click a citation</strong> — opens the document panel with the filename pre-filled in search</li>
+				<li><strong>Visual distinction</strong> — citations appear as accent-colored badges, separate from regular links</li>
+			</ul>
+
+			<div class="callout callout-info">
+				<span class="callout-label">How agents cite</span>
+				The <code>doc_search</code> MCP tool returns a <code>citation</code> field with each
+				result. Agents are instructed to include these citations naturally in their responses
+				when referencing document content.
+			</div>
+		</section>
+
+		<!-- Image OCR -->
+		<section class="page-section" id="image-ocr">
+			<h2>Image OCR</h2>
+			<p>
+				By default, uploaded images are stored but not text-indexed. Room owners can enable
+				OCR (Optical Character Recognition) to extract text from images, making them searchable
+				alongside other documents.
+			</p>
+
+			<h3>Enabling OCR</h3>
+			<ol class="steps-list">
+				<li>Open the document panel from the chat header</li>
+				<li>At the bottom, find the <strong>Image OCR</strong> toggle (owner/lead only)</li>
+				<li>Enable it — new image uploads will be automatically OCR-processed</li>
+			</ol>
+
+			<h3>Indexing Existing Images</h3>
+			<p>
+				After enabling OCR, previously uploaded images remain in "Skipped" status. Click
+				the <strong>Index N existing images</strong> button to queue them for OCR processing.
+				Up to 50 images are processed per batch.
+			</p>
+
+			<div class="callout callout-warn">
+				<span class="callout-label">Cost</span>
+				OCR is opt-in because it consumes more processing resources than text extraction.
+				Each OCR-processed image counts toward the monthly document processing quota.
 			</div>
 		</section>
 
@@ -857,6 +1042,7 @@
 
 	.status-dot.green { background: var(--success); }
 	.status-dot.yellow { background: var(--accent); }
+	.status-dot.red { background: var(--danger); }
 	.status-dot.gray { background: var(--text-muted); opacity: 0.5; }
 
 	/* ── Steps List ────────────────────────────────────── */
