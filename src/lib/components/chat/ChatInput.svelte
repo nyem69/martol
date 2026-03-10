@@ -281,7 +281,11 @@
 					if (json.ok && json.key) {
 						// Use server-sanitized filename to avoid markdown injection from raw file.name
 						const safeAlt = (json.filename as string).replace(/[[\]]/g, '');
-						const marker = `![${safeAlt}](r2:${json.key})`;
+						// Images use ![alt](r2:key), documents use [alt](r2:key)
+						const isImage = (json.contentType as string)?.startsWith('image/');
+						const marker = isImage
+							? `![${safeAlt}](r2:${json.key})`
+							: `[${safeAlt}](r2:${json.key})`;
 						const pos = textarea?.selectionStart ?? value.length;
 						value = value.slice(0, pos) + marker + value.slice(pos);
 						resize();

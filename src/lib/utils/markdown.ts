@@ -14,7 +14,7 @@ function esc(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Custom renderer: rewrite r2: image URLs to /api/upload?key=...
+// Custom renderer: rewrite r2: URLs to /api/upload?key=...
 const renderer: import('marked').RendererObject = {
 	image({ href, title, text }) {
 		const safeAlt = esc(text || '');
@@ -25,6 +25,17 @@ const renderer: import('marked').RendererObject = {
 		}
 		// External images — DOMPurify will validate src
 		return `<img src="${esc(href)}" alt="${safeAlt}"${safeTitle} loading="lazy">`;
+	},
+	link({ href, title, text }) {
+		if (href.startsWith('r2:')) {
+			const key = href.slice(3);
+			const url = `/api/upload?key=${encodeURIComponent(key)}`;
+			const safeText = esc(text || 'file');
+			const safeTitle = title ? ` title="${esc(title)}"` : '';
+			return `<a href="${url}"${safeTitle} class="r2-file" download="${safeText}">📎 ${safeText}</a>`;
+		}
+		// Default link rendering (let DOMPurify handle validation)
+		return false as unknown as string;
 	}
 };
 
@@ -38,7 +49,7 @@ const PURIFY_CONFIG: Config = {
 		'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 		'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'img'
 	],
-	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'loading', 'class'],
+	ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'loading', 'class', 'download'],
 	ALLOW_DATA_ATTR: false
 };
 
@@ -52,7 +63,7 @@ purify.addHook('afterSanitizeAttributes', (node) => {
 		node.setAttribute('rel', 'noopener noreferrer');
 		node.setAttribute('target', '_blank');
 		const href = node.getAttribute('href') || '';
-		if (!/^(https?:|mailto:|#)/.test(href)) {
+		if (!/^(https?:|mailto:|#|\/api\/upload\?key=)/.test(href)) {
 			node.removeAttribute('href');
 		}
 	}
