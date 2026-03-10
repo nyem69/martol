@@ -68,8 +68,9 @@ ENABLE_UPLOADS = "true"
 
 # Stripe publishable key (safe for client)
 STRIPE_PUBLISHABLE_KEY = "pk_test_51T78xgDkVAFKcyqKXNe7msMXQGLnj1ObPLhjrIlbI2Ox7z8pajqpQPmipK5DWJ70ZjRUZLd5ib7wfwhJgo7JHYdb00qs7Mlq0w"
-# Stripe price ID for Pro plan (created in Stripe Dashboard)
+# Stripe price IDs (created in Stripe Dashboard)
 STRIPE_PRO_PRICE_ID = "price_1T7NluDkVAFKcyqKBdjrDYey"
+# STRIPE_PRO_ANNUAL_PRICE_ID — set via: wrangler secret put STRIPE_PRO_ANNUAL_PRICE_ID
 
 # secrets
 # TURNSTILE_SECRET_KEY
