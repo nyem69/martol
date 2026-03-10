@@ -12,7 +12,7 @@ import type { RequestHandler } from './$types';
 import { member, organization } from '$lib/server/db/auth-schema';
 import { attachments, subscriptions } from '$lib/server/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
-import { checkOrgLimits } from '$lib/server/feature-gates';
+import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB (documents can be larger than images)
 const ALLOWED_TYPES = new Set([
@@ -136,7 +136,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	// Feature gate: check upload limits
 	const orgLimits = await checkOrgLimits(locals.db, activeOrgId);
-	if (orgLimits.usage.uploads >= orgLimits.limits.maxUploads) {
+	if (!withinLimit(orgLimits.usage.uploads, orgLimits.limits.maxUploads)) {
 		return new Response(
 			JSON.stringify({ error: { message: 'Upload limit reached. Upgrade to Pro for unlimited uploads.', code: 'upload_limit' } }),
 			{ status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -150,7 +150,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	// Storage quota check
-	if (orgLimits.usage.storageBytes + contentLength > orgLimits.limits.maxStorageBytes) {
+	if (!withinLimit(orgLimits.usage.storageBytes + contentLength - 1, orgLimits.limits.maxStorageBytes)) {
 		return new Response(
 			JSON.stringify({ error: { message: 'Storage limit reached. Delete files or upgrade to free up space.' } }),
 			{ status: 413, headers: { 'Content-Type': 'application/json' } }

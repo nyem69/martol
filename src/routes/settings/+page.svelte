@@ -331,6 +331,9 @@
 	}
 
 	// ── Billing state ──
+	/** Format plan limit: -1 → ∞, otherwise the number */
+	function fmtLimit(n: number): string { return n === -1 ? '∞' : String(n); }
+
 	// Reactive — updates when invalidateAll() re-runs the server loader
 	let billing = $derived(data.billing);
 	let roomCount = $derived(data.roomCount);
@@ -1254,35 +1257,35 @@
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<Users size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_users({ count: String(billing.usage.users), limit: String(billing.limits.maxUsers) })}
+							{m.billing_users({ count: String(billing.usage.users), limit: fmtLimit(billing.limits.maxUsers) })}
 						</div>
 						<div
 							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<Bot size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_agents({ count: String(billing.usage.agents), limit: String(billing.limits.maxAgents) })}
+							{m.billing_agents({ count: String(billing.usage.agents), limit: fmtLimit(billing.limits.maxAgents) })}
 						</div>
 						<div
 							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<MessageSquare size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_messages({ count: String(billing.usage.msgsToday), limit: String(billing.limits.maxMsgsPerDay) })}
+							{m.billing_messages({ count: String(billing.usage.msgsToday), limit: fmtLimit(billing.limits.maxMsgsPerDay) })}
 						</div>
 						<div
 							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<LayoutGrid size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_rooms({ count: String(roomCount), limit: String(billing.limits.maxRooms) })}
+							{m.billing_rooms({ count: String(roomCount), limit: fmtLimit(billing.limits.maxRooms) })}
 						</div>
 						<div
 							class="flex items-center gap-2 rounded-md px-3 py-2 text-xs"
 							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
 						>
 							<Upload size={12} style="color: var(--text-muted); flex-shrink: 0;" />
-							{m.billing_uploads_count({ count: String(billing.usage.uploads), limit: billing.plan === 'pro' ? '∞' : String(billing.limits.maxUploads) })}
+							{m.billing_uploads_count({ count: String(billing.usage.uploads), limit: fmtLimit(billing.limits.maxUploads) })}
 						</div>
 					</div>
 				</div>

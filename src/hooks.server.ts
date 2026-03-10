@@ -18,7 +18,7 @@ import { checkRateLimit } from '$lib/server/rate-limit';
 import { isDisposableEmail } from '$lib/server/disposable-emails';
 import { termsVersions, termsAcceptances } from '$lib/server/db/schema';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
-import { checkOrgLimits, checkUserRoomCount } from '$lib/server/feature-gates';
+import { checkOrgLimits, checkUserRoomCount, withinLimit } from '$lib/server/feature-gates';
 
 // Capacitor and localhost origins allowed for CORS
 const ALLOWED_ORIGINS = new Set([
@@ -222,12 +222,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isOrgCreate =
 		event.url.pathname === '/api/auth/organization/create' && event.request.method === 'POST';
 
-	// ── Room creation limit: max 100 rooms per user ──
+	// ── Room creation limit ──
 	if (isOrgCreate && event.locals.user && event.locals.db) {
 		const roomCount = await checkUserRoomCount(event.locals.db, event.locals.user.id);
-		if (roomCount >= 100) {
+		// Determine the user's room limit from their most recent org or team membership
+		// Free: 100, Pro: unlimited (-1)
+		const orgId = event.locals.session?.activeOrganizationId;
+		let maxRooms = 100; // default free limit
+		if (orgId) {
+			const orgLimits = await checkOrgLimits(event.locals.db, orgId, event.locals.user.id);
+			maxRooms = orgLimits.limits.maxRooms;
+		}
+		if (!withinLimit(roomCount, maxRooms)) {
 			return new Response(
-				JSON.stringify({ error: { message: 'Room limit reached (100). Remove a room before creating another.' } }),
+				JSON.stringify({ error: { message: `Room limit reached (${maxRooms === -1 ? 'unlimited' : maxRooms}). Remove a room before creating another.` } }),
 				{ status: 403, headers: { 'Content-Type': 'application/json' } }
 			);
 		}
@@ -413,7 +421,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				event.locals.db,
 				event.locals.session.activeOrganizationId
 			);
-			if (orgLimits.usage.users >= orgLimits.limits.maxUsers) {
+			if (!withinLimit(orgLimits.usage.users, orgLimits.limits.maxUsers)) {
 				return new Response(
 					JSON.stringify({
 						error: {

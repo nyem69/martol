@@ -4,7 +4,7 @@ import { user, member, organization, invitation, session as sessionTable } from 
 import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
-import { checkOrgLimits } from '$lib/server/feature-gates';
+import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
 
 export const load: PageServerLoad = async (event) => {
 	const { locals, platform } = event;
@@ -343,7 +343,7 @@ export const load: PageServerLoad = async (event) => {
 		hasAgents,
 		hmacSecret,
 		enableUploads: orgLimits?.limits.uploadsEnabled ?? false,
-		canSend: orgLimits ? orgLimits.usage.msgsToday < orgLimits.limits.maxMsgsPerDay : true,
+		canSend: orgLimits ? withinLimit(orgLimits.usage.msgsToday, orgLimits.limits.maxMsgsPerDay) : true,
 		plan: orgLimits?.plan ?? 'free'
 	};
 };

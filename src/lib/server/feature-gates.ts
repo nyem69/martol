@@ -31,14 +31,19 @@ const FREE_LIMITS: PlanLimits = {
 };
 
 const PRO_LIMITS: PlanLimits = {
-	maxUsers: 999,
-	maxAgents: 999,
-	maxMsgsPerDay: 999999,
+	maxUsers: -1, // unlimited
+	maxAgents: -1, // unlimited
+	maxMsgsPerDay: -1, // unlimited
 	maxStorageBytes: 5 * 1024 * 1024 * 1024, // 5 GB
-	maxUploads: 999999,
-	maxRooms: 100,
+	maxUploads: -1, // unlimited
+	maxRooms: -1, // unlimited
 	uploadsEnabled: true
 };
+
+/** Returns true if usage is within the limit. -1 means unlimited. */
+export function withinLimit(usage: number, limit: number): boolean {
+	return limit === -1 || usage < limit;
+}
 
 export interface OrgLimitsResult {
 	plan: 'free' | 'pro';

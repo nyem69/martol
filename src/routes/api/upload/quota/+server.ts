@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { checkOrgLimits } from '$lib/server/feature-gates';
+import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
@@ -12,7 +12,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const orgLimits = await checkOrgLimits(locals.db, orgId);
 
 	return json({
-		canUpload: orgLimits.usage.uploads < orgLimits.limits.maxUploads,
+		canUpload: withinLimit(orgLimits.usage.uploads, orgLimits.limits.maxUploads),
 		plan: orgLimits.plan,
 		uploads: orgLimits.usage.uploads,
 		maxUploads: orgLimits.limits.maxUploads,

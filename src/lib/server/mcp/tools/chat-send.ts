@@ -2,7 +2,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { messages } from '$lib/server/db/schema';
 import type { AgentContext } from '../auth';
 import type { ChatSendResult, McpResponse } from '$lib/types/mcp';
-import { checkOrgLimits } from '$lib/server/feature-gates';
+import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
 
 /**
  * Routes agent messages through the Durable Object for proper
@@ -17,7 +17,7 @@ export async function chatSend(
 ): Promise<McpResponse<ChatSendResult>> {
 	// Feature gate: check daily message quota
 	const orgLimits = await checkOrgLimits(db, agent.orgId);
-	if (orgLimits.usage.msgsToday >= orgLimits.limits.maxMsgsPerDay) {
+	if (!withinLimit(orgLimits.usage.msgsToday, orgLimits.limits.maxMsgsPerDay)) {
 		return { ok: false, error: 'Daily message limit reached. Upgrade for unlimited.', code: 'quota_exceeded' };
 	}
 

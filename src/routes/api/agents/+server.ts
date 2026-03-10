@@ -13,7 +13,7 @@ import { error, json } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
 import { member, user, account, apikey } from '$lib/server/db/auth-schema';
 import { eq, and } from 'drizzle-orm';
-import { checkOrgLimits } from '$lib/server/feature-gates';
+import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
 
 /** Resolve orgId + verify owner/lead role */
 async function resolveOrgAndRole(locals: App.Locals) {
@@ -56,7 +56,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Feature gate: check agent limit
 	const orgLimits = await checkOrgLimits(locals.db, orgId);
-	if (orgLimits.usage.agents >= orgLimits.limits.maxAgents) {
+	if (!withinLimit(orgLimits.usage.agents, orgLimits.limits.maxAgents)) {
 		error(403, `Agent limit reached (${orgLimits.limits.maxAgents} per room). Remove an agent before adding another.`);
 	}
 
