@@ -412,6 +412,55 @@ export const subscriptions = pgTable(
 );
 
 /**
+ * Teams — group billing. Owner pays for N seats, assigns Pro to users.
+ * Each assigned user gets Pro across all their rooms.
+ */
+export const teams = pgTable(
+	'teams',
+	{
+		id: text('id').primaryKey(), // nanoid
+		ownerId: text('owner_id').notNull(),
+		name: text('name').notNull(),
+		stripeCustomerId: text('stripe_customer_id'),
+		stripeSubscriptionId: text('stripe_subscription_id').unique(),
+		seats: integer('seats').notNull().default(5),
+		status: text('status')
+			.notNull()
+			.default('incomplete')
+			.$type<'active' | 'past_due' | 'canceled' | 'incomplete'>(),
+		currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+		cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		index('idx_teams_owner').on(table.ownerId),
+		index('idx_teams_stripe_sub').on(table.stripeSubscriptionId),
+		foreignKey({ columns: [table.ownerId], foreignColumns: [user.id] }).onDelete('restrict')
+	]
+);
+
+/**
+ * Team Members — users assigned Pro via a team.
+ * A user can be in multiple teams (each team pays independently).
+ */
+export const teamMembers = pgTable(
+	'team_members',
+	{
+		id: text('id').primaryKey(), // nanoid
+		teamId: text('team_id').notNull(),
+		userId: text('user_id').notNull(),
+		assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_team_members_unique').on(table.teamId, table.userId),
+		index('idx_team_members_user').on(table.userId),
+		foreignKey({ columns: [table.teamId], foreignColumns: [teams.id] }).onDelete('cascade'),
+		foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade')
+	]
+);
+
+/**
  * User Sanctions — moderation actions applied to users.
  * Types: warning, mute (timed), suspend, ban.
  */
