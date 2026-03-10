@@ -198,21 +198,21 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 
 **Goal:** PDFs actually get extracted and indexed.
 
-- [ ] Install `@kreuzberg/wasm` as a dependency
-- [ ] Create `kreuzberg-provider.ts` implementing `ExtractionProvider`
-- [ ] Register Kreuzberg provider in the ingestion pipeline (replaces PDF stub)
+- [x] Install `@kreuzberg/wasm` as a dependency — `862cea0`
+- [x] Create `kreuzberg-provider.ts` implementing `ExtractionProvider` — `862cea0`
+- [x] Register Kreuzberg provider in the ingestion pipeline (replaces PDF stub) — `862cea0`
 - [ ] Test with PDF uploads — verify extraction, chunking, embedding, search all work
-- [ ] Fix cron retry to actually re-dispatch pending jobs
+- [x] Fix cron retry to actually re-dispatch pending jobs — `next commit`
 - [ ] Verify `doc_search` MCP tool returns PDF results to agents
 
 ### Phase 2: Expanded Format Support
 
 **Goal:** Users can upload Office docs, HTML, email, archives.
 
-- [ ] Expand `ALLOWED_TYPES` set with all Kreuzberg-supported MIME types
-- [ ] Add magic byte signatures for new types (or skip magic bytes for Kreuzberg-handled types and rely on Kreuzberg's own validation)
-- [ ] Update `ChatInput.svelte` file picker `accept` attribute to include new types
-- [ ] Update upload quota logic if needed (larger files = different storage math)
+- [x] Expand `ALLOWED_TYPES` set with all Kreuzberg-supported MIME types — `862cea0`
+- [x] Add magic byte signatures for new types (ZIP-based formats, TIFF, gzip) — `862cea0`
+- [x] Update `ChatInput.svelte` file picker `accept` attribute to include new types — `862cea0`
+- [x] Update upload quota logic (file size limit bumped 10→25 MB for documents) — `862cea0`
 - [ ] Test extraction across format categories: DOCX, XLSX, PPTX, HTML, EML, ZIP
 
 ### Phase 3: Document Panel UI

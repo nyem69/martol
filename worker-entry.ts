@@ -151,9 +151,13 @@ const worker = {
 			console.error('[Cron] Storage recalculation failed:', err);
 		}
 
-		// Retry failed ingestion jobs (max 3 attempts)
+		// Retry failed ingestion jobs (max 3 attempts) — actually re-dispatch processing
 		try {
 			const { ingestionJobs } = await import('./src/lib/server/db/schema');
+			const ai = env.AI as Ai | undefined;
+			const vectorize = env.VECTORIZE as VectorizeIndex | undefined;
+			const r2 = env.STORAGE as R2Bucket | undefined;
+
 			const failedJobs = await db
 				.select({
 					id: ingestionJobs.id,
@@ -169,15 +173,23 @@ const worker = {
 				)
 				.limit(10);
 
-			if (failedJobs.length > 0) {
-				// Reset to pending for retry on next upload or manual trigger
+			if (failedJobs.length > 0 && ai && vectorize && r2) {
+				const { processDocument } = await import('./src/lib/server/rag/process-document');
 				for (const job of failedJobs) {
+					// Increment attempt count and reset status
 					await db
 						.update(ingestionJobs)
 						.set({ status: 'pending', attemptCount: sql`${ingestionJobs.attemptCount} + 1` })
 						.where(eq(ingestionJobs.id, job.id));
+					// Actually re-dispatch the processing
+					ctx.waitUntil(
+						processDocument(db, ai, vectorize, r2, job.attachmentId, job.orgId)
+							.catch((err: unknown) => console.error(`[Cron] Retry failed for attachment ${job.attachmentId}:`, err))
+					);
 				}
-				console.log(`[Cron] Reset ${failedJobs.length} failed ingestion jobs for retry`);
+				console.log(`[Cron] Re-dispatched ${failedJobs.length} failed ingestion jobs`);
+			} else if (failedJobs.length > 0) {
+				console.warn(`[Cron] ${failedJobs.length} failed jobs but AI/Vectorize/R2 bindings unavailable`);
 			}
 		} catch (err) {
 			console.error('[Cron] Ingestion job retry failed:', err);
