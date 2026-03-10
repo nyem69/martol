@@ -4,15 +4,27 @@
 
 	let { data } = $props();
 
-	let team = $state<null | {
+	interface TeamData {
 		id: string;
 		name: string;
 		status: string;
 		seats: number;
-		seatsUsed: number;
-		renewalDate: string | null;
-	}>(null);
-	let members = $state<{ id: string; displayName: string; username: string; email: string }[]>([]);
+		memberCount: number;
+		currentPeriodEnd: string | null;
+		cancelAtPeriodEnd: boolean;
+	}
+
+	interface MemberData {
+		id: string;
+		userId: string;
+		displayName: string;
+		username: string;
+		email: string;
+		assignedAt: string;
+	}
+
+	let team = $state<TeamData | null>(null);
+	let members = $state<MemberData[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let teamName = $state('');
@@ -36,10 +48,9 @@
 		try {
 			const res = await fetch('/api/billing/team');
 			if (res.ok) {
-				const body: unknown = await res.json();
-				const b = body as { team?: typeof team; members?: typeof members };
-				team = b.team ?? null;
-				members = b.members ?? [];
+				const body = (await res.json()) as { team?: TeamData; members?: MemberData[] };
+				team = body.team ?? null;
+				members = body.members ?? [];
 			} else if (res.status === 404) {
 				team = null;
 				members = [];
@@ -65,11 +76,8 @@
 				body: JSON.stringify({ name: teamName.trim(), seats: teamSeats })
 			});
 			if (res.ok) {
-				const body: unknown = await res.json();
-				const b = body as { url?: string };
-				if (b.url) {
-					window.location.href = b.url;
-				}
+				const body = (await res.json()) as { url?: string };
+				if (body.url) window.location.href = body.url;
 			} else {
 				const body: unknown = await res.json().catch(() => ({}));
 				error = extractError(body, 'Failed to start checkout.');
@@ -124,16 +132,13 @@
 		}
 	}
 
-	async function openPortal() {
+	async function openTeamPortal() {
 		error = '';
 		try {
-			const res = await fetch('/api/billing/portal', { method: 'POST' });
+			const res = await fetch('/api/billing/team/portal', { method: 'POST' });
 			if (res.ok) {
-				const body: unknown = await res.json();
-				const b = body as { url?: string };
-				if (b.url) {
-					window.location.href = b.url;
-				}
+				const body = (await res.json()) as { url?: string };
+				if (body.url) window.location.href = body.url;
 			} else {
 				const body: unknown = await res.json().catch(() => ({}));
 				error = extractError(body, 'Failed to open billing portal.');
@@ -147,8 +152,9 @@
 		loadTeam();
 	});
 
+	const isActive = $derived(team !== null && team.status === 'active');
 	const hasAvailableSeats = $derived(
-		team !== null && team.status === 'active' && team.seatsUsed < team.seats
+		isActive && (team?.memberCount ?? 0) < (team?.seats ?? 0)
 	);
 
 	function formatDate(dateStr: string | null) {
@@ -161,99 +167,90 @@
 	}
 </script>
 
-<div class="min-h-screen bg-zinc-900 text-zinc-100">
-	<div class="mx-auto max-w-2xl px-4 py-10">
+<div class="team-shell">
+	<div class="team-content">
 		<!-- Back link -->
 		<button
-			class="mb-8 flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-zinc-100"
+			class="back-link"
 			onclick={() => goto('/settings')}
 			data-testid="back-to-settings"
 		>
-			<ArrowLeft class="h-4 w-4" />
+			<ArrowLeft size={16} />
 			Back to Settings
 		</button>
 
 		<!-- Header -->
-		<div class="mb-8 flex items-center gap-3">
-			<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-				<Users class="h-5 w-5 text-amber-400" />
+		<div class="page-header">
+			<div class="header-icon">
+				<Users size={20} />
 			</div>
 			<div>
-				<h1 class="text-xl font-semibold text-zinc-100">Team</h1>
-				<p class="text-sm text-zinc-400">Manage your team subscription and members</p>
+				<h1>Team</h1>
+				<p class="subtitle">Manage your team subscription and members</p>
 			</div>
 		</div>
 
 		<!-- Error -->
 		{#if error}
-			<div
-				class="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"
-				data-testid="team-error"
-			>
+			<div class="error-bar" data-testid="team-error">
 				{error}
 			</div>
 		{/if}
 
 		<!-- Loading -->
 		{#if loading}
-			<div class="flex items-center justify-center py-20">
-				<Loader class="h-6 w-6 animate-spin text-amber-400" />
+			<div class="loading-center">
+				<Loader size={24} class="spin" />
 			</div>
 
 		<!-- No team: create form -->
 		{:else if !team}
-			<div class="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-				<div class="mb-6 flex items-center gap-2">
-					<Crown class="h-5 w-5 text-amber-400" />
-					<h2 class="text-base font-medium text-zinc-100">Create a Team</h2>
+			<div class="card">
+				<div class="card-header">
+					<Crown size={20} />
+					<h2>Create a Team</h2>
 				</div>
-				<p class="mb-6 text-sm text-zinc-400">
+				<p class="card-desc">
 					A team subscription lets you assign Pro status to multiple users under one invoice.
-					Each seat costs <span class="text-zinc-200">$10/user/month</span>.
+					Each seat costs <strong>$10/user/month</strong>.
 				</p>
 
-				<div class="space-y-4">
-					<div>
-						<label for="team-name" class="mb-1.5 block text-sm text-zinc-300">Team name</label>
+				<div class="form-stack">
+					<div class="form-group">
+						<label for="team-name">Team name</label>
 						<input
 							id="team-name"
 							type="text"
 							placeholder="Acme Corp"
 							bind:value={teamName}
-							class="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20"
 							data-testid="team-name-input"
 						/>
 					</div>
 
-					<div>
-						<label for="team-seats" class="mb-1.5 block text-sm text-zinc-300">
-							Number of seats
-						</label>
+					<div class="form-group">
+						<label for="team-seats">Number of seats</label>
 						<input
 							id="team-seats"
 							type="number"
 							min="1"
 							max="500"
 							bind:value={teamSeats}
-							class="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20"
 							data-testid="team-seats-input"
 						/>
-						<p class="mt-1 text-xs text-zinc-500">
-							Total: <span class="text-zinc-300">${teamSeats * 10}/month</span>
-						</p>
+						<span class="hint">Total: <strong>${teamSeats * 10}/month</strong></span>
 					</div>
 
 					<button
-						class="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+						class="btn-primary full-width"
 						onclick={createTeam}
 						disabled={createLoading || !teamName.trim()}
 						data-testid="create-team-button"
 					>
 						{#if createLoading}
-							<Loader class="h-4 w-4 animate-spin" />
+							<Loader size={16} class="spin" />
 							Redirecting to checkout…
 						{:else}
-							<CreditCard class="h-4 w-4" />
+							<CreditCard size={16} />
 							Continue to Checkout
 						{/if}
 					</button>
@@ -263,116 +260,115 @@
 		<!-- Team exists -->
 		{:else}
 			<!-- Team info card -->
-			<div class="mb-6 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-				<div class="mb-4 flex items-start justify-between">
+			<div class="card">
+				<div class="team-info-row">
 					<div>
-						<div class="flex items-center gap-2">
-							<Crown class="h-4 w-4 text-amber-400" />
-							<span class="text-base font-medium text-zinc-100">{team.name}</span>
-							<span
-								class={[
-									'rounded-full px-2 py-0.5 text-xs font-medium',
-									team.status === 'active'
-										? 'bg-emerald-500/15 text-emerald-400'
-										: 'bg-zinc-700 text-zinc-400'
-								].join(' ')}
-								data-testid="team-status"
-							>
+						<div class="team-name-row">
+							<Crown size={16} />
+							<span class="team-name">{team.name}</span>
+							<span class="status-badge" class:active={isActive}>
 								{team.status}
 							</span>
 						</div>
-						<p class="mt-1 text-sm text-zinc-400">
-							{team.seatsUsed} / {team.seats} seats used
+						<p class="seats-text">
+							{team.memberCount} / {team.seats} seats used
 						</p>
-						{#if team.renewalDate}
-							<p class="mt-0.5 text-xs text-zinc-500">
-								Renews {formatDate(team.renewalDate)}
+						{#if team.currentPeriodEnd}
+							<p class="renewal-text">
+								Renews {formatDate(team.currentPeriodEnd)}
 							</p>
 						{/if}
 					</div>
 
 					<button
-						class="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
-						onclick={openPortal}
+						class="btn-secondary"
+						onclick={openTeamPortal}
 						data-testid="manage-billing-button"
 					>
-						<CreditCard class="h-3.5 w-3.5" />
+						<CreditCard size={14} />
 						Manage Billing
 					</button>
 				</div>
 
 				<!-- Seat usage bar -->
-				<div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+				<div class="seats-bar">
 					<div
-						class="h-full rounded-full bg-amber-500 transition-all"
-						style="width: {Math.min(100, (team.seatsUsed / team.seats) * 100)}%"
+						class="seats-fill"
+						style="width: {Math.min(100, (team.memberCount / team.seats) * 100)}%"
 					></div>
 				</div>
 			</div>
 
-			<!-- Add member form (only if active + seats available) -->
-			{#if hasAvailableSeats}
-				<div class="mb-6 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-					<h2 class="mb-4 text-sm font-medium text-zinc-300">Add Member</h2>
-					<div class="flex gap-2">
+			<!-- Add member form -->
+			<div class="card">
+				<h2 class="section-title">Add Member</h2>
+				{#if !isActive}
+					<p class="card-desc">
+						Team subscription must be active to add members.
+					</p>
+				{:else if !hasAvailableSeats}
+					<p class="card-desc">
+						All {team.seats} seats are filled. Increase seats via the billing portal.
+					</p>
+				{:else}
+					<div class="add-row">
 						<input
 							type="email"
 							placeholder="member@example.com"
 							bind:value={addEmail}
-							class="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20"
 							data-testid="add-member-email-input"
 						/>
 						<button
-							class="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+							class="btn-primary"
 							onclick={addMember}
 							disabled={addLoading || !addEmail.trim()}
 							data-testid="add-member-button"
 						>
 							{#if addLoading}
-								<Loader class="h-4 w-4 animate-spin" />
+								<Loader size={16} class="spin" />
 							{:else}
-								<Plus class="h-4 w-4" />
+								<Plus size={16} />
 							{/if}
 							Add
 						</button>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 
 			<!-- Members list -->
-			<div class="rounded-xl border border-zinc-800 bg-zinc-900">
-				<div class="border-b border-zinc-800 px-6 py-4">
-					<h2 class="text-sm font-medium text-zinc-300">
+			<div class="card no-pad">
+				<div class="members-header">
+					<h2 class="section-title">
 						Members
-						<span class="ml-1.5 text-zinc-500">({members.length})</span>
+						<span class="count">({members.length})</span>
 					</h2>
 				</div>
 
 				{#if members.length === 0}
-					<div class="px-6 py-10 text-center text-sm text-zinc-500">
+					<div class="empty-state">
 						No members yet. Add someone above.
 					</div>
 				{:else}
-					<ul class="divide-y divide-zinc-800">
-						{#each members as member (member.id)}
-							<li class="flex items-center justify-between px-6 py-4" data-testid="member-row">
+					<ul class="members-list">
+						{#each members as m (m.id)}
+							<li class="member-row" data-testid="member-row">
 								<div>
-									<p class="text-sm text-zinc-100">
-										{member.displayName || member.username}
+									<p class="member-name">
+										{m.displayName || m.username || m.email}
 									</p>
-									<p class="text-xs text-zinc-500">{member.email}</p>
+									<p class="member-email">{m.email}</p>
 								</div>
-								{#if member.id !== data.userId}
+								{#if m.userId !== data.userId}
 									<button
-										class="flex items-center gap-1 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 transition hover:border-red-500/40 hover:text-red-400"
-										onclick={() => removeMember(member.id)}
+										class="btn-remove"
+										onclick={() => removeMember(m.userId)}
 										data-testid="remove-member-button"
 									>
-										<Trash2 class="h-3.5 w-3.5" />
+										<Trash2 size={14} />
 										Remove
 									</button>
 								{:else}
-									<span class="text-xs text-zinc-600">You</span>
+									<span class="you-badge">You</span>
 								{/if}
 							</li>
 						{/each}
@@ -382,3 +378,424 @@
 		{/if}
 	</div>
 </div>
+
+<style>
+	/* ── Shell ──────────────────────────────────────── */
+	.team-shell {
+		min-height: 100dvh;
+		background: var(--bg);
+		color: var(--text);
+		overflow-y: auto;
+	}
+
+	.team-content {
+		max-width: 640px;
+		margin: 0 auto;
+		padding: 40px 24px 120px;
+	}
+
+	/* ── Back link ──────────────────────────────────── */
+	.back-link {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--text-muted);
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin-bottom: 32px;
+		transition: color 0.12s;
+	}
+
+	.back-link:hover {
+		color: var(--text);
+	}
+
+	/* ── Page header ───────────────────────────────── */
+	.page-header {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin-bottom: 32px;
+	}
+
+	.header-icon {
+		width: 40px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 10px;
+		background: color-mix(in oklch, var(--accent) 12%, transparent);
+		color: var(--accent);
+	}
+
+	.page-header h1 {
+		font-family: var(--font-mono-alt);
+		font-size: 20px;
+		font-weight: 600;
+		margin: 0;
+	}
+
+	.subtitle {
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--text-muted);
+		margin: 2px 0 0;
+	}
+
+	/* ── Error ─────────────────────────────────────── */
+	.error-bar {
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--danger);
+		background: color-mix(in oklch, var(--danger) 10%, transparent);
+		border: 1px solid color-mix(in oklch, var(--danger) 25%, transparent);
+		border-radius: 8px;
+		padding: 10px 16px;
+		margin-bottom: 24px;
+	}
+
+	/* ── Loading ────────────────────────────────────── */
+	.loading-center {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 80px 0;
+		color: var(--accent);
+	}
+
+	:global(.spin) {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
+	}
+
+	/* ── Card ───────────────────────────────────────── */
+	.card {
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		padding: 24px;
+		margin-bottom: 24px;
+	}
+
+	.card.no-pad {
+		padding: 0;
+	}
+
+	.card-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 16px;
+		color: var(--accent);
+	}
+
+	.card-header h2 {
+		font-family: var(--font-mono-alt);
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--text);
+		margin: 0;
+	}
+
+	.card-desc {
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--text-muted);
+		margin-bottom: 20px;
+		line-height: 1.5;
+	}
+
+	.card-desc strong {
+		color: var(--text);
+	}
+
+	/* ── Form ──────────────────────────────────────── */
+	.form-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.form-group {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.form-group label {
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--text-muted);
+	}
+
+	.form-group input,
+	.add-row input {
+		font-family: var(--font-mono-alt);
+		font-size: 14px;
+		color: var(--text);
+		background: var(--bg-elevated);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 10px 14px;
+		transition: border-color 0.15s;
+	}
+
+	.form-group input:focus,
+	.add-row input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.form-group input::placeholder,
+	.add-row input::placeholder {
+		color: var(--text-muted);
+		opacity: 0.5;
+	}
+
+	.hint {
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		color: var(--text-muted);
+	}
+
+	.hint strong {
+		color: var(--text);
+	}
+
+	/* ── Buttons ────────────────────────────────────── */
+	.btn-primary {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--bg);
+		background: var(--accent);
+		border: none;
+		border-radius: 8px;
+		padding: 10px 20px;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.btn-primary:hover { opacity: 0.85; }
+	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-primary.full-width { width: 100%; }
+
+	.btn-secondary {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		color: var(--text-muted);
+		background: var(--bg-elevated);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 8px 14px;
+		cursor: pointer;
+		transition: all 0.12s;
+		white-space: nowrap;
+	}
+
+	.btn-secondary:hover {
+		color: var(--text);
+		border-color: var(--text-muted);
+	}
+
+	.btn-remove {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		color: var(--text-muted);
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 6px 10px;
+		cursor: pointer;
+		transition: all 0.12s;
+	}
+
+	.btn-remove:hover {
+		color: var(--danger);
+		border-color: color-mix(in oklch, var(--danger) 40%, transparent);
+	}
+
+	/* ── Team info ──────────────────────────────────── */
+	.team-info-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		margin-bottom: 16px;
+	}
+
+	.team-name-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--accent);
+	}
+
+	.team-name {
+		font-family: var(--font-mono-alt);
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--text);
+	}
+
+	.status-badge {
+		font-family: var(--font-mono-alt);
+		font-size: 11px;
+		font-weight: 500;
+		padding: 2px 8px;
+		border-radius: 10px;
+		background: color-mix(in oklch, var(--text-muted) 15%, transparent);
+		color: var(--text-muted);
+	}
+
+	.status-badge.active {
+		background: color-mix(in oklch, var(--success) 15%, transparent);
+		color: var(--success);
+	}
+
+	.seats-text {
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--text-muted);
+		margin-top: 4px;
+	}
+
+	.renewal-text {
+		font-family: var(--font-mono-alt);
+		font-size: 11px;
+		color: var(--text-muted);
+		opacity: 0.7;
+		margin-top: 2px;
+	}
+
+	/* ── Seat bar ───────────────────────────────────── */
+	.seats-bar {
+		height: 6px;
+		width: 100%;
+		background: var(--bg-elevated);
+		border-radius: 3px;
+		overflow: hidden;
+	}
+
+	.seats-fill {
+		height: 100%;
+		background: var(--accent);
+		border-radius: 3px;
+		transition: width 0.3s;
+	}
+
+	/* ── Add member ─────────────────────────────────── */
+	.section-title {
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--text-muted);
+		margin: 0 0 12px;
+	}
+
+	.count {
+		opacity: 0.6;
+		margin-left: 4px;
+	}
+
+	.add-row {
+		display: flex;
+		gap: 8px;
+	}
+
+	.add-row input {
+		flex: 1;
+	}
+
+	/* ── Members list ───────────────────────────────── */
+	.members-header {
+		padding: 16px 24px;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.members-header .section-title {
+		margin: 0;
+	}
+
+	.members-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.member-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16px 24px;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.member-row:last-child {
+		border-bottom: none;
+	}
+
+	.member-name {
+		font-family: var(--font-mono-alt);
+		font-size: 14px;
+		color: var(--text);
+		margin: 0;
+	}
+
+	.member-email {
+		font-family: var(--font-mono-alt);
+		font-size: 12px;
+		color: var(--text-muted);
+		margin: 2px 0 0;
+	}
+
+	.you-badge {
+		font-family: var(--font-mono-alt);
+		font-size: 11px;
+		color: var(--text-muted);
+		opacity: 0.5;
+	}
+
+	.empty-state {
+		padding: 40px 24px;
+		text-align: center;
+		font-family: var(--font-mono-alt);
+		font-size: 13px;
+		color: var(--text-muted);
+	}
+
+	/* ── Responsive ─────────────────────────────────── */
+	@media (max-width: 640px) {
+		.team-content {
+			padding: 24px 16px 100px;
+		}
+
+		.team-info-row {
+			flex-direction: column;
+			gap: 12px;
+		}
+
+		.add-row {
+			flex-direction: column;
+		}
+	}
+</style>
