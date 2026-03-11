@@ -461,6 +461,17 @@ export const teamMembers = pgTable(
 );
 
 /**
+ * Test Account Credentials — password hashes for test accounts.
+ * Only used by the test-login endpoint. Never populated in production.
+ */
+export const testAccountCredentials = pgTable('test_account_credentials', {
+	userId: text('user_id').primaryKey(),
+	passwordHash: text('password_hash').notNull()
+}, (table) => [
+	foreignKey({ columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade')
+]);
+
+/**
  * User Sanctions — moderation actions applied to users.
  * Types: warning, mute (timed), suspend, ban.
  */
