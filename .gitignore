@@ -20,5 +20,8 @@ docs/prompt
 .obsidian/
 .playwright-mcp/
 .worktrees/
-_data
 .mcp.json
+
+_data
+docs/prompt
+docs/superpowers

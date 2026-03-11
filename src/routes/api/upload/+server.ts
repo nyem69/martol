@@ -246,9 +246,25 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	// Trigger async RAG processing via waitUntil (non-blocking)
-	if (isParseable && insertedId && platform?.env?.VECTORIZE) {
+	let ragStatus = 'skipped';
+	let ragReason = '';
+
+	if (!isParseable) {
+		ragReason = `type ${file.type} not parseable`;
+	} else if (!insertedId) {
+		ragReason = 'no insertedId from DB';
+	} else if (!platform?.env?.VECTORIZE) {
+		ragReason = 'VECTORIZE binding missing';
+	} else if (!platform?.env?.AI) {
+		ragReason = 'AI binding missing';
+	} else {
 		const ctx = platform.context;
-		if (ctx?.waitUntil) {
+		if (!ctx?.waitUntil) {
+			ragReason = 'platform.context.waitUntil unavailable';
+		} else {
+			ragStatus = 'triggered';
+			ragReason = `attachmentId=${insertedId}`;
+			console.log(`[Upload] RAG triggered for attachment ${insertedId}, file ${safeName}`);
 			const { processDocument } = await import('$lib/server/rag/process-document');
 			ctx.waitUntil(
 				processDocument(
@@ -264,12 +280,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	}
 
+	if (ragStatus !== 'triggered') {
+		console.log(`[Upload] RAG not triggered: ${ragReason}`);
+	}
+
 	return json({
 		ok: true,
 		key: r2Key,
 		filename: safeName,
 		contentType: file.type,
-		sizeBytes: file.size
+		sizeBytes: file.size,
+		rag: { status: ragStatus, reason: ragReason }
 	});
 };
 

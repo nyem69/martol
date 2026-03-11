@@ -281,9 +281,14 @@
 		xhr.onload = () => {
 			activeXhr = null;
 			uploading = false;
+			console.log(`[Upload] Response status=${xhr.status}`);
 			if (xhr.status >= 200 && xhr.status < 300) {
 				try {
 					const json = JSON.parse(xhr.responseText);
+					console.log('[Upload] Server response:', JSON.stringify(json, null, 2));
+					if (json.rag) {
+						console.log(`[Upload] RAG pipeline: ${json.rag.status} — ${json.rag.reason}`);
+					}
 					if (json.ok && json.key) {
 						// Use server-sanitized filename to avoid markdown injection from raw file.name
 						const safeAlt = (json.filename as string).replace(/[[\]]/g, '');
