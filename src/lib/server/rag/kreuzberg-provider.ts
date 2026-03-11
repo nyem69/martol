@@ -64,8 +64,10 @@ async function ensureWasm(): Promise<typeof import('@kreuzberg/wasm')> {
 		if (!wasmInitialized) {
 			console.log('[Kreuzberg] Initializing WASM...');
 			// Cloudflare Workers can't auto-load .wasm files — must pass module explicitly.
-			// @ts-expect-error — wrangler resolves .wasm imports as WebAssembly.Module
-			const wasmModule = await import('@kreuzberg/wasm/kreuzberg_wasm_bg.wasm');
+			// @vite-ignore prevents Vite from trying to resolve the .wasm import;
+			// wrangler handles it at deploy time.
+			const wasmPath = '@kreuzberg/wasm/kreuzberg_wasm_bg.wasm';
+			const wasmModule = await import(/* @vite-ignore */ wasmPath);
 			await kreuzberg.initWasm({ wasmModule: wasmModule.default ?? wasmModule });
 			wasmInitialized = true;
 			console.log('[Kreuzberg] WASM initialized successfully');
