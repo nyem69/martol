@@ -344,42 +344,50 @@
 	let managing = $state(false);
 	let billingError = $state('');
 	let billingSuccess = $state('');
+	let billingVerifying = $state(false);
 	let upgradeInterval = $state<'month' | 'year'>('month');
 
 	// Check URL params for billing/team redirect result
-	$effect(() => {
+	async function verifyCheckoutReturn() {
 		const params = new URLSearchParams(window.location.search);
 		const billingParam = params.get('billing');
 		const teamParam = params.get('team');
 		const sessionId = params.get('session_id');
 
-		if (billingParam === 'success' || teamParam === 'success') {
-			// Clean URL immediately
-			const url = new URL(window.location.href);
-			url.searchParams.delete('billing');
-			url.searchParams.delete('team');
-			url.searchParams.delete('session_id');
-			window.history.replaceState({}, '', url.toString());
+		if (billingParam !== 'success' && teamParam !== 'success') return;
 
-			// Verify checkout with Stripe and activate subscription in DB
-			// (webhook may be delayed or misconfigured — this ensures activation)
+		// Clean URL immediately
+		const url = new URL(window.location.href);
+		url.searchParams.delete('billing');
+		url.searchParams.delete('team');
+		url.searchParams.delete('session_id');
+		window.history.replaceState({}, '', url.toString());
+
+		billingVerifying = true;
+
+		// Verify checkout with Stripe and activate subscription in DB
+		// (webhook may be delayed — this ensures immediate activation)
+		try {
 			if (sessionId) {
-				fetch('/api/billing/verify', {
+				await fetch('/api/billing/verify', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ session_id: sessionId })
-				}).then(() => invalidateAll()).catch(() => {
-					invalidateAll();
 				});
-			} else {
-				invalidateAll();
 			}
-
-			billingSuccess = teamParam === 'success'
-				? m.billing_success()
-				: m.billing_success();
-			setTimeout(() => (billingSuccess = ''), 5000);
+		} catch {
+			// verify failed — sync on page load will catch it
 		}
+
+		await invalidateAll();
+		billingVerifying = false;
+
+		billingSuccess = m.billing_success();
+		setTimeout(() => (billingSuccess = ''), 5000);
+	}
+
+	$effect(() => {
+		verifyCheckoutReturn();
 	});
 
 	async function handleUpgrade() {
@@ -1300,7 +1308,17 @@
 						{billingError}
 					</div>
 				{/if}
-				{#if billingSuccess}
+				{#if billingVerifying}
+				<div
+					class="mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-xs"
+					style="background: color-mix(in oklch, var(--accent) 10%, transparent); color: var(--accent);"
+					role="status"
+				>
+					<Loader size={14} class="animate-spin" />
+					Activating your subscription...
+				</div>
+			{/if}
+			{#if billingSuccess}
 					<div
 						class="mb-3 flex items-center gap-1.5 rounded-md px-3 py-2 text-xs"
 						style="background: color-mix(in oklch, var(--success) 10%, transparent); color: var(--success);"
