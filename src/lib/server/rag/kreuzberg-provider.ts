@@ -63,7 +63,10 @@ async function ensureWasm(): Promise<typeof import('@kreuzberg/wasm')> {
 		const kreuzberg = await import('@kreuzberg/wasm');
 		if (!wasmInitialized) {
 			console.log('[Kreuzberg] Initializing WASM...');
-			await kreuzberg.initWasm();
+			// Cloudflare Workers can't auto-load .wasm files — must pass module explicitly.
+			// @ts-expect-error — wrangler resolves .wasm imports as WebAssembly.Module
+			const wasmModule = await import('@kreuzberg/wasm/kreuzberg_wasm_bg.wasm');
+			await kreuzberg.initWasm({ wasmModule: wasmModule.default ?? wasmModule });
 			wasmInitialized = true;
 			console.log('[Kreuzberg] WASM initialized successfully');
 		}
