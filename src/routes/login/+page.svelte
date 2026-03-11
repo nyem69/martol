@@ -30,6 +30,11 @@
 	// OTP
 	let code = $state('');
 
+	// Test account password login
+	let password = $state('');
+	const isTestAccount = $derived(email.trim().toLowerCase().endsWith('@martol.test'));
+	const testAccountsEnabled = $derived(data.testAccountsEnabled);
+
 	// Magic link flow — user clicked magic link in email, redirected here with token
 	let magicVerifying = $state(false);
 	let magicError = $state('');
@@ -171,6 +176,31 @@
 		} catch {
 			resetTurnstile();
 			error = m.error_generic();
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function handleTestLogin() {
+		if (!email.trim() || !password) return;
+		loading = true;
+		error = '';
+		try {
+			const res = await fetch('/api/auth/test-login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: email.trim().toLowerCase(), password })
+			});
+			if (res.ok) {
+				const result = (await res.json()) as { redirectTo?: string };
+				const redirectTo = $page.url.searchParams.get('redirect');
+				goto(redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : result.redirectTo || '/chat');
+			} else {
+				const err = (await res.json().catch(() => ({ message: 'Login failed' }))) as { message?: string };
+				error = err.message || 'Invalid credentials';
+			}
+		} catch {
+			error = 'Login failed. Please try again.';
 		} finally {
 			loading = false;
 		}
@@ -437,6 +467,42 @@
 						/>
 					</div>
 
+					{#if isTestAccount && testAccountsEnabled}
+					<div style="margin-top: 1rem;">
+						<label for="test-password" style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">
+							Test account — password login
+						</label>
+						<input
+							id="test-password"
+							type="password"
+							bind:value={password}
+							placeholder="Password"
+							disabled={loading}
+							data-testid="test-password-input"
+							class="w-full rounded-md px-3 py-2.5 text-sm"
+							style="background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono);"
+							onkeydown={(e) => e.key === 'Enter' && handleTestLogin()}
+						/>
+					</div>
+					<button
+						onclick={handleTestLogin}
+						disabled={loading || !password}
+						data-testid="test-login-btn"
+						class="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+						style="background: var(--accent); color: var(--bg); letter-spacing: 0.5px;"
+					>
+						{#if loading}
+							<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+							Signing in...
+						{:else}
+							Sign in
+						{/if}
+					</button>
+				{:else if isTestAccount}
+					<p style="color: var(--text-muted); margin-top: 1rem; font-size: 0.875rem;">
+						Test accounts are disabled.
+					</p>
+				{:else}
 					<!-- Separate ToS checkbox -->
 					<label class="mt-4 flex cursor-pointer items-start gap-2">
 						<input
@@ -487,6 +553,7 @@
 							{m.login_continue()}
 						{/if}
 					</button>
+				{/if}
 				</form>
 			</div>
 		{:else}

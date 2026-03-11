@@ -27,6 +27,7 @@ interface CloudflareEnv {
 	STRIPE_PRO_PRICE_ID: string;
 	STRIPE_PRO_ANNUAL_PRICE_ID?: string;
 	EXPORT_TOKEN_SECRET: string;
+	TEST_ACCOUNTS_ENABLED?: string;
 }
 
 declare global {
