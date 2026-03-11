@@ -133,18 +133,13 @@ export const DELETE: RequestHandler = async ({ request, locals, platform }) => {
 		.delete(documentChunks)
 		.where(eq(documentChunks.attachmentId, att.id));
 
-	// 4. Delete attachment from DB
-	await locals.db
-		.delete(attachments)
-		.where(eq(attachments.id, att.id));
-
-	// 5. Clean up message body that referenced this file
+	// 4. Clean up message body that referenced this file (before deleting attachment)
 	if (att.messageId) {
 		try {
 			await locals.db
 				.update(messages)
 				.set({
-					body: sql`REPLACE(${messages.body}, ${`[${att.filename}](r2:${att.r2Key})`}, ${`[File deleted: ${att.filename}]`})`,
+					body: sql`REPLACE(body, ${`[${att.filename}](r2:${att.r2Key})`}, ${`[File deleted: ${att.filename}]`})`,
 					editedAt: new Date()
 				})
 				.where(eq(messages.id, att.messageId));
@@ -152,6 +147,11 @@ export const DELETE: RequestHandler = async ({ request, locals, platform }) => {
 			console.error('[Files] Message cleanup failed:', err);
 		}
 	}
+
+	// 5. Delete attachment from DB
+	await locals.db
+		.delete(attachments)
+		.where(eq(attachments.id, att.id));
 
 	// 6. Decrement storage counter
 	await locals.db
