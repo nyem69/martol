@@ -1,51 +1,28 @@
 /**
- * Kreuzberg extraction provider for RAG pipeline.
+ * Document extraction provider for RAG pipeline.
  *
- * Uses @kreuzberg/wasm to extract text from PDF, Office docs, HTML,
- * email, archives, and other formats. Loaded lazily to avoid WASM
- * overhead in the main request path.
+ * Uses unpdf (serverless PDF.js) for PDF extraction — designed for
+ * Cloudflare Workers and edge runtimes. Plain text types are decoded
+ * directly from the buffer.
  */
 
 import type { ExtractionProvider, ExtractionResult } from './parser';
 
-/** MIME types Kreuzberg handles (beyond what builtin-text covers). */
-const KREUZBERG_TYPES = new Set([
-	// Documents
+/** MIME types this provider handles. */
+const SUPPORTED_TYPES = new Set([
+	// PDF — extracted via unpdf
 	'application/pdf',
-	'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-	'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-	'application/vnd.oasis.opendocument.text', // .odt
-	// Spreadsheets
-	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+	// Plain text variants — decoded directly
+	'text/plain',
+	'text/markdown',
 	'text/csv',
-	// Web / data
 	'text/html',
-	'application/xml',
-	'text/xml',
 	'application/json',
 	'text/yaml',
 	'application/x-yaml',
-	// Email
-	'message/rfc822', // .eml
-	'application/vnd.ms-outlook', // .msg
-	// Archives
-	'application/zip',
-	'application/x-tar',
-	'application/x-7z-compressed',
-	'application/gzip',
-	// Academic
-	'application/x-tex',
-	'application/x-bibtex',
-	'application/x-ipynb+json',
-	// Images (OCR — only when explicitly requested)
-	'image/png',
-	'image/jpeg',
-	'image/tiff',
-	'image/webp',
-	'image/gif',
+	'application/xml',
+	'text/xml',
 ]);
-
-let wasmInitialized = false;
 
 /** Typed extraction error with structured error code. */
 export class ExtractionError extends Error {
@@ -58,29 +35,6 @@ export class ExtractionError extends Error {
 	}
 }
 
-async function ensureWasm(): Promise<typeof import('@kreuzberg/wasm')> {
-	try {
-		const kreuzberg = await import('@kreuzberg/wasm');
-		if (!wasmInitialized) {
-			console.log('[Kreuzberg] Initializing WASM...');
-			// The WASM module is imported in worker-entry.ts (bundled by wrangler)
-			// and exposed on globalThis because Vite can't handle .wasm imports.
-			const wasmModule = (globalThis as unknown as Record<string, unknown>).__KREUZBERG_WASM;
-			if (!wasmModule) {
-				throw new Error('__KREUZBERG_WASM not found on globalThis — worker-entry.ts import missing');
-			}
-			await kreuzberg.initWasm({ wasmModule });
-			wasmInitialized = true;
-			console.log('[Kreuzberg] WASM initialized successfully');
-		}
-		return kreuzberg;
-	} catch (err) {
-		wasmInitialized = false;
-		console.error('[Kreuzberg] WASM init failed:', err);
-		throw new ExtractionError('wasm_init_failed', `WASM initialization failed: ${err instanceof Error ? err.message : String(err)}`);
-	}
-}
-
 /** SHA-256 hex digest of a buffer. */
 async function sha256(buffer: ArrayBuffer): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', buffer);
@@ -89,12 +43,25 @@ async function sha256(buffer: ArrayBuffer): Promise<string> {
 		.join('');
 }
 
+/** Extract text from a PDF using unpdf (serverless PDF.js). */
+async function extractPdf(buffer: ArrayBuffer): Promise<{ text: string; pages: number }> {
+	const { getDocumentProxy, extractText } = await import('unpdf');
+	const pdf = await getDocumentProxy(new Uint8Array(buffer));
+	const result = await extractText(pdf, { mergePages: true });
+	return { text: result.text as string, pages: result.totalPages };
+}
+
+/** Decode plain text from buffer. */
+function decodeText(buffer: ArrayBuffer): string {
+	return new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+}
+
 export const kreuzbergProvider: ExtractionProvider = {
-	name: 'kreuzberg-wasm',
-	version: '4.4.4',
+	name: 'unpdf',
+	version: '1.4.0',
 
 	supports(contentType: string): boolean {
-		return KREUZBERG_TYPES.has(contentType);
+		return SUPPORTED_TYPES.has(contentType);
 	},
 
 	async extract(
@@ -102,27 +69,38 @@ export const kreuzbergProvider: ExtractionProvider = {
 		contentType: string,
 		_filename: string
 	): Promise<ExtractionResult | null> {
-		const kreuzberg = await ensureWasm();
-
 		try {
-			const bytes = new Uint8Array(buffer);
-			const result = await kreuzberg.extractBytes(bytes, contentType);
+			let text: string;
+			let pageCount: number | null = null;
 
-			const text = result.content?.trim();
+			if (contentType === 'application/pdf') {
+				console.log('[Extract] Using unpdf for PDF extraction');
+				const result = await extractPdf(buffer);
+				text = result.text;
+				pageCount = result.pages;
+			} else {
+				// Plain text types — decode directly
+				text = decodeText(buffer);
+			}
+
+			text = text.trim();
 			if (!text) return null;
 
 			return {
 				text,
 				tokenEstimate: Math.ceil(text.length / 4),
-				parserName: 'kreuzberg-wasm',
+				parserName: 'unpdf',
 				parserVersion: this.version,
 				contentSha256: await sha256(buffer),
-				pageCount: result.metadata?.pageCount ?? null,
+				pageCount,
 			};
 		} catch (err) {
 			if (err instanceof ExtractionError) throw err;
-			console.error('[Kreuzberg] Extraction failed:', err);
-			throw new ExtractionError('extraction_failed', `Extraction failed: ${err instanceof Error ? err.message : String(err)}`);
+			console.error('[Extract] Extraction failed:', err);
+			throw new ExtractionError(
+				'extraction_failed',
+				`Extraction failed: ${err instanceof Error ? err.message : String(err)}`
+			);
 		}
 	},
 };

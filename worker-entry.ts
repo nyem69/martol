@@ -15,13 +15,6 @@
 
 import { withSentry } from '@sentry/cloudflare';
 import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
-// WASM module for Kreuzberg document extraction — imported here because
-// wrangler bundles worker-entry.ts and can resolve .wasm imports directly.
-// Vite (SvelteKit build) cannot handle raw .wasm imports.
-import kreuzbergWasm from '@kreuzberg/wasm/kreuzberg_wasm_bg.wasm';
-
-// Expose globally so kreuzberg-provider.ts can access it without import
-(globalThis as unknown as Record<string, unknown>).__KREUZBERG_WASM = kreuzbergWasm;
 
 // Durable Object classes
 export { ChatRoom } from './src/lib/server/chat-room';
