@@ -204,7 +204,7 @@ describe('POST /api/billing/checkout', () => {
 				line_items: [
 					expect.objectContaining({
 						price: 'price_monthly_123',
-						quantity: 3
+						quantity: 1
 					})
 				]
 			})
@@ -407,12 +407,11 @@ describe('POST /api/billing/checkout', () => {
 		expect(json).toEqual({ url: 'https://checkout.stripe.com/test' });
 	});
 
-	it('Clamps member count to minimum of 1', async () => {
+	it('Always uses quantity 1 for Pro checkout (per-user billing)', async () => {
 		const stripe = makeStripeClient();
 		mockCreateStripe.mockReturnValue(stripe);
 
-		// memberCount=0 → should be clamped to 1
-		const db = makeCheckoutDb({ memberRole: 'owner', existingSub: null, memberCount: 0 });
+		const db = makeCheckoutDb({ memberRole: 'owner', existingSub: null });
 		const event = makeRequestEvent({ db });
 
 		await POST(event);

@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
 import { createStripe } from '$lib/server/stripe';
 import { subscriptions } from '$lib/server/db/schema';
 import { member } from '$lib/server/db/auth-schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request, locals, platform, url }) => {
 	if (!locals.user || !locals.session) error(401, 'Authentication required');
@@ -89,14 +89,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 		stripeCustomerId = customer.id;
 	}
 
-	// Count human members only (exclude agents) for seat quantity
-	const [{ count: rawMemberCount }] = await locals.db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(member)
-		.where(and(eq(member.organizationId, orgId), sql`${member.role} != 'agent'`));
-	const memberCount = Math.max(1, rawMemberCount ?? 0);
-
-	// Create Checkout Session
+	// Create Checkout Session — Pro is per-user (quantity always 1)
 	const session = await stripe.checkout.sessions.create({
 		customer: stripeCustomerId,
 		mode: 'subscription',
@@ -104,7 +97,7 @@ export const POST: RequestHandler = async ({ request, locals, platform, url }) =
 		line_items: [
 			{
 				price: priceId,
-				quantity: memberCount
+				quantity: 1
 			}
 		],
 		success_url: `${origin}/settings?billing=success&session_id={CHECKOUT_SESSION_ID}`,
