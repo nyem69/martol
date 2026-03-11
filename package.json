@@ -11,6 +11,7 @@
     "check:watch": "svelte-kit sync && paraglide-js compile --outdir ./src/lib/paraglide && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "TEST_ACCOUNTS_ENABLED=true playwright test",
     "test:load": "k6 run tests/load/http-endpoints.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "NODE_TLS_REJECT_UNAUTHORIZED=0 drizzle-kit migrate",
@@ -50,6 +51,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.0.2",
     "@cloudflare/workers-types": "^4.20250214.0",
+    "@playwright/test": "^1.58.2",
     "@sveltejs/adapter-cloudflare": "^6.0.0",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.49.2",
