@@ -63,6 +63,13 @@
 		}
 	});
 
+	// Auto-refresh when a document finishes indexing (via WebSocket)
+	$effect(() => {
+		function onDocIndexed() { loadFiles(); }
+		window.addEventListener('document-indexed', onDocIndexed);
+		return () => window.removeEventListener('document-indexed', onDocIndexed);
+	});
+
 	async function loadFiles() {
 		loading = true;
 		try {

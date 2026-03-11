@@ -115,6 +115,9 @@ export class MessagesStore {
 			case 'brief_changed':
 				this.briefVersion = msg.version;
 				break;
+			case 'document_indexed':
+				window.dispatchEvent(new CustomEvent('document-indexed', { detail: msg }));
+				break;
 			case 'error':
 				this.error = msg.message;
 				break;
