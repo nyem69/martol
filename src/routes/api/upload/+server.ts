@@ -265,18 +265,26 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			ragStatus = 'triggered';
 			ragReason = `attachmentId=${insertedId}`;
 			console.log(`[Upload] RAG triggered for attachment ${insertedId}, file ${safeName}`);
-			const { processDocument } = await import('$lib/server/rag/process-document');
-			ctx.waitUntil(
-				processDocument(
-					locals.db,
-					platform.env.AI,
-					platform.env.VECTORIZE,
-					platform.env.STORAGE,
-					insertedId,
-					activeOrgId,
-					platform?.env as unknown as Record<string, unknown>
-				).catch((err: unknown) => console.error('[RAG] Background processing failed:', err))
-			);
+			ctx.waitUntil((async () => {
+				console.log(`[RAG:waitUntil] START — attachment ${insertedId}`);
+				try {
+					console.log('[RAG:waitUntil] Importing process-document module...');
+					const { processDocument } = await import('$lib/server/rag/process-document');
+					console.log('[RAG:waitUntil] Module imported, calling processDocument...');
+					const result = await processDocument(
+						locals.db,
+						platform.env.AI,
+						platform.env.VECTORIZE,
+						platform.env.STORAGE,
+						insertedId,
+						activeOrgId,
+						platform?.env as unknown as Record<string, unknown>
+					);
+					console.log(`[RAG:waitUntil] DONE — result:`, JSON.stringify(result));
+				} catch (err) {
+					console.error(`[RAG:waitUntil] CRASHED —`, err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : String(err));
+				}
+			})());
 		}
 	}
 
