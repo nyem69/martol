@@ -265,14 +265,20 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			ragStatus = 'triggered';
 			ragReason = `attachmentId=${insertedId}`;
 			console.log(`[Upload] RAG triggered for attachment ${insertedId}, file ${safeName}`);
+			// Create a dedicated DB connection for background processing.
+			// The request's Hyperdrive client is closed in hooks.server.ts finally{},
+			// which runs BEFORE waitUntil completes — so locals.db is dead by then.
+			const hyperdrive = (platform.env as unknown as Record<string, unknown>).HYPERDRIVE as { connectionString: string };
 			ctx.waitUntil((async () => {
 				console.log(`[RAG:waitUntil] START — attachment ${insertedId}`);
+				const { createHyperdriveDb } = await import('$lib/server/db/hyperdrive');
+				const { db: bgDb, client: bgClient } = createHyperdriveDb(hyperdrive);
 				try {
-					console.log('[RAG:waitUntil] Importing process-document module...');
+					await bgClient.connect();
+					console.log('[RAG:waitUntil] Background DB connected');
 					const { processDocument } = await import('$lib/server/rag/process-document');
-					console.log('[RAG:waitUntil] Module imported, calling processDocument...');
 					const result = await processDocument(
-						locals.db,
+						bgDb,
 						platform.env.AI,
 						platform.env.VECTORIZE,
 						platform.env.STORAGE,
@@ -283,6 +289,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 					console.log(`[RAG:waitUntil] DONE — result:`, JSON.stringify(result));
 				} catch (err) {
 					console.error(`[RAG:waitUntil] CRASHED —`, err instanceof Error ? `${err.name}: ${err.message}\n${err.stack}` : String(err));
+				} finally {
+					try { await bgClient.end(); } catch { /* already closed */ }
 				}
 			})());
 		}
