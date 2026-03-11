@@ -207,7 +207,7 @@ const worker = {
 				const { processDocument } = await import('./src/lib/server/rag/process-document');
 				for (const row of orphaned.rows) {
 					ctx.waitUntil(
-						processDocument(db, ai, vectorize, r2, Number(row.id), String(row.org_id))
+						processDocument(db, ai, vectorize, r2, Number(row.id), String(row.org_id), env)
 							.catch((err: unknown) => console.error(`[Cron] Orphan dispatch failed for attachment ${row.id}:`, err))
 					);
 				}
@@ -260,7 +260,7 @@ const worker = {
 						.set({ status: 'pending', attemptCount: sql`${ingestionJobs.attemptCount} + 1` })
 						.where(eq(ingestionJobs.id, job.id));
 					ctx.waitUntil(
-						processDocument(db, ai, vectorize, r2, job.attachmentId, job.orgId)
+						processDocument(db, ai, vectorize, r2, job.attachmentId, job.orgId, env)
 							.catch((err: unknown) => console.error(`[Cron] Retry failed for attachment ${job.attachmentId}:`, err))
 					);
 				}

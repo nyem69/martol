@@ -38,7 +38,8 @@ export async function processDocument(
 	vectorize: VectorizeIndex,
 	r2: R2Bucket,
 	attachmentId: number,
-	orgId: string
+	orgId: string,
+	env?: Record<string, unknown>
 ): Promise<{ chunksIndexed: number } | null> {
 	// 1. Create ingestion job
 	const [job] = await db
@@ -174,6 +175,22 @@ export async function processDocument(
 			.set({ processingStatus: 'indexed', indexedAt: new Date() })
 			.where(eq(attachments.id, attachmentId));
 
+		// 10b. Notify room that document is indexed
+		if (env) {
+			try {
+				await notifyRoom(env, orgId, {
+					attachmentId,
+					filename: att.filename,
+					chunks: indexed.length,
+					words: Math.round(extracted.text.length / 5),
+					pages: extracted.pageCount ?? null
+				});
+			} catch (err) {
+				// Non-fatal — document is indexed, notification is best-effort
+				console.error('[RAG] Room notification failed:', err);
+			}
+		}
+
 		// 11. Track AI usage
 		const today = new Date().toISOString().slice(0, 10);
 		await db
@@ -225,4 +242,30 @@ function resolveErrorCode(err: unknown): string {
 		return err.message.slice(0, 200);
 	}
 	return 'unknown_error';
+}
+
+async function notifyRoom(
+	env: Record<string, unknown>,
+	roomId: string,
+	payload: { attachmentId: number; filename: string; chunks: number; words: number; pages: number | null }
+): Promise<void> {
+	const chatRoomNs = env.CHAT_ROOM as DurableObjectNamespace | undefined;
+	const secret = env.HMAC_SIGNING_SECRET as string | undefined;
+	if (!chatRoomNs || !secret) return;
+
+	const doId = chatRoomNs.idFromName(roomId);
+	const stub = chatRoomNs.get(doId);
+
+	const res = await stub.fetch(new Request('https://internal/notify-document', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'X-Internal-Secret': secret
+		},
+		body: JSON.stringify(payload)
+	}));
+
+	if (!res.ok) {
+		console.error(`[RAG] DO notify-document failed: ${res.status} ${await res.text()}`);
+	}
 }

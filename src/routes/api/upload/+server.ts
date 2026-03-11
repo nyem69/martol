@@ -257,7 +257,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 					platform.env.VECTORIZE,
 					platform.env.STORAGE,
 					insertedId,
-					activeOrgId
+					activeOrgId,
+					platform?.env as unknown as Record<string, unknown>
 				).catch((err: unknown) => console.error('[RAG] Background processing failed:', err))
 			);
 		}

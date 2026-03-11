@@ -68,7 +68,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (ai && vectorize && r2 && ctx?.waitUntil) {
 		const { processDocument } = await import('$lib/server/rag/process-document');
 		ctx.waitUntil(
-			processDocument(locals.db, ai, vectorize, r2, att.id, activeOrgId)
+			processDocument(locals.db, ai, vectorize, r2, att.id, activeOrgId, platform?.env as unknown as Record<string, unknown>)
 				.catch((err: unknown) => console.error('[Retry] Processing failed:', err))
 		);
 	}
