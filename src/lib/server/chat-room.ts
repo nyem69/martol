@@ -158,6 +158,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return this.handleNotifyBrief(request);
 		}
 
+		// REST document-indexed notification — used after RAG pipeline completes
+		if (request.method === 'POST' && url.pathname.endsWith('/notify-document')) {
+			return this.handleNotifyDocumentIndexed(request);
+		}
+
 		if (request.headers.get('Upgrade') !== 'websocket') {
 			return new Response('Expected WebSocket upgrade', { status: 426 });
 		}
@@ -867,6 +872,96 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			version: payload.version,
 			changedBy: payload.changedBy
 		});
+
+		return new Response(
+			JSON.stringify({ ok: true }),
+			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
+	// ── REST Document Indexed Notification ───────────────────────────
+
+	private async handleNotifyDocumentIndexed(request: Request): Promise<Response> {
+		const internalSecret = request.headers.get('X-Internal-Secret');
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
+			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
+		}
+
+		let payload: { attachmentId: number; filename: string; chunks: number; words: number; pages: number | null };
+		try {
+			payload = await request.json();
+		} catch {
+			return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
+		}
+
+		// Broadcast real-time event to connected clients
+		await this.broadcast({
+			type: 'document_indexed',
+			attachmentId: payload.attachmentId,
+			filename: payload.filename,
+			chunks: payload.chunks
+		});
+
+		// Inject persistent system message so agents see it in chat history
+		const systemBody = `[System] ${payload.filename} has been indexed (${payload.pages ? `${payload.pages} pages, ` : ''}~${payload.words.toLocaleString()} words, ${payload.chunks} chunks). Agents can query it with doc_search.`;
+
+		// Resolve orgId: prefer stored meta (set by handleRestIngest), fall back to DO name
+		const orgId =
+			(await this.ctx.storage.get<string>('meta:orgId')) ||
+			this.ctx.id.name ||
+			'';
+
+		// Write system message to WAL (same pattern as handleMessage)
+		const seqId = this.nextLocalId++;
+		const timestamp = new Date().toISOString();
+
+		const stored: StoredMessage = {
+			localId: `sys-doc-${payload.attachmentId}`,
+			orgId,
+			senderId: 'system',
+			senderRole: 'system',
+			senderName: 'System',
+			body: systemBody,
+			timestamp,
+			flushed: false
+		};
+
+		const entrySize = measureBytes(stored);
+		this.unflushedIds.push(seqId);
+		this.walMessageCount++;
+		this.walByteSize += entrySize;
+
+		await this.ctx.storage.put({
+			[storageKey(seqId)]: stored,
+			'meta:nextId': this.nextLocalId,
+			'meta:walByteSize': this.walByteSize,
+			'meta:walMessageCount': this.walMessageCount,
+			'meta:unflushedIds': this.unflushedIds
+		});
+
+		// Broadcast the system message
+		const msgPayload: ServerMessagePayload = {
+			localId: stored.localId,
+			serverSeqId: seqId,
+			senderId: stored.senderId,
+			senderRole: stored.senderRole,
+			senderName: stored.senderName,
+			body: stored.body,
+			timestamp: stored.timestamp
+		};
+		await this.broadcast({ type: 'message', message: msgPayload });
+
+		// Schedule flush
+		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (existing) await this.ctx.storage.deleteAlarm();
+			await this.ctx.storage.setAlarm(Date.now());
+		} else if (this.unflushedIds.length === 1) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (!existing) {
+				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+			}
+		}
 
 		return new Response(
 			JSON.stringify({ ok: true }),
