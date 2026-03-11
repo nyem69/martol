@@ -37,6 +37,7 @@ export type ServerMessage =
 	| { type: 'edit'; serverSeqId: number; body: string; editedAt: string; senderId: string }
 	| { type: 'clear'; clearedBy: string }
 	| { type: 'brief_changed'; version: number; changedBy: string }
+	| { type: 'document_indexed'; attachmentId: number; filename: string; chunks: number }
 	| { type: 'error'; code: ErrorCode; message: string };
 
 export type ErrorCode =
