@@ -47,13 +47,32 @@ const KREUZBERG_TYPES = new Set([
 
 let wasmInitialized = false;
 
-async function ensureWasm(): Promise<typeof import('@kreuzberg/wasm')> {
-	const kreuzberg = await import('@kreuzberg/wasm');
-	if (!wasmInitialized) {
-		await kreuzberg.initWasm();
-		wasmInitialized = true;
+/** Typed extraction error with structured error code. */
+export class ExtractionError extends Error {
+	constructor(
+		public readonly code: string,
+		message: string
+	) {
+		super(message);
+		this.name = 'ExtractionError';
 	}
-	return kreuzberg;
+}
+
+async function ensureWasm(): Promise<typeof import('@kreuzberg/wasm')> {
+	try {
+		const kreuzberg = await import('@kreuzberg/wasm');
+		if (!wasmInitialized) {
+			console.log('[Kreuzberg] Initializing WASM...');
+			await kreuzberg.initWasm();
+			wasmInitialized = true;
+			console.log('[Kreuzberg] WASM initialized successfully');
+		}
+		return kreuzberg;
+	} catch (err) {
+		wasmInitialized = false;
+		console.error('[Kreuzberg] WASM init failed:', err);
+		throw new ExtractionError('wasm_init_failed', `WASM initialization failed: ${err instanceof Error ? err.message : String(err)}`);
+	}
 }
 
 /** SHA-256 hex digest of a buffer. */
@@ -79,19 +98,25 @@ export const kreuzbergProvider: ExtractionProvider = {
 	): Promise<ExtractionResult | null> {
 		const kreuzberg = await ensureWasm();
 
-		const bytes = new Uint8Array(buffer);
-		const result = await kreuzberg.extractBytes(bytes, contentType);
+		try {
+			const bytes = new Uint8Array(buffer);
+			const result = await kreuzberg.extractBytes(bytes, contentType);
 
-		const text = result.content?.trim();
-		if (!text) return null;
+			const text = result.content?.trim();
+			if (!text) return null;
 
-		return {
-			text,
-			tokenEstimate: Math.ceil(text.length / 4),
-			parserName: 'kreuzberg-wasm',
-			parserVersion: this.version,
-			contentSha256: await sha256(buffer),
-			pageCount: result.metadata?.pageCount ?? null,
-		};
+			return {
+				text,
+				tokenEstimate: Math.ceil(text.length / 4),
+				parserName: 'kreuzberg-wasm',
+				parserVersion: this.version,
+				contentSha256: await sha256(buffer),
+				pageCount: result.metadata?.pageCount ?? null,
+			};
+		} catch (err) {
+			if (err instanceof ExtractionError) throw err;
+			console.error('[Kreuzberg] Extraction failed:', err);
+			throw new ExtractionError('extraction_failed', `Extraction failed: ${err instanceof Error ? err.message : String(err)}`);
+		}
 	},
 };
