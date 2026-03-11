@@ -7,7 +7,7 @@ function scryptAsync(
 	options: { N: number; r: number; p: number },
 ): Promise<Buffer> {
 	return new Promise((resolve, reject) => {
-		scrypt(password, salt, keylen, options, (err, derived) => {
+		(scrypt as Function)(password, salt, keylen, options, (err: Error | null, derived: Buffer) => {
 			if (err) reject(err);
 			else resolve(derived);
 		});
