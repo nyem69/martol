@@ -272,9 +272,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			ctx.waitUntil((async () => {
 				console.log(`[RAG:waitUntil] START — attachment ${insertedId}`);
 				const { createHyperdriveDb } = await import('$lib/server/db/hyperdrive');
-				const { db: bgDb, client: bgClient } = createHyperdriveDb(hyperdrive);
+				const { db: bgDb, client: bgClient, connectPromise } = createHyperdriveDb(hyperdrive);
 				try {
-					await bgClient.connect();
+					await connectPromise;
 					console.log('[RAG:waitUntil] Background DB connected');
 					const { processDocument } = await import('$lib/server/rag/process-document');
 					const result = await processDocument(
