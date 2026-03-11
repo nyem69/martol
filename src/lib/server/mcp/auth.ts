@@ -24,7 +24,8 @@ export async function authenticateAgent(
 	apiKeyHeader: string | null,
 	auth: { api: { verifyApiKey: (opts: { body: { key: string } }) => Promise<any> } },
 	db: any,
-	kv?: KVNamespace
+	kv?: KVNamespace,
+	orgIdHint?: string | null
 ): Promise<AuthResult> {
 	if (!apiKeyHeader) {
 		return {
@@ -73,7 +74,12 @@ export async function authenticateAgent(
 		}
 	}
 
-	// Single joined query: member + user to resolve agent context
+	// Resolve agent context — prefer orgIdHint if the agent is a member of that org
+	const baseConditions = [eq(member.userId, agentUserId), eq(member.role, 'agent')];
+	if (orgIdHint) {
+		baseConditions.push(eq(member.organizationId, orgIdHint));
+	}
+
 	const [result] = await db
 		.select({
 			orgId: member.organizationId,
@@ -83,7 +89,7 @@ export async function authenticateAgent(
 		})
 		.from(member)
 		.innerJoin(user, eq(user.id, member.userId))
-		.where(and(eq(member.userId, agentUserId), eq(member.role, 'agent')))
+		.where(and(...baseConditions))
 		.orderBy(member.createdAt)
 		.limit(1);
 

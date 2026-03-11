@@ -30,7 +30,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	const kv = platform?.env?.CACHE;
-	const authResult = await authenticateAgent(request.headers.get('x-api-key'), locals.auth, locals.db, kv);
+	const orgIdHint = request.headers.get('x-org-id');
+	const authResult = await authenticateAgent(request.headers.get('x-api-key'), locals.auth, locals.db, kv, orgIdHint);
 
 	if (!authResult.ok) {
 		return json(authResult.error, { status: authResult.status });
