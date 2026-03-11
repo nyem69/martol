@@ -8,7 +8,7 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { member } from '$lib/server/db/auth-schema';
-import { attachments, documentChunks, subscriptions } from '$lib/server/db/schema';
+import { attachments, documentChunks, subscriptions, messages } from '$lib/server/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -87,13 +87,15 @@ export const DELETE: RequestHandler = async ({ request, locals, platform }) => {
 		error(400, 'Missing or invalid file ID');
 	}
 
-	// Load attachment to get R2 key and size
+	// Load attachment to get R2 key, size, and message link
 	const [att] = await locals.db
 		.select({
 			id: attachments.id,
 			r2Key: attachments.r2Key,
+			filename: attachments.filename,
 			sizeBytes: attachments.sizeBytes,
 			orgId: attachments.orgId,
+			messageId: attachments.messageId,
 		})
 		.from(attachments)
 		.where(and(eq(attachments.id, body.id), eq(attachments.orgId, activeOrgId)))
@@ -136,7 +138,22 @@ export const DELETE: RequestHandler = async ({ request, locals, platform }) => {
 		.delete(attachments)
 		.where(eq(attachments.id, att.id));
 
-	// 5. Decrement storage counter
+	// 5. Clean up message body that referenced this file
+	if (att.messageId) {
+		try {
+			await locals.db
+				.update(messages)
+				.set({
+					body: sql`REPLACE(${messages.body}, ${`[${att.filename}](r2:${att.r2Key})`}, ${`[File deleted: ${att.filename}]`})`,
+					editedAt: new Date()
+				})
+				.where(eq(messages.id, att.messageId));
+		} catch (err) {
+			console.error('[Files] Message cleanup failed:', err);
+		}
+	}
+
+	// 6. Decrement storage counter
 	await locals.db
 		.update(subscriptions)
 		.set({ storageBytesUsed: sql`GREATEST(${subscriptions.storageBytesUsed} - ${att.sizeBytes}, 0)` })
