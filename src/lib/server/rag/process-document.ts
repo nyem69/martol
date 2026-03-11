@@ -41,24 +41,30 @@ export async function processDocument(
 	orgId: string,
 	env?: Record<string, unknown>
 ): Promise<{ chunksIndexed: number } | null> {
-	// 1. Create ingestion job
-	const [job] = await db
-		.insert(ingestionJobs)
-		.values({
-			attachmentId,
-			orgId,
-			jobType: 'extract',
-			status: 'running',
-			startedAt: new Date(),
-		})
-		.returning({ id: ingestionJobs.id });
-
-	console.log(`[RAG] Processing attachment ${attachmentId} for org ${orgId}, job ${job.id}`);
+	// 1. Create ingestion job (non-fatal — pipeline continues even if tracking table fails)
+	let jobId: number | null = null;
+	try {
+		const [job] = await db
+			.insert(ingestionJobs)
+			.values({
+				attachmentId,
+				orgId,
+				jobType: 'extract',
+				status: 'running',
+				startedAt: new Date(),
+			})
+			.returning({ id: ingestionJobs.id });
+		jobId = job.id;
+		console.log(`[RAG] Processing attachment ${attachmentId} for org ${orgId}, job ${jobId}`);
+	} catch (err) {
+		console.error(`[RAG] ingestion_jobs insert failed (non-fatal):`, err instanceof Error ? err.message : err);
+		console.log(`[RAG] Processing attachment ${attachmentId} for org ${orgId}, no job tracking`);
+	}
 
 	// 2. Check spending cap
 	if (await isAiCapReached(db, orgId)) {
 		await db.update(attachments).set({ processingStatus: 'skipped' }).where(eq(attachments.id, attachmentId));
-		await finishJob(db, job.id, 'completed', null);
+		await finishJob(db, jobId, 'completed', null);
 		console.log(`[RAG] Org ${orgId} AI cap reached, skipping document`);
 		return null;
 	}
@@ -76,7 +82,7 @@ export async function processDocument(
 		.limit(1);
 
 	if (!att) {
-		await finishJob(db, job.id, 'failed', 'attachment_not_found');
+		await finishJob(db, jobId, 'failed', 'attachment_not_found');
 		return null;
 	}
 
@@ -91,7 +97,7 @@ export async function processDocument(
 		console.log(`[RAG] Fetching from R2: ${att.r2Key}`);
 		const obj = await r2.get(att.r2Key);
 		if (!obj) {
-			await markFailed(db, attachmentId, job.id, 'r2_object_missing');
+			await markFailed(db, attachmentId, jobId, 'r2_object_missing');
 			return null;
 		}
 
@@ -108,14 +114,14 @@ export async function processDocument(
 			);
 		} catch (err) {
 			if (err instanceof ExtractionError) {
-				await markFailed(db, attachmentId, job.id, err.code);
+				await markFailed(db, attachmentId, jobId, err.code);
 				return null;
 			}
 			throw err;
 		}
 
 		if (!extracted) {
-			await markFailed(db, attachmentId, job.id, 'extraction_empty');
+			await markFailed(db, attachmentId, jobId, 'extraction_empty');
 			return null;
 		}
 
@@ -137,7 +143,7 @@ export async function processDocument(
 		console.log(`[RAG] Chunked into ${chunks.length} segments`);
 		if (chunks.length === 0) {
 			await db.update(attachments).set({ processingStatus: 'skipped' }).where(eq(attachments.id, attachmentId));
-			await finishJob(db, job.id, 'completed', null);
+			await finishJob(db, jobId, 'completed', null);
 			return null;
 		}
 
@@ -202,19 +208,19 @@ export async function processDocument(
 			});
 
 		// 12. Finish job
-		await finishJob(db, job.id, 'completed', null);
+		await finishJob(db, jobId, 'completed', null);
 
 		return { chunksIndexed: indexed.length };
 	} catch (err) {
 		console.error('[RAG] Document processing failed:', err);
 		const errorCode = resolveErrorCode(err);
-		await markFailed(db, attachmentId, job.id, errorCode);
+		await markFailed(db, attachmentId, jobId, errorCode);
 		return null;
 	}
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function markFailed(db: any, attachmentId: number, jobId: number, errorCode: string) {
+async function markFailed(db: any, attachmentId: number, jobId: number | null, errorCode: string) {
 	await db
 		.update(attachments)
 		.set({ processingStatus: 'failed', extractionErrorCode: errorCode })
@@ -223,11 +229,16 @@ async function markFailed(db: any, attachmentId: number, jobId: number, errorCod
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function finishJob(db: any, jobId: number, status: 'completed' | 'failed', error: string | null) {
-	await db
-		.update(ingestionJobs)
-		.set({ status, error, finishedAt: new Date() })
-		.where(eq(ingestionJobs.id, jobId));
+async function finishJob(db: any, jobId: number | null, status: 'completed' | 'failed', error: string | null) {
+	if (!jobId) return; // No job tracking — skip
+	try {
+		await db
+			.update(ingestionJobs)
+			.set({ status, error, finishedAt: new Date() })
+			.where(eq(ingestionJobs.id, jobId));
+	} catch (err) {
+		console.error(`[RAG] finishJob failed (non-fatal):`, err instanceof Error ? err.message : err);
+	}
 }
 
 function resolveErrorCode(err: unknown): string {
