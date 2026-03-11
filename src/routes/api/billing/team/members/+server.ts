@@ -45,31 +45,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	if (!targetUser) error(404, 'User not found with that email');
 
-	// Check seat availability
-	const [{ count: memberCount }] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(teamMembers)
-		.where(eq(teamMembers.teamId, team.id));
+	// Use transaction with serializable isolation to prevent seat over-assignment
+	try {
+		await db.transaction(async (tx: typeof db) => {
+			// Check seat availability (inside transaction — prevents TOCTOU race)
+			const [{ count: memberCount }] = await tx
+				.select({ count: sql<number>`count(*)::int` })
+				.from(teamMembers)
+				.where(eq(teamMembers.teamId, team.id));
 
-	if ((memberCount ?? 0) >= team.seats) {
-		error(400, `All ${team.seats} seats are filled. Increase seats via billing portal.`);
+			if ((memberCount ?? 0) >= team.seats) {
+				throw new Error(`SEAT_LIMIT:All ${team.seats} seats are filled. Increase seats via billing portal.`);
+			}
+
+			// Check if already assigned
+			const [existing] = await tx
+				.select({ id: teamMembers.id })
+				.from(teamMembers)
+				.where(and(eq(teamMembers.teamId, team.id), eq(teamMembers.userId, targetUser.id)))
+				.limit(1);
+
+			if (existing) {
+				throw new Error('DUPLICATE:User is already assigned to this team');
+			}
+
+			// Assign seat
+			await tx.insert(teamMembers).values({
+				id: crypto.randomUUID(),
+				teamId: team.id,
+				userId: targetUser.id
+			});
+		});
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg.startsWith('SEAT_LIMIT:')) error(400, msg.slice(11));
+		if (msg.startsWith('DUPLICATE:')) error(400, msg.slice(10));
+		throw err;
 	}
-
-	// Check if already assigned
-	const [existing] = await db
-		.select({ id: teamMembers.id })
-		.from(teamMembers)
-		.where(and(eq(teamMembers.teamId, team.id), eq(teamMembers.userId, targetUser.id)))
-		.limit(1);
-
-	if (existing) error(400, 'User is already assigned to this team');
-
-	// Assign seat
-	await db.insert(teamMembers).values({
-		id: crypto.randomUUID(),
-		teamId: team.id,
-		userId: targetUser.id
-	});
 
 	return json({ success: true });
 };

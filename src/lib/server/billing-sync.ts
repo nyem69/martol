@@ -30,9 +30,10 @@ function mapStripeStatus(
 /**
  * Sync org subscription from Stripe.
  * Looks up the Stripe customer's subscriptions and updates DB if needed.
+ * Returns true if sync succeeded, false if it failed (stale data may be served).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function syncOrgSubscription(db: any, orgId: string, stripeKey: string): Promise<void> {
+export async function syncOrgSubscription(db: any, orgId: string, stripeKey: string): Promise<boolean> {
 	const [sub] = await db
 		.select({
 			id: subscriptions.id,
@@ -45,7 +46,7 @@ export async function syncOrgSubscription(db: any, orgId: string, stripeKey: str
 		.where(eq(subscriptions.orgId, orgId))
 		.limit(1);
 
-	if (!sub?.stripeCustomerId) return;
+	if (!sub?.stripeCustomerId) return true; // No subscription to sync
 
 	try {
 		const stripe = createStripe(stripeKey);
@@ -55,7 +56,7 @@ export async function syncOrgSubscription(db: any, orgId: string, stripeKey: str
 		});
 
 		const stripeSub = subs.data[0];
-		if (!stripeSub) return;
+		if (!stripeSub) return true; // No Stripe subscription found
 
 		const periodEnd = stripeSub.items.data[0]?.current_period_end;
 		const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000) : null;
@@ -78,17 +79,20 @@ export async function syncOrgSubscription(db: any, orgId: string, stripeKey: str
 				})
 				.where(eq(subscriptions.orgId, orgId));
 		}
+		return true;
 	} catch (err) {
-		console.error('[BillingSync] Org sync failed:', err);
+		console.error('[BillingSync] Org sync failed for orgId=%s customerId=%s:', orgId, sub.stripeCustomerId, err);
+		return false;
 	}
 }
 
 /**
  * Sync team subscription from Stripe.
  * Looks up the Stripe customer's subscriptions and updates DB if needed.
+ * Returns true if sync succeeded, false if it failed (stale data may be served).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function syncTeamSubscription(db: any, teamId: string, stripeCustomerId: string, stripeKey: string): Promise<void> {
+export async function syncTeamSubscription(db: any, teamId: string, stripeCustomerId: string, stripeKey: string): Promise<boolean> {
 	try {
 		const stripe = createStripe(stripeKey);
 		const subs = await stripe.subscriptions.list({
@@ -97,7 +101,7 @@ export async function syncTeamSubscription(db: any, teamId: string, stripeCustom
 		});
 
 		const stripeSub = subs.data[0];
-		if (!stripeSub) return;
+		if (!stripeSub) return true; // No Stripe subscription found
 
 		const periodEnd = stripeSub.items.data[0]?.current_period_end;
 		const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000) : null;
@@ -114,7 +118,9 @@ export async function syncTeamSubscription(db: any, teamId: string, stripeCustom
 				updatedAt: new Date()
 			})
 			.where(eq(teams.id, teamId));
+		return true;
 	} catch (err) {
-		console.error('[BillingSync] Team sync failed:', err);
+		console.error('[BillingSync] Team sync failed for teamId=%s customerId=%s:', teamId, stripeCustomerId, err);
+		return false;
 	}
 }

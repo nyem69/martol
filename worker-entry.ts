@@ -197,15 +197,19 @@ const worker = {
 
 		// Report AI usage to Stripe (daily at midnight UTC only)
 		const now = new Date();
-		if (now.getUTCHours() === 0) {
+		if (now.getUTCHours() === 0 && env.STRIPE_SECRET_KEY && env.STRIPE_AI_METER_ID) {
 			try {
-				// Query all Pro orgs with AI usage this month
-				// Report overage to Stripe via subscription items
-				// TODO: Implement after metered prices created in Stripe dashboard
-				// Will use stripe.subscriptionItems.createUsageRecord()
-				console.log('[Cron] Stripe AI usage reporting: pending metered price setup');
+				const { reportAiUsageToStripe } = await import('./src/lib/server/ai-billing');
+				const reported = await reportAiUsageToStripe(
+					db,
+					env.STRIPE_SECRET_KEY as string,
+					env.STRIPE_AI_METER_ID as string
+				);
+				if (reported > 0) {
+					console.log(`[Cron] Reported AI overage for ${reported} orgs to Stripe`);
+				}
 			} catch (err) {
-				console.error('[Cron] Stripe usage reporting failed:', err);
+				console.error('[Cron] Stripe AI usage reporting failed:', err);
 			}
 		}
 
