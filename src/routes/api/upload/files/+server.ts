@@ -34,6 +34,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			contentType: attachments.contentType,
 			sizeBytes: attachments.sizeBytes,
 			processingStatus: attachments.processingStatus,
+			extractionErrorCode: attachments.extractionErrorCode,
 			createdAt: attachments.createdAt,
 		})
 		.from(attachments)
@@ -50,6 +51,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			content_type: f.contentType,
 			size_bytes: f.sizeBytes,
 			processing_status: f.processingStatus,
+			extraction_error_code: f.extractionErrorCode ?? null,
 			created_at: f.createdAt?.toISOString() ?? null,
 		})),
 	});

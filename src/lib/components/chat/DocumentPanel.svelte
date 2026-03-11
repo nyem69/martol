@@ -23,6 +23,7 @@
 		content_type: string;
 		size_bytes: number;
 		processing_status: string;
+		extraction_error_code: string | null;
 		created_at: string | null;
 	}
 
@@ -203,7 +204,7 @@
 		switch (status) {
 			case 'indexed': return 'Indexed';
 			case 'processing': return 'Processing...';
-			case 'pending': return 'Pending';
+			case 'pending': return 'Queued';
 			case 'failed': return 'Failed';
 			case 'skipped': return 'Skipped';
 			default: return status;
@@ -332,8 +333,13 @@
 						<div class="mt-0.5 flex items-center gap-2 text-[10px]" style="color: var(--text-muted);">
 							<span
 								class="inline-flex items-center gap-1"
+								title={file.processing_status === 'failed' && file.extraction_error_code ? `Error: ${file.extraction_error_code}` : ''}
 							>
-								<span class="inline-block h-1.5 w-1.5 rounded-full" style="background: {statusColor(file.processing_status)};"></span>
+								{#if file.processing_status === 'processing'}
+									<RefreshCw size={10} class="animate-spin" style="color: {statusColor(file.processing_status)};" />
+								{:else}
+									<span class="inline-block h-1.5 w-1.5 rounded-full" style="background: {statusColor(file.processing_status)};"></span>
+								{/if}
 								{statusLabel(file.processing_status)}
 							</span>
 							<span>{formatSize(file.size_bytes)}</span>
