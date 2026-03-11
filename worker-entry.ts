@@ -151,6 +151,72 @@ const worker = {
 			console.error('[Cron] Storage recalculation failed:', err);
 		}
 
+		// Clean up stuck processing jobs (>5 minutes without progress)
+		try {
+			const { ingestionJobs, attachments } = await import('./src/lib/server/db/schema');
+			const stuckCutoff = new Date(Date.now() - 5 * 60 * 1000);
+
+			const stuckJobs = await db
+				.select({
+					id: ingestionJobs.id,
+					attachmentId: ingestionJobs.attachmentId,
+				})
+				.from(ingestionJobs)
+				.where(
+					and(
+						eq(ingestionJobs.status, 'running'),
+						lt(ingestionJobs.startedAt, stuckCutoff)
+					)
+				)
+				.limit(20);
+
+			for (const job of stuckJobs) {
+				await db
+					.update(attachments)
+					.set({ processingStatus: 'failed', extractionErrorCode: 'processing_timeout' })
+					.where(eq(attachments.id, job.attachmentId));
+				await db
+					.update(ingestionJobs)
+					.set({ status: 'failed', error: 'processing_timeout', finishedAt: new Date() })
+					.where(eq(ingestionJobs.id, job.id));
+			}
+
+			if (stuckJobs.length > 0) {
+				console.log(`[Cron] Marked ${stuckJobs.length} stuck processing jobs as failed (processing_timeout)`);
+			}
+		} catch (err) {
+			console.error('[Cron] Stuck job cleanup failed:', err);
+		}
+
+		// Dispatch orphaned pending attachments (pending but no ingestion job)
+		try {
+			const ai = env.AI as Ai | undefined;
+			const vectorize = env.VECTORIZE as VectorizeIndex | undefined;
+			const r2 = env.STORAGE as R2Bucket | undefined;
+
+			const orphaned = await db.execute(sql`
+				SELECT a.id, a.org_id
+				FROM attachments a
+				LEFT JOIN ingestion_jobs ij ON ij.attachment_id = a.id
+				WHERE a.processing_status = 'pending'
+				  AND ij.id IS NULL
+				LIMIT 10
+			`);
+
+			if (orphaned.rows.length > 0 && ai && vectorize && r2) {
+				const { processDocument } = await import('./src/lib/server/rag/process-document');
+				for (const row of orphaned.rows) {
+					ctx.waitUntil(
+						processDocument(db, ai, vectorize, r2, Number(row.id), String(row.org_id))
+							.catch((err: unknown) => console.error(`[Cron] Orphan dispatch failed for attachment ${row.id}:`, err))
+					);
+				}
+				console.log(`[Cron] Dispatched ${orphaned.rows.length} orphaned pending attachments`);
+			}
+		} catch (err) {
+			console.error('[Cron] Orphan dispatch failed:', err);
+		}
+
 		// Retry failed ingestion jobs (max 3 attempts) — actually re-dispatch processing
 		try {
 			const { ingestionJobs } = await import('./src/lib/server/db/schema');
@@ -163,6 +229,8 @@ const worker = {
 					id: ingestionJobs.id,
 					attachmentId: ingestionJobs.attachmentId,
 					orgId: ingestionJobs.orgId,
+					attemptCount: ingestionJobs.attemptCount,
+					finishedAt: ingestionJobs.finishedAt,
 				})
 				.from(ingestionJobs)
 				.where(
@@ -176,12 +244,21 @@ const worker = {
 			if (failedJobs.length > 0 && ai && vectorize && r2) {
 				const { processDocument } = await import('./src/lib/server/rag/process-document');
 				for (const job of failedJobs) {
-					// Increment attempt count and reset status
+					// Backoff: attempt 2 waits 1min, attempt 3 waits 5min
+					const attemptNum = (job.attemptCount ?? 0) + 1;
+					const backoffMs =
+						attemptNum === 2 ? 60_000 :
+						attemptNum >= 3 ? 300_000 : 0;
+
+					if (backoffMs > 0 && job.finishedAt) {
+						const elapsed = Date.now() - new Date(job.finishedAt).getTime();
+						if (elapsed < backoffMs) continue;
+					}
+
 					await db
 						.update(ingestionJobs)
 						.set({ status: 'pending', attemptCount: sql`${ingestionJobs.attemptCount} + 1` })
 						.where(eq(ingestionJobs.id, job.id));
-					// Actually re-dispatch the processing
 					ctx.waitUntil(
 						processDocument(db, ai, vectorize, r2, job.attachmentId, job.orgId)
 							.catch((err: unknown) => console.error(`[Cron] Retry failed for attachment ${job.attachmentId}:`, err))
