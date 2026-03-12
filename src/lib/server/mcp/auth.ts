@@ -80,6 +80,8 @@ export async function authenticateAgent(
 		baseConditions.push(eq(member.organizationId, orgIdHint));
 	}
 
+	console.log(`[MCP:auth] userId=${agentUserId}, orgIdHint=${orgIdHint ?? 'none'}, conditions=${baseConditions.length}`);
+
 	const [result] = await db
 		.select({
 			orgId: member.organizationId,
@@ -94,12 +96,15 @@ export async function authenticateAgent(
 		.limit(1);
 
 	if (!result) {
+		console.log(`[MCP:auth] No membership found for userId=${agentUserId} with orgIdHint=${orgIdHint ?? 'none'}`);
 		return {
 			ok: false,
 			status: 403,
 			error: { ok: false, error: 'Agent not a member of any room', code: 'agent_unbound' }
 		};
 	}
+
+	console.log(`[MCP:auth] Resolved orgId=${result.orgId} (hint was ${orgIdHint ?? 'none'})`);
 
 	return {
 		ok: true,

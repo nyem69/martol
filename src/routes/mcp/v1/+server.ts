@@ -112,7 +112,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				if (!env?.VECTORIZE) {
 					return json({ ok: false, error: 'Document search not configured', code: 'vectorize_unavailable' }, { status: 503 });
 				}
+				console.log(`[MCP:doc_search] orgId=${agent.orgId}, query="${req.params.query}", top_k=${req.params.top_k}`);
 				result = await docSearch(req.params, agent, locals.db, env.AI, env.VECTORIZE);
+				console.log(`[MCP:doc_search] results=${(result as any)?.data?.total ?? 0}`);
 				break;
 			}
 			case 'brief_get_active':
