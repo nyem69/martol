@@ -92,4 +92,4 @@ index_name = "martol-docs"
 binding = "AI"
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/5 * * * *"]
