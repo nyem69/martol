@@ -400,10 +400,10 @@
 			Supported for search
 		</span>
 		<p class="mt-1 text-[10px] leading-relaxed" style="color: var(--text-muted);">
-			PDF, TXT, Markdown, CSV, HTML, JSON, YAML, XML
+			PDF, DOCX, XLSX, PPTX, TXT, Markdown, CSV, HTML, JSON, YAML, XML
 		</p>
 		<p class="mt-1 text-[10px] leading-relaxed" style="color: var(--text-muted);">
-			DOCX, XLSX, PPTX, images — upload only (search coming soon)
+			Images — upload only (no text extraction)
 		</p>
 	</div>
 </aside>

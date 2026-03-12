@@ -6,7 +6,7 @@
 
 ## Summary
 
-Upgrade Martol from basic file storage to a full document intelligence system. Users and agents upload documents (PDF, text, HTML, JSON, YAML, XML), Martol extracts text via unpdf (for PDFs) or direct decoding (for text types), chunks and embeds it, then serves semantic search with citations. A new document panel lets users browse, search, and manage room documents directly. Office formats (DOCX/XLSX/PPTX) and images (OCR) are accepted for upload/storage but not yet parsed — see [Future: DOCX & OCR Support](#future-docx--ocr-support).
+Upgrade Martol from basic file storage to a full document intelligence system. Users and agents upload documents (PDF, DOCX, XLSX, PPTX, text, HTML, JSON, YAML, XML), Martol extracts text via unpdf (PDFs), Kreuzberg WASM (Office formats), or direct decoding (text types), chunks and embeds it, then serves semantic search with citations. A new document panel lets users browse, search, and manage room documents directly. Images (OCR) are accepted for upload/storage but not yet parsed — see [Future: OCR Support](#future-docx--ocr-support).
 
 ## Current State
 
@@ -30,16 +30,17 @@ The RAG pipeline is fully operational. PDF extraction, semantic search, agent do
 | Cron retry for failed jobs | **Done** | Fixed: attachment-level retry with dedup — `9911d40` |
 | File delete (R2 + vectors + DB) | Done | Owner/lead only, full cascade |
 | User-facing document UI | **Done** | Document panel with search — `00ced5c` |
-| Office/HTML/email/archive support | **Upload-only** | Accepted for storage; extraction requires new providers — see future plan |
+| DOCX/XLSX/PPTX extraction | **Done** | Kreuzberg WASM (manual wasm-bindgen init in worker-entry.ts) |
+| Email/archive/ODT support | **Upload-only** | Accepted for storage; extraction requires new providers |
 | Vectorize metadata index | **Done** | Required for org-scoped filtering — created manually |
 
-**Remaining gaps:** DOCX/Office extraction needs a new provider (unpdf is PDF-only). Images require an OCR-capable provider (Phase 6 UI exists but backend is non-functional). See [Future: DOCX & OCR Support](#future-docx--ocr-support).
+**Remaining gaps:** Images require an OCR-capable provider (Phase 6 UI exists but backend is non-functional). Email (.eml) and archive (ZIP) extraction not yet implemented. See [Future: OCR Support](#future-docx--ocr-support).
 
 ## Architecture
 
-### Extraction Layer — unpdf
+### Extraction Layer — unpdf + Kreuzberg WASM
 
-> **Historical note:** The original plan was to use `@kreuzberg/wasm` for all document types. This failed in production — see [Lessons Learned](#lessons-learned) below. We replaced it with `unpdf` (serverless PDF.js) which works reliably on Cloudflare Workers.
+> **Historical note:** The original plan was to use `@kreuzberg/wasm` for all document types. The official `initWasm()` failed on Workers, but manual wasm-bindgen initialization works — see [Lessons Learned](#lessons-learned). PDF extraction uses `unpdf` (serverless PDF.js); Office formats use Kreuzberg WASM.
 
 ```
 Upload arrives (any supported type)
@@ -52,14 +53,14 @@ processDocument()
   |
   v
 kreuzbergProvider.extract(buffer, contentType, filename)
-  |                    |
-  |  text/plain,       |  PDF
-  |  text/markdown,    |  -> unpdf (serverless PDF.js)
-  |  text/csv, HTML,   |
-  |  JSON, YAML, XML   |
-  |  -> TextDecoder     |
-  |                    |
-  v                    v
+  |                    |                    |
+  |  text/plain,       |  PDF               |  DOCX, XLSX, PPTX
+  |  text/markdown,    |  -> unpdf           |  -> Kreuzberg WASM
+  |  text/csv, HTML,   |  (serverless        |  (manual wasm-bindgen
+  |  JSON, YAML, XML   |   PDF.js)           |   init in worker-entry.ts)
+  |  -> TextDecoder     |                    |
+  |                    |                    |
+  v                    v                    v
 ExtractionResult { text, parserName, parserVersion, contentSha256, pageCount }
   |
   v
@@ -401,6 +402,17 @@ For the Claude Code agent wrapper (`martol-client`), `doc_search` was initially 
 The working approach uses the Claude Agent SDK's native `@tool` decorator + `create_sdk_mcp_server()` to register `doc_search` as a proper MCP tool that appears in Claude's tool list. The agent calls it natively like any other tool.
 
 ## Changelog
+
+### 2026-03-13 — Kreuzberg WASM Integration for Office Formats
+
+- **feat:** DOCX/XLSX/PPTX extraction via Kreuzberg WASM on Cloudflare Workers
+- **spike:** Confirmed `initWasm()` fails on Workers (import.meta.url issue), but manual wasm-bindgen init works
+- **impl:** Static WASM import + manual instantiation in `worker-entry.ts`, exposed via `globalThis.__kreuzbergBg`
+- **impl:** Updated `kreuzberg-provider.ts` to route Office MIME types through Kreuzberg WASM
+- **impl:** Added Office MIME types to `PARSEABLE_TYPES` in upload endpoint
+- **docs:** Updated Lessons Learned to note `initWasm()` was never tried (it was — it fails)
+- **note:** PDF still uses unpdf (Kreuzberg PDF requires PDFium which adds ~2MB WASM)
+- **note:** Worker size: ~9.3MB gzipped (limit 10MB) — Kreuzberg WASM is ~7.5MB
 
 ### 2026-03-12 — Audit & Correctness Fixes
 

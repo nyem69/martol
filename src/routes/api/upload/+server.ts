@@ -51,12 +51,18 @@ const ALLOWED_TYPES = new Set([
  * Types the extraction provider can actually handle (triggers async RAG pipeline).
  * Must match SUPPORTED_TYPES in kreuzberg-provider.ts.
  *
- * NOTE: DOCX/XLSX/PPTX are accepted for upload (ALLOWED_TYPES) but NOT parsed —
- * unpdf only handles PDF. Office extraction is a future enhancement.
- * Archives and email are also upload-only for now.
+ * PDF: unpdf (serverless PDF.js)
+ * DOCX/XLSX/PPTX: Kreuzberg WASM (initialized in worker-entry.ts)
+ * Text types: direct TextDecoder
+ * Archives, email, ODT, images: upload-only for now.
  */
 const PARSEABLE_TYPES = new Set([
 	'application/pdf',
+	// Office — Kreuzberg WASM
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+	'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+	// Text types — direct decode
 	'text/plain',
 	'text/markdown',
 	'text/csv',

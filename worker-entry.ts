@@ -19,18 +19,72 @@ import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
 // Durable Object classes
 export { ChatRoom } from './src/lib/server/chat-room';
 
-// ── Kreuzberg WASM spike test ──────────────────────────────────────────
-// Static WASM import — Wrangler handles .wasm natively (no Vite involved).
+// ── Kreuzberg WASM init for Office document extraction ─────────────────
+// Static WASM import — Wrangler handles .wasm natively (bypasses Vite).
+// Manual wasm-bindgen init because initWasm() fails on Workers (import.meta.url issue).
+// The initialized bg module is exposed globally for kreuzberg-provider.ts to use.
 // @ts-expect-error — .wasm static import has no TS declaration
 import kreuzbergWasm from '@kreuzberg/wasm/kreuzberg_wasm_bg.wasm';
-import { initWasm } from '@kreuzberg/wasm';
+// @ts-ignore — no TS declaration for internal bg.js
+import * as kreuzbergBg from '@kreuzberg/wasm/dist/pkg/kreuzberg_wasm_bg.js';
 
-// Init once at module load; expose the promise globally so SvelteKit routes
-// can await it. If init fails, the error is logged but doesn't crash the Worker.
-(globalThis as Record<string, unknown>).__kreuzbergReady = initWasm({ wasmModule: kreuzbergWasm })
-	.then(() => console.log('[Kreuzberg] WASM initialized successfully'))
-	.catch((err: unknown) => console.error('[Kreuzberg] WASM init failed:', err));
-// ── End spike test ─────────────────────────────────────────────────────
+(globalThis as Record<string, unknown>).__kreuzbergReady = (async () => {
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let instance: any;
+		const getMemory = () => instance?.exports?.memory as WebAssembly.Memory | undefined;
+
+		const imports: WebAssembly.Imports = {
+			'./kreuzberg_wasm_bg.js': kreuzbergBg,
+			'env': { system: () => -1, mkstemp: () => -1 },
+			'wasi_snapshot_preview1': {
+				proc_exit: (code: number) => { throw new Error(`proc_exit(${code})`); },
+				fd_write: () => 0, fd_read: () => 0, fd_seek: () => 0, fd_close: () => 0,
+				fd_fdstat_get: () => 0, fd_fdstat_set_flags: () => 0,
+				fd_prestat_get: () => 8, fd_prestat_dir_name: () => 8,
+				environ_get: () => 0,
+				environ_sizes_get: (countPtr: number, sizePtr: number) => {
+					const mem = getMemory();
+					if (mem) { const v = new DataView(mem.buffer); v.setUint32(countPtr, 0, true); v.setUint32(sizePtr, 0, true); }
+					return 0;
+				},
+				clock_time_get: (_id: number, _precision: bigint, outPtr: number) => {
+					const mem = getMemory();
+					if (mem) { new DataView(mem.buffer).setBigUint64(outPtr, BigInt(Math.floor(performance.now() * 1e6)), true); }
+					return 0;
+				},
+				random_get: (buf: number, len: number) => {
+					const mem = getMemory();
+					if (mem) crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
+					return 0;
+				},
+				path_create_directory: () => 63, path_filestat_get: () => 63,
+				path_open: () => 63, path_remove_directory: () => 63, path_unlink_file: () => 63,
+				args_get: () => 0,
+				args_sizes_get: (countPtr: number, sizePtr: number) => {
+					const mem = getMemory();
+					if (mem) { const v = new DataView(mem.buffer); v.setUint32(countPtr, 0, true); v.setUint32(sizePtr, 0, true); }
+					return 0;
+				},
+				sched_yield: () => 0,
+			},
+		};
+
+		instance = await WebAssembly.instantiate(kreuzbergWasm, imports);
+		kreuzbergBg.__wbg_set_wasm(instance.exports);
+		const exports = instance.exports as Record<string, unknown>;
+		if (typeof exports.__wbindgen_start === 'function') {
+			(exports.__wbindgen_start as () => void)();
+		}
+
+		// Expose initialized module globally for SvelteKit providers
+		(globalThis as Record<string, unknown>).__kreuzbergBg = kreuzbergBg;
+		console.log('[Kreuzberg] WASM initialized, version:', kreuzbergBg.version());
+	} catch (err) {
+		console.error('[Kreuzberg] WASM init failed:', err instanceof Error ? err.message : err);
+	}
+})();
+// ── End Kreuzberg init ─────────────────────────────────────────────────
 
 // Origins allowed for WebSocket upgrade (mirrors hooks.server.ts CORS list)
 const WS_ALLOWED_ORIGINS = new Set([

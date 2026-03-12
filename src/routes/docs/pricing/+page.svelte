@@ -894,17 +894,6 @@
 		padding: 8px 16px;
 	}
 
-	/* ── Code ──────────────────────────────────────────── */
-	.docs-main code {
-		font-family: var(--font-mono-alt);
-		font-size: 13.5px;
-		background: var(--bg-elevated);
-		border: 1px solid var(--border);
-		padding: 1px 6px;
-		border-radius: 4px;
-		color: var(--accent);
-	}
-
 	/* ── Responsive ────────────────────────────────────── */
 	@media (max-width: 860px) {
 		.docs-main {
