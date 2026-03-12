@@ -141,7 +141,8 @@ Planned approach: Workers AI Vision (`@cf/meta/llama-3.2-11b-vision-instruct`) â
 | Content | From | To |
 |---------|------|----|
 | Document Panel / User Search / Citations | Architecture > User-Facing Document UI | Top-level "Document UI" section |
-| Cron Retry Logic | Architecture > Cron Retry Logic | Operational Reference > Cron Jobs |
+| Cron Retry Logic (operational description) | Architecture > Cron Retry Logic | Operational Reference > Cron Jobs |
+| Cron bug-fix narrative (blockquote) | Architecture > Cron Retry Logic | Development History > Lessons Learned (or keep inline in Implementation Phases) |
 | OCR info | OCR Strategy + Future sections | Operational Reference > OCR Status |
 
 ## Renames
