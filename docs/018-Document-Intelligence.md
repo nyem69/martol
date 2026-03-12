@@ -349,16 +349,20 @@ Considerations for expanded formats:
 
 ## Lessons Learned
 
-### Kreuzberg WASM Does Not Work on Cloudflare Workers
+### Kreuzberg WASM — Abandoned Prematurely?
 
-`@kreuzberg/wasm` was the original plan for document extraction. It failed through **four successive attempts**:
+`@kreuzberg/wasm` was the original plan for document extraction. It failed through **four successive attempts**, all using custom/manual WASM loading:
 
 1. **Dynamic import** (`f4eea87`) — `import('@kreuzberg/wasm')` failed; Vite/Workers couldn't resolve the WASM module
 2. **Explicit WASM module passing** (`901923e`) — tried passing the WASM binary explicitly; initialization still failed
 3. **Global WASM in worker-entry.ts** (`fa25221`) — loaded WASM at the worker top level and passed it through; WASM init failed with opaque errors
 4. **Gave up on Kreuzberg** (`d204692`) — replaced entirely with `unpdf`, which is built specifically for serverless/edge runtimes
 
-**Takeaway:** For Cloudflare Workers, prefer libraries explicitly designed for edge runtimes. WASM-heavy libraries built for Node.js often have subtle initialization requirements that don't translate to Workers' execution model.
+**What was never tried:** The official Cloudflare Workers WASM initialization pattern — calling `await initWasm()` explicitly before `extractBytes()`. All four attempts used custom WASM wiring instead of the documented path. The `@kreuzberg/wasm` package exports `initWasm()` specifically for non-Node environments, and this was the most likely correct approach.
+
+**Spike test recommended:** Before permanently abandoning Kreuzberg (which would unlock DOCX, XLSX, PPTX, and OCR support), test a minimal isolated Worker endpoint: latest `@kreuzberg/wasm`, top-level cached `initPromise` or guarded `initWasm()`, one tiny PDF, `extractBytes(bytes, 'application/pdf')`, no OCR, no Office, no abstraction layer. If this works, the extraction layer can be significantly expanded.
+
+**Takeaway:** When a WASM library fails on Workers, try the library's **official documented initialization path** first before resorting to manual WASM wiring. Only abandon the library if the official path explicitly fails.
 
 ### Vectorize Metadata Indexes Must Be Created Before Upsert
 

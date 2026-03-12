@@ -19,6 +19,19 @@ import svelteKitWorker from './.svelte-kit/cloudflare/_worker.js';
 // Durable Object classes
 export { ChatRoom } from './src/lib/server/chat-room';
 
+// ── Kreuzberg WASM spike test ──────────────────────────────────────────
+// Static WASM import — Wrangler handles .wasm natively (no Vite involved).
+// @ts-expect-error — .wasm static import has no TS declaration
+import kreuzbergWasm from '@kreuzberg/wasm/kreuzberg_wasm_bg.wasm';
+import { initWasm } from '@kreuzberg/wasm';
+
+// Init once at module load; expose the promise globally so SvelteKit routes
+// can await it. If init fails, the error is logged but doesn't crash the Worker.
+(globalThis as Record<string, unknown>).__kreuzbergReady = initWasm({ wasmModule: kreuzbergWasm })
+	.then(() => console.log('[Kreuzberg] WASM initialized successfully'))
+	.catch((err: unknown) => console.error('[Kreuzberg] WASM init failed:', err));
+// ── End spike test ─────────────────────────────────────────────────────
+
 // Origins allowed for WebSocket upgrade (mirrors hooks.server.ts CORS list)
 const WS_ALLOWED_ORIGINS = new Set([
 	'http://localhost:5190',
