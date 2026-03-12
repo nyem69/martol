@@ -394,48 +394,18 @@
 		{/if}
 	</div>
 
-	<!-- OCR Settings (owner/lead only) -->
-	{#if canManage}
-		<div class="shrink-0 border-t px-4 py-3" style="border-color: var(--border);">
-			<div class="flex items-center justify-between">
-				<div>
-					<span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
-						Image OCR
-					</span>
-					<p class="mt-0.5 text-[10px]" style="color: var(--text-muted);">
-						Extract text from images via OCR
-					</p>
-				</div>
-				<button
-					class="relative h-5 w-9 rounded-full transition-colors"
-					style="background: {ocrEnabled ? 'var(--accent)' : 'var(--border)'};"
-					onclick={toggleOcr}
-					disabled={ocrLoading}
-					aria-label="Toggle OCR"
-					title={ocrEnabled ? 'Disable OCR' : 'Enable OCR'}
-				>
-					<span
-						class="absolute top-0.5 left-0.5 h-4 w-4 rounded-full transition-transform"
-						style="background: var(--bg); transform: translateX({ocrEnabled ? '1rem' : '0'});"
-					></span>
-				</button>
-			</div>
-			{#if ocrEnabled && skippedImageCount > 0}
-				<button
-					class="mt-2 w-full rounded px-2 py-1 text-[10px] transition-opacity hover:opacity-80"
-					style="background: color-mix(in oklch, var(--accent) 15%, transparent); color: var(--accent); font-family: var(--font-mono);"
-					onclick={reindexImages}
-					disabled={reindexing}
-				>
-					{#if reindexing}
-						Processing...
-					{:else}
-						Index {skippedImageCount} existing image{skippedImageCount === 1 ? '' : 's'}
-					{/if}
-				</button>
-			{/if}
-		</div>
-	{/if}
+	<!-- Supported formats info -->
+	<div class="shrink-0 border-t px-4 py-3" style="border-color: var(--border);">
+		<span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
+			Supported for search
+		</span>
+		<p class="mt-1 text-[10px] leading-relaxed" style="color: var(--text-muted);">
+			PDF, TXT, Markdown, CSV, HTML, JSON, YAML, XML
+		</p>
+		<p class="mt-1 text-[10px] leading-relaxed" style="color: var(--text-muted);">
+			DOCX, XLSX, PPTX, images — upload only (search coming soon)
+		</p>
+	</div>
 </aside>
 
 <ConfirmDialog
