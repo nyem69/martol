@@ -188,7 +188,7 @@ const worker = {
 			console.error('[Cron] Stuck job cleanup failed:', err);
 		}
 
-		// Dispatch orphaned pending attachments (pending but no ingestion job)
+		// Dispatch pending attachments with no active (running/pending) ingestion job
 		try {
 			const ai = env.AI as Ai | undefined;
 			const vectorize = env.VECTORIZE as VectorizeIndex | undefined;
@@ -197,9 +197,11 @@ const worker = {
 			const orphaned = await db.execute(sql`
 				SELECT a.id, a.org_id
 				FROM attachments a
-				LEFT JOIN ingestion_jobs ij ON ij.attachment_id = a.id
 				WHERE a.processing_status = 'pending'
-				  AND ij.id IS NULL
+				  AND NOT EXISTS (
+					SELECT 1 FROM ingestion_jobs ij
+					WHERE ij.attachment_id = a.id AND ij.status IN ('running', 'pending')
+				  )
 				LIMIT 10
 			`);
 
@@ -217,56 +219,57 @@ const worker = {
 			console.error('[Cron] Orphan dispatch failed:', err);
 		}
 
-		// Retry failed ingestion jobs (max 3 attempts) — actually re-dispatch processing
+		// Retry failed attachments (max 3 total attempts across all jobs)
+		// Only retries attachments still in 'failed' state with no running job
 		try {
-			const { ingestionJobs } = await import('./src/lib/server/db/schema');
 			const ai = env.AI as Ai | undefined;
 			const vectorize = env.VECTORIZE as VectorizeIndex | undefined;
 			const r2 = env.STORAGE as R2Bucket | undefined;
 
-			const failedJobs = await db
-				.select({
-					id: ingestionJobs.id,
-					attachmentId: ingestionJobs.attachmentId,
-					orgId: ingestionJobs.orgId,
-					attemptCount: ingestionJobs.attemptCount,
-					finishedAt: ingestionJobs.finishedAt,
-				})
-				.from(ingestionJobs)
-				.where(
-					and(
-						eq(ingestionJobs.status, 'failed'),
-						lt(ingestionJobs.attemptCount, 3)
-					)
-				)
-				.limit(10);
+			const retryable = await db.execute(sql`
+				SELECT a.id AS attachment_id, a.org_id,
+					COUNT(ij.id) AS total_attempts,
+					MAX(ij.finished_at) AS last_finished
+				FROM attachments a
+				LEFT JOIN ingestion_jobs ij ON ij.attachment_id = a.id
+				WHERE a.processing_status = 'failed'
+				  AND NOT EXISTS (
+					SELECT 1 FROM ingestion_jobs ij2
+					WHERE ij2.attachment_id = a.id AND ij2.status IN ('running', 'pending')
+				  )
+				GROUP BY a.id, a.org_id
+				HAVING COUNT(ij.id) < 3
+				LIMIT 5
+			`);
 
-			if (failedJobs.length > 0 && ai && vectorize && r2) {
+			if (retryable.rows.length > 0 && ai && vectorize && r2) {
 				const { processDocument } = await import('./src/lib/server/rag/process-document');
-				for (const job of failedJobs) {
-					// Backoff: attempt 2 waits 1min, attempt 3 waits 5min
-					const attemptNum = (job.attemptCount ?? 0) + 1;
-					const backoffMs =
-						attemptNum === 2 ? 60_000 :
-						attemptNum >= 3 ? 300_000 : 0;
+				let dispatched = 0;
+				for (const row of retryable.rows) {
+					const attempts = Number(row.total_attempts);
+					const lastFinished = row.last_finished ? new Date(row.last_finished as string) : null;
 
-					if (backoffMs > 0 && job.finishedAt) {
-						const elapsed = Date.now() - new Date(job.finishedAt).getTime();
+					// Backoff: attempt 2 waits 1min, attempt 3 waits 5min
+					const backoffMs = attempts === 1 ? 60_000 : attempts >= 2 ? 300_000 : 0;
+					if (backoffMs > 0 && lastFinished) {
+						const elapsed = Date.now() - lastFinished.getTime();
 						if (elapsed < backoffMs) continue;
 					}
 
-					await db
-						.update(ingestionJobs)
-						.set({ status: 'pending', attemptCount: sql`${ingestionJobs.attemptCount} + 1` })
-						.where(eq(ingestionJobs.id, job.id));
+					// Reset attachment to pending (processDocument will set it to processing)
+					await db.update(attachments)
+						.set({ processingStatus: 'pending', extractionErrorCode: null })
+						.where(eq(attachments.id, Number(row.attachment_id)));
+
 					ctx.waitUntil(
-						processDocument(db, ai, vectorize, r2, job.attachmentId, job.orgId, env)
-							.catch((err: unknown) => console.error(`[Cron] Retry failed for attachment ${job.attachmentId}:`, err))
+						processDocument(db, ai, vectorize, r2, Number(row.attachment_id), String(row.org_id), env)
+							.catch((err: unknown) => console.error(`[Cron] Retry failed for attachment ${row.attachment_id}:`, err))
 					);
+					dispatched++;
 				}
-				console.log(`[Cron] Re-dispatched ${failedJobs.length} failed ingestion jobs`);
-			} else if (failedJobs.length > 0) {
-				console.warn(`[Cron] ${failedJobs.length} failed jobs but AI/Vectorize/R2 bindings unavailable`);
+				if (dispatched > 0) {
+					console.log(`[Cron] Retried ${dispatched} failed attachments`);
+				}
 			}
 		} catch (err) {
 			console.error('[Cron] Ingestion job retry failed:', err);
