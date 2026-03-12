@@ -148,7 +148,7 @@
 		>
 			MARTOL
 		</span>
-		<span class="hidden text-xs tabular-nums sm:inline" style="color: var(--text-muted); font-family: var(--font-mono);">b{__BUILD_NUMBER__}</span>
+		<a href="https://github.com/nyem69/martol/commits/main/" target="_blank" rel="noopener noreferrer" class="hidden text-xs tabular-nums sm:inline hover:underline" style="color: var(--text-muted); font-family: var(--font-mono); text-decoration: none;">b{__BUILD_NUMBER__}</a>
 		<span class="text-xs" style="color: var(--text-muted);">/</span>
 		<button
 			class="room-switcher-btn flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium transition-colors"
