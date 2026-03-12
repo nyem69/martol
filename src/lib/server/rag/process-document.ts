@@ -19,7 +19,7 @@ import { isAiCapReached } from '$lib/server/ai-billing';
 // Prepended to the registry so it takes priority over the built-in PDF stub.
 registerProvider(kreuzbergProvider);
 
-const EXTRACTION_TIMEOUT_MS = 30_000;
+const EXTRACTION_TIMEOUT_MS = 60_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {

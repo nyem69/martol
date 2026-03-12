@@ -9,7 +9,7 @@
 
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { member, organization } from '$lib/server/db/auth-schema';
+import { member } from '$lib/server/db/auth-schema';
 import { attachments, subscriptions } from '$lib/server/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
@@ -47,25 +47,25 @@ const ALLOWED_TYPES = new Set([
 	'application/gzip',
 ]);
 
-/** Types that Kreuzberg can extract text from (triggers async RAG pipeline). */
+/**
+ * Types the extraction provider can actually handle (triggers async RAG pipeline).
+ * Must match SUPPORTED_TYPES in kreuzberg-provider.ts.
+ *
+ * NOTE: DOCX/XLSX/PPTX are accepted for upload (ALLOWED_TYPES) but NOT parsed —
+ * unpdf only handles PDF. Office extraction is a future enhancement.
+ * Archives and email are also upload-only for now.
+ */
 const PARSEABLE_TYPES = new Set([
 	'application/pdf',
 	'text/plain',
 	'text/markdown',
 	'text/csv',
-	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-	'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-	'application/vnd.oasis.opendocument.text',
 	'text/html',
 	'application/json',
 	'text/yaml',
 	'application/x-yaml',
 	'application/xml',
 	'text/xml',
-	'message/rfc822',
-	'application/zip',
-	'application/gzip',
 ]);
 
 // Strict key format: orgId/timestamp-filename (no path traversal)
@@ -204,20 +204,11 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	// Determine if file is parseable for RAG (text extraction + embedding)
 	let isParseable = PARSEABLE_TYPES.has(file.type);
 
-	// Images are parseable only when OCR is enabled for the org
-	if (!isParseable && file.type.startsWith('image/')) {
-		try {
-			const [org] = await locals.db
-				.select({ metadata: organization.metadata })
-				.from(organization)
-				.where(eq(organization.id, activeOrgId))
-				.limit(1);
-			if (org?.metadata) {
-				const meta = typeof org.metadata === 'string' ? JSON.parse(org.metadata) : org.metadata;
-				if (meta?.ocrEnabled === true) isParseable = true;
-			}
-		} catch { /* non-critical — default to skipped */ }
-	}
+	// OCR for images — disabled until an OCR-capable provider is added.
+	// The original Kreuzberg WASM provider supported OCR but was replaced with
+	// unpdf (PDF-only). The ocrEnabled org setting and UI toggle still exist
+	// but extraction will not run on images until a provider handles image/*.
+	// See docs/018-Document-Intelligence.md "Future: DOCX & OCR Support"
 
 	// Record in attachments table (message_id backfilled when message is persisted)
 	// Compensate on DB failure: delete the R2 object to prevent orphans

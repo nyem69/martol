@@ -151,6 +151,26 @@ const worker = {
 			console.error('[Cron] Storage recalculation failed:', err);
 		}
 
+		// Purge old ingestion jobs (completed/failed > 30 days)
+		try {
+			const { ingestionJobs } = await import('./src/lib/server/db/schema');
+			const jobRetentionCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+			const purged = await db
+				.delete(ingestionJobs)
+				.where(
+					and(
+						sql`${ingestionJobs.status} IN ('completed', 'failed')`,
+						lt(ingestionJobs.createdAt, jobRetentionCutoff)
+					)
+				)
+				.returning({ id: ingestionJobs.id });
+			if (purged.length > 0) {
+				console.log(`[Cron] Purged ${purged.length} old ingestion jobs (>30 days)`);
+			}
+		} catch (err) {
+			console.error('[Cron] Ingestion job purge failed:', err);
+		}
+
 		// Clean up stuck processing jobs (>5 minutes without progress)
 		try {
 			const { ingestionJobs, attachments } = await import('./src/lib/server/db/schema');
