@@ -1,12 +1,27 @@
 # Document Intelligence
 
-**Date:** 2026-03-10 (updated 2026-03-13)
+**Date:** 2026-03-10 (updated 2026-03-14)
 **Status:** Implemented (Phase 1–6 complete, hardened)
 **Depends on:** 006-Image-Upload (implemented), existing RAG pipeline (implemented)
 
+## Table of Contents
+
+- [Summary](#summary)
+- [Current State](#current-state)
+- [Architecture](#architecture)
+- [Document UI](#document-ui)
+- [Operational Reference](#operational-reference)
+- [Dependencies](#dependencies)
+- [Billing Impact](#billing-impact)
+- [Risks & Known Issues](#risks--known-issues)
+- [Development History](#development-history)
+  - [Implementation Phases](#implementation-phases)
+  - [Changelog](#changelog)
+  - [Lessons Learned](#lessons-learned)
+
 ## Summary
 
-Upgrade Martol from basic file storage to a full document intelligence system. Users and agents upload documents (PDF, DOCX, XLSX, PPTX, text, HTML, JSON, YAML, XML), Martol extracts text via unpdf (PDFs), Kreuzberg WASM (Office formats), or direct decoding (text types), chunks and embeds it, then serves semantic search with citations. A new document panel lets users browse, search, and manage room documents directly. Images (OCR) are accepted for upload/storage but not yet parsed — see [Future: OCR Support](#future-docx--ocr-support).
+Upgrade Martol from basic file storage to a full document intelligence system. Users and agents upload documents (PDF, DOCX, XLSX, PPTX, text, HTML, JSON, YAML, XML), Martol extracts text via unpdf (PDFs), Kreuzberg WASM (Office formats), or direct decoding (text types), chunks and embeds it, then serves semantic search with citations. A new document panel lets users browse, search, and manage room documents directly. Images (OCR) are accepted for upload/storage but not yet parsed — see [OCR Status](#ocr-status).
 
 ## Current State
 
@@ -34,7 +49,7 @@ The RAG pipeline is fully operational. PDF extraction, semantic search, agent do
 | Email/archive/ODT support | **Upload-only** | Accepted for storage; extraction requires new providers |
 | Vectorize metadata index | **Done** | Required for org-scoped filtering — created manually |
 
-**Remaining gaps:** Images require an OCR-capable provider (Phase 6 UI exists but backend is non-functional). Email (.eml) and archive (ZIP) extraction not yet implemented. See [Future: OCR Support](#future-docx--ocr-support).
+**Remaining gaps:** Images require an OCR-capable provider (Phase 6 UI exists but backend is non-functional). Email (.eml) and archive (ZIP) extraction not yet implemented. See [OCR Status](#ocr-status).
 
 ## Architecture
 
@@ -79,19 +94,20 @@ The provider file is still named `kreuzberg-provider.ts` for historical reasons 
 | Text | Plain, Markdown, CSV | `text/plain`, `text/markdown`, `text/csv` |
 | Web | HTML, XML | `text/html`, `application/xml`, `text/xml` |
 | Data | JSON, YAML | `application/json`, `text/yaml`, `application/x-yaml` |
+| Office | DOCX, XLSX, PPTX | `application/vnd.openxmlformats-officedocument.*` (via Kreuzberg WASM) |
 
 **Upload-only** (stored in R2 but NOT parsed — no extraction provider):
 
 | Category | Formats | MIME Types |
 |----------|---------|------------|
-| Office | DOCX, XLSX, PPTX, ODT | `application/vnd.openxmlformats-officedocument.*`, `application/vnd.oasis.opendocument.*` |
+| Office | ODT | `application/vnd.oasis.opendocument.*` |
 | Email | EML | `message/rfc822` |
 | Archives | ZIP, gzip | `application/zip`, `application/gzip` |
-| Images | JPEG, PNG, GIF, WebP, TIFF | `image/*` (OCR disabled — see future plan) |
+| Images | JPEG, PNG, GIF, WebP, TIFF | `image/*` (OCR disabled — see [OCR Status](#ocr-status)) |
 
-### User-Facing Document UI
+## Document UI
 
-#### Document Panel (sidebar)
+### Document Panel (sidebar)
 
 A slide-out panel (like MemberPanel) showing all room documents:
 
@@ -120,7 +136,7 @@ Features:
 - Delete button (owner/lead only)
 - Failed items show error + retry button
 
-#### User Search
+### User Search
 
 A search bar in the document panel (or a `/search` command in chat):
 
@@ -146,7 +162,7 @@ Features:
 - Source attribution (filename, page/section, character range)
 - Click to download source document
 
-#### Citation Rendering in Agent Responses
+### Citation Rendering in Agent Responses
 
 When agents use `doc_search` and include results, the response can contain citation markers that render as interactive references:
 
@@ -160,15 +176,39 @@ Citations rendered as clickable links that:
 
 **Implementation:** The MCP `doc_search` tool already returns `filename`, `chunkIndex`, `charStart`, `charEnd`, and `score`. Agents can format citations naturally. The client-side markdown renderer can detect `[filename.ext, ...]` patterns following search results and render them as interactive citation links.
 
-### OCR Strategy (Currently Disabled)
+## Operational Reference
 
-OCR for images was designed around Kreuzberg's built-in Tesseract WASM. Since Kreuzberg was replaced with unpdf (PDF-only), OCR is non-functional. The UI toggle, API endpoints, and org metadata flag still exist but the extraction backend cannot process images.
+### Deployment Checklist
 
-- **Default:** Images are stored but NOT OCR-processed (`processingStatus: 'skipped'`)
-- **Opt-in toggle:** Exists in UI but extraction will not run (code path disabled in upload endpoint)
-- **Re-enabling requires:** A new OCR-capable provider — see [Future: DOCX & OCR Support](#future-docx--ocr-support)
+Before first deploy or after infrastructure changes:
 
-### Cron Retry Logic (Fixed)
+1. **Vectorize index** — create metadata index before any documents are uploaded:
+   ```bash
+   npx wrangler vectorize create-metadata-index martol-docs --property-name orgId --type string
+   ```
+   Vectors upserted before index creation are NOT included — they must be re-upserted.
+
+2. **Worker size** — verify gzipped size stays under 10 MB:
+   ```bash
+   npx wrangler deploy --dry-run 2>&1 | grep -i size
+   ```
+   Current: ~9.3 MB (Kreuzberg WASM is ~7.5 MB of that).
+
+3. **Required bindings** — all must be present in `wrangler.toml`:
+   - `AI` — Workers AI (embeddings + future OCR)
+   - `VECTORIZE` — martol-docs index
+   - `STORAGE` — R2 bucket
+   - `HYPERDRIVE` — PostgreSQL connection
+   - `CHAT_ROOM` — Durable Object (for document-indexed notifications)
+   - `HMAC_SIGNING_SECRET` — internal DO auth
+
+4. **Cron trigger** — must be configured for RAG retry/cleanup:
+   ```toml
+   [triggers]
+   crons = ["*/5 * * * *"]
+   ```
+
+### Cron Jobs
 
 The cron (`worker-entry.ts`) runs every 5 minutes and handles:
 
@@ -176,27 +216,85 @@ The cron (`worker-entry.ts`) runs every 5 minutes and handles:
 2. **Pending dispatch** — finds `pending` attachments with no active (`running`/`pending`) ingestion job and dispatches them
 3. **Failed retry** — finds `failed` attachments with < 3 total attempts (across all jobs) and no active job, then re-dispatches with backoff (1min after 1st failure, 5min after 2nd)
 
-> **Critical bug fixed (`9911d40`):** The original retry logic had two cascading bugs: (1) it reset the old failed job to `pending` AND called `processDocument()` which creates a new `running` job — double job creation every cycle; (2) no guard against already-indexed attachments. This caused ~10 junk jobs per cron cycle, accumulating to 136+ within an hour. The fix queries by attachment (not individual job), counts total attempts across all jobs, and skips attachments with any active job.
+### Error Codes
 
-## Schema Changes
+Stored in `attachments.extractionErrorCode`. Common codes:
 
-### Expand `ALLOWED_TYPES` in upload endpoint
+| Code | Meaning | Action |
+|------|---------|--------|
+| `extraction_timeout` | Exceeded 120s timeout | Retry; if persistent, file may be too complex |
+| `extraction_empty` | Parser returned no text | File may be empty or image-only PDF |
+| `extraction_failed` | Generic extraction error | Check logs for stack trace |
+| `kreuzberg_not_available` | Kreuzberg WASM not initialized | Check worker-entry.ts init logs |
+| `wasm_init_failed` | WASM instantiation failed | Deploy issue — check Worker startup |
+| `embedding_failed` | Workers AI embedding call failed | AI binding issue or rate limit |
+| `vectorize_upsert_failed` | Vectorize insert failed | Check index exists and quota |
+| `r2_object_missing` | File not found in R2 | Orphaned DB record — file deleted from R2 |
+| `ai_cap_reached` | Org hit monthly AI spending cap | Expected; user needs to wait or upgrade |
+| `processing_timeout` | Job ran >5 min (cron cleanup) | Cron marked it; may warrant manual retry |
+| `attachment_not_found` | DB record missing for attachment ID | Data inconsistency |
 
-Add all Kreuzberg-supported MIME types to the upload allowlist. Magic byte validation needs corresponding signatures for new types, or delegate validation to Kreuzberg itself (it validates format integrity during extraction).
+### Monitoring
 
-### Add room settings for OCR
+Key log prefixes to watch in Workers logs:
 
-```sql
-ALTER TABLE organization ADD COLUMN ocr_enabled BOOLEAN NOT NULL DEFAULT false;
-```
+| Prefix | What it means |
+|--------|---------------|
+| `[RAG]` | Document processing pipeline (extract, chunk, embed, index) |
+| `[RAG:waitUntil]` | Background processing lifecycle (START/DONE/CRASHED) |
+| `[Upload]` | File upload + RAG trigger decision |
+| `[Kreuzberg]` | WASM initialization (success or failure at Worker startup) |
+| `[ChatRoom]` | Durable Object operations including document-indexed notifications |
 
-Or store in `organization.metadata` JSON to avoid a migration for a single flag.
+**Health signals:**
+- `[Kreuzberg] WASM initialized, version: X.X.X` on every cold start — if missing, Office extraction is broken
+- `[RAG:waitUntil] CRASHED` — extraction failed; check the error following this line
+- `processing_timeout` errors accumulating — may indicate Worker CPU limits being hit
 
-### No other schema changes needed
+### OCR Status
 
-The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` tables already have all required columns including `parserName`, `parserVersion`, `extractedTextBytes`, `contentSha256`, `extractedAt`, `indexedAt`, `extractionErrorCode`, `charStart`, `charEnd`, `embeddingModel`, `embeddingDim`, and `chunkHash`.
+**Current state:** Disabled. Neither unpdf nor Kreuzberg WASM handles `image/*` types. The UI toggle, API endpoints (`GET/PATCH/POST /api/rooms/[roomId]/ocr`), and org metadata flag exist but extraction will silently fail.
 
-## Implementation Plan
+**Planned approach:** Workers AI Vision (`@cf/meta/llama-3.2-11b-vision-instruct`) — no new dependencies, already have the `AI` binding. Would extract text via vision prompt. Not yet implemented.
+
+## Dependencies
+
+| Dependency | Purpose | Size Impact |
+|------------|---------|-------------|
+| `unpdf` | PDF text extraction (serverless PDF.js) | ~500 KB (lazy-loaded in `waitUntil`) |
+| `@kreuzberg/wasm` | DOCX/XLSX/PPTX extraction (manual wasm-bindgen init) | ~7.5 MB gzipped WASM (loaded in `worker-entry.ts`) |
+
+> **Worker size:** ~9.3 MB gzipped with Kreuzberg WASM (Cloudflare paid plan limit: 10 MB). Monitor size when adding dependencies.
+
+The pipeline also uses Workers AI for embeddings and Cloudflare Vectorize for vector search (no additional npm dependencies).
+
+## Billing Impact
+
+Current caps (from `ai-billing.ts`) already meter `doc_process` and `vector_query` operations. Both unpdf and Kreuzberg WASM extraction run inside the existing `processDocument()` pipeline, so no new billing category is needed.
+
+Considerations:
+- Large documents (100+ page PDFs) consume more Worker CPU time — 120s timeout mitigates
+- Kreuzberg WASM adds ~7.5 MB to Worker size — near the 10 MB limit
+- OCR is significantly more expensive — consider separate OCR usage counter if it becomes popular
+
+## Risks & Known Issues
+
+| Risk | Mitigation | Status |
+|------|-----------|--------|
+| WASM library compatibility on Workers | Manual wasm-bindgen init for Kreuzberg (Office); unpdf for PDF (no WASM) | **Resolved** |
+| WASM CPU limits in Workers | 120s extraction timeout; skip + mark failed on timeout | **Active** — some large PDFs still timeout |
+| Vectorize metadata filtering silently fails | Must create metadata index before upserting vectors; re-upsert after index creation | **Resolved** |
+| Cron retry creates infinite duplicate jobs | Fixed with attachment-level retry + active job guard | **Resolved** |
+| Archive bombs (zip of zips) | Cap extracted text at 1 MB; cap archive depth at 1 level | Planned |
+| Worker size near limit | Kreuzberg WASM adds ~7.5 MB; total ~9.3 MB of 10 MB limit | **Active** — monitor when adding deps |
+| OCR cost explosion | OCR is opt-in per room; metered under existing AI caps | Planned |
+| Multi-room agent org resolution | Agents send `x-org-id` header; server validates against membership | **Resolved** |
+
+---
+
+## Development History
+
+## Implementation Phases
 
 ### Phase 1: PDF Extraction + Pipeline Hardening
 
@@ -225,8 +323,8 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 - [x] Add magic byte signatures for new types (ZIP-based formats, TIFF, gzip) — `862cea0`
 - [x] Update `ChatInput.svelte` file picker `accept` attribute to include new types — `862cea0`
 - [x] Update upload quota logic (file size limit bumped 10→25 MB for documents) — `862cea0`
-- [x] Remove Office/email/archive types from `PARSEABLE_TYPES` (no extraction provider) — `next commit`
-- [ ] Add DOCX extraction provider — see [Future: DOCX & OCR Support](#future-docx--ocr-support)
+- [x] Remove email/archive types from `PARSEABLE_TYPES` (no extraction provider)
+- [x] Add DOCX/XLSX/PPTX extraction via Kreuzberg WASM — `b0a93fb`
 
 ### Phase 3: Document Panel UI
 
@@ -265,105 +363,89 @@ The existing `attachments`, `document_chunks`, `ingestion_jobs`, and `ai_usage` 
 
 - [x] Add `ocrEnabled` flag to org metadata JSON (no migration needed) — `c10583a`
 - [x] ~~When enabled, upload endpoint sets `processingStatus: 'pending'` for images~~ — disabled, unpdf has no OCR
-- [ ] ~~Kreuzberg provider handles `image/*` types with OCR extraction~~ — **broken**: Kreuzberg was replaced with unpdf which is PDF-only
+- [ ] ~~Kreuzberg provider handles `image/*` types with OCR extraction~~ — **broken**: neither unpdf nor Kreuzberg WASM handles image/* types
 - [x] "Index images" bulk action via `POST /api/rooms/[roomId]/ocr` — `c10583a` (endpoint exists but will fail)
 - [x] Room settings UI toggle in DocumentPanel (owner/lead only) — `c10583a` (UI exists but non-functional)
 
-> **Status:** The UI toggle and API endpoints exist but OCR extraction is non-functional since Kreuzberg was replaced with unpdf. The upload endpoint OCR code path is disabled. See [Future: DOCX & OCR Support](#future-docx--ocr-support).
+> **Status:** The UI toggle and API endpoints exist but OCR extraction is non-functional — neither unpdf nor Kreuzberg WASM handles `image/*` types. The upload endpoint OCR code path is disabled. See [OCR Status](#ocr-status).
 
-## Future: DOCX & OCR Support
+## Changelog
 
-Two extraction capabilities are missing since Kreuzberg was replaced with unpdf:
+### 2026-03-13 — Kreuzberg WASM Integration for Office Formats
 
-### DOCX/Office Extraction
+- **feat:** DOCX/XLSX/PPTX extraction via Kreuzberg WASM on Cloudflare Workers
+- **spike:** Confirmed `initWasm()` fails on Workers (import.meta.url issue), but manual wasm-bindgen init works
+- **impl:** Static WASM import + manual instantiation in `worker-entry.ts`, exposed via `globalThis.__kreuzbergBg`
+- **impl:** Updated `kreuzberg-provider.ts` to route Office MIME types through Kreuzberg WASM
+- **impl:** Added Office MIME types to `PARSEABLE_TYPES` in upload endpoint
+- **docs:** Updated Lessons Learned to note `initWasm()` was never tried (it was — it fails)
+- **note:** PDF still uses unpdf (Kreuzberg PDF requires PDFium which adds ~4MB WASM)
+- **note:** Worker size: ~9.3MB gzipped (limit 10MB) — Kreuzberg WASM is ~7.5MB
 
-**Problem:** DOCX, XLSX, PPTX files are accepted for upload but stored as-is — no text extraction, no RAG indexing.
+### 2026-03-12 — Audit & Correctness Fixes
 
-**Candidate solutions:**
+- **fix:** Remove EML/archive from `PARSEABLE_TYPES` — no extraction provider exists (DOCX/XLSX/PPTX re-added 2026-03-13)
+- **fix:** Disable OCR image code path in upload endpoint — unpdf has no OCR capability
+- **fix:** Increase extraction timeout from 30s to 60s, then to 120s (`fa6413d`) — moderate/large PDFs were timing out
+- **fix:** Add ingestion jobs purge to cron (delete completed/failed jobs > 30 days)
+- **fix:** Recover 4 wrongly-failed attachments (had chunks but were marked failed by stuck-job cleanup)
+- **docs:** Update spec to reflect actual supported formats, mark Phase 6 as broken, add future plan for DOCX + OCR
 
-| Library | Formats | Workers-compatible? | Notes |
-|---------|---------|---------------------|-------|
-| `mammoth` | DOCX → HTML | Yes (pure JS) | Well-maintained, DOCX only |
-| `xlsx` (SheetJS) | XLSX, CSV | Yes (pure JS) | Large bundle; community edition |
-| `officeparser` | DOCX, XLSX, PPTX, ODT | Needs testing | Uses JSZip internally |
+### 2026-03-12 — Pipeline Hardening & doc_search Fix
 
-**Recommended approach:** Add `mammoth` for DOCX first (most common Office upload). Register as a new provider in `kreuzberg-provider.ts` or a separate `office-provider.ts`. XLSX/PPTX can follow later.
+- **fix:** Replace Kreuzberg WASM with unpdf for PDF extraction — `d204692`
+- **fix:** Create Vectorize metadata index on `orgId` for filtered search — manual CLI
+- **fix:** Accept `x-org-id` header in MCP auth for multi-room agents — `83d38ff`
+- **fix:** Prevent duplicate ingestion jobs in cron retry logic — `9911d40`
+- **fix:** Run RAG cron every 5 minutes instead of hourly — `f98de86`
+- **fix:** Create dedicated DB connection for waitUntil RAG processing — `f7ab3fb`
+- **fix:** Use connectPromise instead of double-connecting Hyperdrive client — `2140777`
+- **fix:** Make ingestion_jobs insert non-fatal — `c9f024b`
+- **debug:** Add MCP auth and doc_search logging — `3e1d101` (temporary — should be removed)
+- **verified:** doc_search returns PDF results to agents via SDK MCP tool ✅
+- **data:** Re-indexed all documents after Vectorize metadata index creation; 11 of 18 documents indexed, 5 failing with `processing_timeout` (large PDFs), 2 permanently skipped (JPEG, GIF)
 
-**Implementation:**
-1. `pnpm add mammoth`
-2. Add `application/vnd.openxmlformats-officedocument.wordprocessingml.document` to provider's SUPPORTED_TYPES
-3. Add extraction path: `mammoth.extractRawText({ arrayBuffer })` → text
-4. Re-add DOCX to `PARSEABLE_TYPES` in upload endpoint
-5. Test with existing failed DOCX uploads
+### 2026-03-10 — Initial Implementation (Phases 1–6)
 
-### Image OCR
-
-**Problem:** The OCR UI toggle and API endpoints exist but the extraction backend can't process images.
-
-**Candidate solutions:**
-
-| Approach | How | Workers-compatible? | Notes |
-|----------|-----|---------------------|-------|
-| Workers AI Vision | `@cf/meta/llama-3.2-11b-vision-instruct` | Yes (native binding) | Already have `AI` binding; extract text via vision prompt |
-| Tesseract.js WASM | `tesseract.js` | Risky (WASM) | Same WASM issues as Kreuzberg |
-| External OCR API | Google Vision, AWS Textract | Yes (HTTP call) | Adds external dependency + cost |
-
-**Recommended approach:** Use Workers AI Vision model — no new dependencies, already have the `AI` binding. Send image with prompt "Extract all text from this image" and use the response as extracted text. Much simpler than WASM-based Tesseract.
-
-**Implementation:**
-1. Add `image/*` types to provider's SUPPORTED_TYPES (gated by OCR check)
-2. Call `env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', { image: [...], prompt: '...' })`
-3. Re-enable OCR code path in upload endpoint
-4. Test with existing image uploads
-
-## Dependencies
-
-| Dependency | Purpose | Size Impact |
-|------------|---------|-------------|
-| `unpdf` | PDF text extraction (serverless PDF.js) | ~500 KB (lazy-loaded in `waitUntil`) |
-
-> `@kreuzberg/wasm` was removed — it failed on Cloudflare Workers due to WASM initialization issues. See [Lessons Learned](#lessons-learned).
-
-No other new dependencies. The pipeline already uses Workers AI for embeddings and Cloudflare Vectorize for vector search.
-
-## Billing Impact
-
-Current caps (from `ai-billing.ts`) already meter `doc_process` and `vector_query` operations. Kreuzberg extraction runs inside the existing `processDocument()` pipeline, so no new billing category is needed.
-
-Considerations for expanded formats:
-- Large documents (100+ page PDFs, archive bundles) consume more Worker CPU time
-- Consider adding a max file size per type (e.g., 50 MB for archives, 25 MB for Office docs)
-- OCR is significantly more expensive — consider separate OCR usage counter if it becomes popular
-
-## Risks
-
-| Risk | Mitigation | Status |
-|------|-----------|--------|
-| WASM library compatibility on Workers | Replaced Kreuzberg with unpdf after multiple WASM init failures | **Resolved** |
-| WASM CPU limits in Workers | 30s extraction timeout; skip + mark failed on timeout | **Active** — some large PDFs still timeout |
-| Vectorize metadata filtering silently fails | Must create metadata index before upserting vectors; re-upsert after index creation | **Resolved** |
-| Cron retry creates infinite duplicate jobs | Fixed with attachment-level retry + active job guard | **Resolved** |
-| Archive bombs (zip of zips) | Cap extracted text at 1 MB; cap archive depth at 1 level | Planned |
-| DOCX/Office extraction not supported | unpdf is PDF-only; need a separate provider for Office formats | **Open** |
-| OCR cost explosion | OCR is opt-in per room; metered under existing AI caps | Planned |
-| Multi-room agent org resolution | Agents send `x-org-id` header; server validates against membership | **Resolved** |
+- **feat:** Kreuzberg WASM provider for PDF extraction — `862cea0` (later replaced)
+- **feat:** Document panel UI with search — `00ced5c`
+- **feat:** Citation rendering in agent responses — `7f5e410`
+- **feat:** AI usage metering for document search — `1f1fc1b`
+- **feat:** OCR opt-in per room — `c10583a`
+- **feat:** Room notification on document indexed — `e1656bd`
+- **feat:** Stuck job cleanup + orphan dispatch + retry backoff — `085b126`
+- **fix:** Structured error codes in extraction pipeline — `6806996`
 
 ## Lessons Learned
 
-### Kreuzberg WASM — Abandoned Prematurely?
+### Kreuzberg WASM — Rescued via Manual wasm-bindgen Init
 
-`@kreuzberg/wasm` was the original plan for document extraction. It failed through **four successive attempts**, all using custom/manual WASM loading:
+`@kreuzberg/wasm` was the original plan for all document extraction. It failed through **four successive attempts** before being replaced with `unpdf` for PDFs. A spike test (`148505e`) then confirmed that manual wasm-bindgen initialization works on Workers, leading to Kreuzberg being re-integrated for Office formats (`b0a93fb`).
 
-1. **Dynamic import** (`f4eea87`) — `import('@kreuzberg/wasm')` failed; Vite/Workers couldn't resolve the WASM module
-2. **Explicit WASM module passing** (`901923e`) — tried passing the WASM binary explicitly; initialization still failed
-3. **Global WASM in worker-entry.ts** (`fa25221`) — loaded WASM at the worker top level and passed it through; WASM init failed with opaque errors
-4. **Gave up on Kreuzberg** (`d204692`) — replaced entirely with `unpdf`, which is built specifically for serverless/edge runtimes
+**Attempts that failed:**
 
-**What was never tried:** The official Cloudflare Workers WASM initialization pattern — calling `await initWasm()` explicitly before `extractBytes()`. All four attempts used custom WASM wiring instead of the documented path. The `@kreuzberg/wasm` package exports `initWasm()` specifically for non-Node environments, and this was the most likely correct approach.
+1. **Dynamic import** (`f4eea87`) — `import('@kreuzberg/wasm')` failed; Vite couldn't resolve WASM
+2. **Explicit WASM module passing** (`901923e`) — passed binary explicitly; init still failed
+3. **Global WASM in worker-entry.ts** (`fa25221`) — opaque errors from wasm-bindgen glue
+4. **`initWasm()`** (`148505e` spike) — fails because `import.meta.url` is not a valid URL after Wrangler bundling; the glue file's top-level `fetch()` hangs on Workers
 
-**Spike test recommended:** Before permanently abandoning Kreuzberg (which would unlock DOCX, XLSX, PPTX, and OCR support), test a minimal isolated Worker endpoint: latest `@kreuzberg/wasm`, top-level cached `initPromise` or guarded `initWasm()`, one tiny PDF, `extractBytes(bytes, 'application/pdf')`, no OCR, no Office, no abstraction layer. If this works, the extraction layer can be significantly expanded.
+**What worked: manual wasm-bindgen initialization**
 
-**Takeaway:** When a WASM library fails on Workers, try the library's **official documented initialization path** first before resorting to manual WASM wiring. Only abandon the library if the official path explicitly fails.
+Instead of calling `initWasm()`, bypass it entirely:
+1. Static import the `.wasm` binary (Wrangler handles natively)
+2. Import `kreuzberg_wasm_bg.js` (the raw glue, not the auto-loading `kreuzberg_wasm.js`)
+3. Build the `WebAssembly.Imports` object manually with 3 namespaces:
+   - `./kreuzberg_wasm_bg.js` — the 110+ wasm-bindgen glue functions
+   - `env` — `system()` and `mkstemp()` stubs (return -1)
+   - `wasi_snapshot_preview1` — 17 WASI stubs (clock, RNG, filesystem no-ops)
+4. Call `WebAssembly.instantiate(wasmModule, imports)`
+5. Wire memory via `kreuzbergBg.__wbg_set_wasm(instance.exports)`
+6. Call `__wbindgen_start()` if present (initializes Rust runtime)
+7. Expose via `globalThis.__kreuzbergBg` for SvelteKit routes to consume
+
+**Why not Kreuzberg for PDFs?** Kreuzberg's PDF extraction requires a separate PDFium Emscripten module (~4 MB WASM) which would push the Worker over the 10 MB limit. `unpdf` (serverless PDF.js) handles PDFs without additional WASM.
+
+**Takeaway:** When a wasm-bindgen library's `initWasm()` fails on Workers, the manual instantiation pattern (static WASM import + `__wbg_set_wasm()`) is a reliable fallback. The key insight is importing the `_bg.js` file (raw glue without auto-loading) instead of the main entry point.
 
 ### Vectorize Metadata Indexes Must Be Created Before Upsert
 
@@ -400,50 +482,3 @@ The fix (`9911d40`) rewrote retry to query by **attachment** (not job), count to
 For the Claude Code agent wrapper (`martol-client`), `doc_search` was initially implemented as a fenced-block interception pattern (agent outputs a code block, wrapper intercepts and calls MCP). This was fragile — the agent often didn't format the block correctly.
 
 The working approach uses the Claude Agent SDK's native `@tool` decorator + `create_sdk_mcp_server()` to register `doc_search` as a proper MCP tool that appears in Claude's tool list. The agent calls it natively like any other tool.
-
-## Changelog
-
-### 2026-03-13 — Kreuzberg WASM Integration for Office Formats
-
-- **feat:** DOCX/XLSX/PPTX extraction via Kreuzberg WASM on Cloudflare Workers
-- **spike:** Confirmed `initWasm()` fails on Workers (import.meta.url issue), but manual wasm-bindgen init works
-- **impl:** Static WASM import + manual instantiation in `worker-entry.ts`, exposed via `globalThis.__kreuzbergBg`
-- **impl:** Updated `kreuzberg-provider.ts` to route Office MIME types through Kreuzberg WASM
-- **impl:** Added Office MIME types to `PARSEABLE_TYPES` in upload endpoint
-- **docs:** Updated Lessons Learned to note `initWasm()` was never tried (it was — it fails)
-- **note:** PDF still uses unpdf (Kreuzberg PDF requires PDFium which adds ~2MB WASM)
-- **note:** Worker size: ~9.3MB gzipped (limit 10MB) — Kreuzberg WASM is ~7.5MB
-
-### 2026-03-12 — Audit & Correctness Fixes
-
-- **fix:** Remove DOCX/XLSX/PPTX/EML/archive from `PARSEABLE_TYPES` — no extraction provider exists
-- **fix:** Disable OCR image code path in upload endpoint — unpdf has no OCR capability
-- **fix:** Increase extraction timeout from 30s to 60s — moderate PDFs were timing out
-- **fix:** Add ingestion jobs purge to cron (delete completed/failed jobs > 30 days)
-- **fix:** Recover 4 wrongly-failed attachments (had chunks but were marked failed by stuck-job cleanup)
-- **docs:** Update spec to reflect actual supported formats, mark Phase 6 as broken, add future plan for DOCX + OCR
-
-### 2026-03-12 — Pipeline Hardening & doc_search Fix
-
-- **fix:** Replace Kreuzberg WASM with unpdf for PDF extraction — `d204692`
-- **fix:** Create Vectorize metadata index on `orgId` for filtered search — manual CLI
-- **fix:** Accept `x-org-id` header in MCP auth for multi-room agents — `83d38ff`
-- **fix:** Prevent duplicate ingestion jobs in cron retry logic — `9911d40`
-- **fix:** Run RAG cron every 5 minutes instead of hourly — `f98de86`
-- **fix:** Create dedicated DB connection for waitUntil RAG processing — `f7ab3fb`
-- **fix:** Use connectPromise instead of double-connecting Hyperdrive client — `2140777`
-- **fix:** Make ingestion_jobs insert non-fatal — `c9f024b`
-- **debug:** Add MCP auth and doc_search logging — `3e1d101`
-- **verified:** doc_search returns PDF results to agents via SDK MCP tool ✅
-- **data:** Re-indexed all documents after Vectorize metadata index creation; 11 of 18 documents indexed, 5 failing with `processing_timeout` (large PDFs), 2 permanently skipped (JPEG, GIF)
-
-### 2026-03-10 — Initial Implementation (Phases 1–6)
-
-- **feat:** Kreuzberg WASM provider for PDF extraction — `862cea0` (later replaced)
-- **feat:** Document panel UI with search — `00ced5c`
-- **feat:** Citation rendering in agent responses — `7f5e410`
-- **feat:** AI usage metering for document search — `1f1fc1b`
-- **feat:** OCR opt-in per room — `c10583a`
-- **feat:** Room notification on document indexed — `e1656bd`
-- **feat:** Stuck job cleanup + orphan dispatch + retry backoff — `085b126`
-- **fix:** Structured error codes in extraction pipeline — `6806996`
