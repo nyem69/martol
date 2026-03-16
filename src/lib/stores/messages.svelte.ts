@@ -26,6 +26,7 @@ export interface DisplayMessage {
 	pending: boolean;
 	failed: boolean;
 	isOwn: boolean;
+	streaming?: boolean;
 }
 
 export interface SystemEvent {
@@ -52,6 +53,7 @@ export class MessagesStore {
 	private lastTypingSent = 0;
 	private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private streamingMessages = new Map<string, number>(); // localId → index in messages array
 	private systemEventCounter = 0;
 
 	constructor(
@@ -118,6 +120,15 @@ export class MessagesStore {
 			case 'document_indexed':
 				window.dispatchEvent(new CustomEvent('document-indexed', { detail: msg }));
 				break;
+			case 'stream_start':
+				this.handleStreamStart(msg);
+				break;
+			case 'stream_delta':
+				this.handleStreamDelta(msg);
+				break;
+			case 'stream_abort':
+				this.handleStreamAbort(msg);
+				break;
 			case 'error':
 				this.error = msg.message;
 				break;
@@ -125,6 +136,31 @@ export class MessagesStore {
 	}
 
 	private handleMessage(payload: ServerMessagePayload): void {
+		// Finalize streaming message — replace placeholder with confirmed version
+		const streamIdx = this.streamingMessages.get(payload.localId);
+		if (streamIdx !== undefined) {
+			this.streamingMessages.delete(payload.localId);
+			this.messages[streamIdx] = {
+				localId: payload.localId,
+				serverSeqId: payload.serverSeqId,
+				senderId: payload.senderId,
+				senderName: payload.senderName,
+				senderRole: payload.senderRole,
+				body: payload.body,
+				replyTo: payload.replyTo,
+				timestamp: payload.timestamp,
+				pending: false,
+				failed: false,
+				isOwn: payload.senderId === this.userId,
+				streaming: false,
+			};
+			if (payload.serverSeqId > this.lastServerSeqId) {
+				this.lastServerSeqId = payload.serverSeqId;
+				this.ws.updateLastKnownId(payload.serverSeqId);
+			}
+			return; // Skip normal dedup path
+		}
+
 		// Deduplicate: replace pending message with confirmed version
 		const existingIdx = this.messages.findIndex((m) => m.localId === payload.localId);
 		const display: DisplayMessage = {
@@ -270,12 +306,52 @@ export class MessagesStore {
 
 	private handleClear(clearedBy: string): void {
 		this.messages = [];
+		this.streamingMessages.clear();
 		// Clear all pending timers
 		for (const timer of this.pendingTimers.values()) {
 			clearTimeout(timer);
 		}
 		this.pendingTimers.clear();
 		this.addSystemEvent('clear', clearedBy);
+	}
+
+	private handleStreamStart(msg: Extract<ServerMessage, { type: 'stream_start' }>): void {
+		const display: DisplayMessage = {
+			localId: msg.localId,
+			senderId: msg.senderId,
+			senderName: msg.senderName,
+			senderRole: msg.senderRole,
+			body: '',
+			replyTo: msg.replyTo,
+			timestamp: msg.timestamp,
+			pending: false,
+			failed: false,
+			isOwn: msg.senderId === this.userId,
+			streaming: true,
+		};
+		this.messages.push(display);
+		this.streamingMessages.set(msg.localId, this.messages.length - 1);
+
+		// Suppress typing indicator for this sender
+		this.handleTyping(msg.senderId, msg.senderName, false);
+	}
+
+	private handleStreamDelta(msg: Extract<ServerMessage, { type: 'stream_delta' }>): void {
+		const idx = this.streamingMessages.get(msg.localId);
+		if (idx === undefined) return;
+		const dm = this.messages[idx];
+		if (!dm) return;
+		// Index assignment with spread triggers Svelte 5 $state reactivity
+		this.messages[idx] = { ...dm, body: dm.body + msg.delta };
+	}
+
+	private handleStreamAbort(msg: Extract<ServerMessage, { type: 'stream_abort' }>): void {
+		const idx = this.streamingMessages.get(msg.localId);
+		if (idx === undefined) return;
+		const dm = this.messages[idx];
+		if (!dm) return;
+		this.messages[idx] = { ...dm, streaming: false, failed: true };
+		this.streamingMessages.delete(msg.localId);
 	}
 
 	private addSystemEvent(type: 'join' | 'leave' | 'clear', name: string): void {
