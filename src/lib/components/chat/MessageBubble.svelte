@@ -23,7 +23,33 @@
 	let lightboxSrc = $state<string | null>(null);
 	let lightboxAlt = $state('');
 	const timeStr = $derived(formatRelativeTime(message.timestamp, now));
-	const htmlBody = $derived(renderMarkdown(message.body));
+	// Throttle markdown rendering during streaming to avoid per-delta re-renders
+	let streamRenderedHtml = $state('');
+	let streamThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const htmlBody = $derived.by(() => {
+		if (!message.streaming) {
+			// Not streaming — render immediately (normal path)
+			if (streamThrottleTimer) {
+				clearTimeout(streamThrottleTimer);
+				streamThrottleTimer = null;
+			}
+			return renderMarkdown(message.body);
+		}
+		// During streaming, return the last throttled render
+		return streamRenderedHtml || renderMarkdown(message.body);
+	});
+
+	$effect(() => {
+		if (!message.streaming) return;
+		// Throttle: re-render markdown every 150ms during streaming
+		const body = message.body; // track dependency
+		if (streamThrottleTimer) return; // already scheduled
+		streamThrottleTimer = setTimeout(() => {
+			streamThrottleTimer = null;
+			streamRenderedHtml = renderMarkdown(body);
+		}, 150);
+	});
 
 	$effect(() => {
 		const interval = setInterval(() => {
@@ -116,14 +142,18 @@
 			onclick={(e) => { handleImageClick(e); handleCitationClick(e); }}
 			onkeydown={(e) => { if (e.key === 'Enter') { handleImageClick(e as unknown as MouseEvent); handleCitationClick(e as unknown as MouseEvent); } }}
 		>
-			{@html htmlBody}
+			{@html htmlBody}{#if message.streaming}<span class="streaming-cursor"></span>{/if}
 		</article>
 		{#if message.editedAt}
 			<span class="text-[10px]" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};">
 				({m.chat_edited()})
 			</span>
 		{/if}
-		{#if message.pending}
+		{#if message.streaming}
+			<span class="text-[10px] animate-pulse" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 70%, transparent)' : 'var(--text-muted)'};">
+				{m.chat_streaming()}
+			</span>
+		{:else if message.pending}
 			<span class="text-[10px] animate-pulse" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 70%, transparent)' : 'var(--text-muted)'};">
 				{m.chat_sending()}
 			</span>
@@ -155,7 +185,7 @@
 				{timeStr}
 			</time>
 		{/if}
-		{#if !message.pending && !message.failed && message.dbId}
+		{#if !message.pending && !message.streaming && !message.failed && message.dbId}
 			<div class="msg-actions flex items-center gap-0.5">
 				{#if onReply}
 					<button
@@ -272,5 +302,20 @@
 
 	:global(article.prose .doc-citation:hover) {
 		background: color-mix(in oklch, var(--accent) 18%, transparent);
+	}
+
+	.streaming-cursor {
+		display: inline-block;
+		width: 2px;
+		height: 1em;
+		background: var(--accent);
+		margin-left: 1px;
+		vertical-align: text-bottom;
+		animation: cursor-blink 1s step-end infinite;
+	}
+
+	@keyframes cursor-blink {
+		0%, 50% { opacity: 1; }
+		51%, 100% { opacity: 0; }
 	}
 </style>
