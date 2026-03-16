@@ -45,6 +45,8 @@ Three new async methods alongside existing `send_message()` (line 535):
 New abstract method:
 
 ```python
+from collections.abc import AsyncIterator
+
 @abstractmethod
 async def stream_chat(
     self,
@@ -55,6 +57,8 @@ async def stream_chat(
     """Stream a chat response. Yields str deltas, then a final LLMResponse."""
     ...
 ```
+
+Import `AsyncIterator` from `collections.abc` (Python 3.10+). The actual implementation is an `AsyncGenerator` (uses `yield`), but `AsyncIterator` is the correct public return type annotation.
 
 The iterator yields:
 - `str` — text deltas (0 or more)
@@ -82,32 +86,73 @@ Uses the Anthropic SDK's `messages.stream()` context manager which:
 
 ```python
 async def stream_chat(self, system, messages, tools):
-    kwargs = { model, messages: [system_msg, ...messages], max_tokens, tools, stream: True }
+    openai_messages = [{"role": "system", "content": system}]
+    openai_messages.extend(messages)
+    kwargs = {
+        "model": self.model,
+        "messages": openai_messages,
+        "max_tokens": 4096,
+        "stream": True,
+    }
+    openai_tools = to_openai_tools(tools)
+    if openai_tools:
+        kwargs["tools"] = openai_tools
+
     response = await self.client.chat.completions.create(**kwargs)
 
-    text_parts = []
-    tool_calls_acc = {}  # accumulate tool call fragments
+    text_parts: list[str] = []
+    # Accumulate tool call fragments keyed by index
+    # Each entry: {"id": str, "name": str, "arguments": str}
+    tool_calls_acc: dict[int, dict[str, str]] = {}
+    finish_reason: str | None = None
 
     async for chunk in response:
         choice = chunk.choices[0] if chunk.choices else None
-        if not choice: continue
+        if not choice:
+            continue
         delta = choice.delta
 
+        # Text deltas — yield immediately
         if delta.content:
             yield delta.content
             text_parts.append(delta.content)
 
+        # Tool call fragments — accumulate by index
         if delta.tool_calls:
-            # accumulate tool call fragments (id, name, arguments come in pieces)
-            for tc in delta.tool_calls:
-                # ... accumulate by tc.index ...
+            for tc_delta in delta.tool_calls:
+                idx = tc_delta.index
+                if idx not in tool_calls_acc:
+                    tool_calls_acc[idx] = {"id": "", "name": "", "arguments": ""}
+                entry = tool_calls_acc[idx]
+                if tc_delta.id:
+                    entry["id"] = tc_delta.id
+                if tc_delta.function and tc_delta.function.name:
+                    entry["name"] = tc_delta.function.name
+                if tc_delta.function and tc_delta.function.arguments:
+                    entry["arguments"] += tc_delta.function.arguments
 
         if choice.finish_reason:
-            # build final LLMResponse from accumulated state
-            yield LLMResponse(text="".join(text_parts), tool_calls=[...], stop_reason=...)
+            finish_reason = choice.finish_reason
+
+    # Assemble final LLMResponse
+    assembled_tool_calls = []
+    for idx in sorted(tool_calls_acc.keys()):
+        entry = tool_calls_acc[idx]
+        try:
+            args = json.loads(entry["arguments"]) if entry["arguments"] else {}
+        except json.JSONDecodeError:
+            args = {}
+        assembled_tool_calls.append(ToolCall(id=entry["id"], name=entry["name"], arguments=args))
+
+    stop_map = {"stop": "end_turn", "tool_calls": "tool_use", "length": "max_tokens"}
+    yield LLMResponse(
+        text="".join(text_parts) or None,
+        tool_calls=assembled_tool_calls,
+        stop_reason=stop_map.get(finish_reason or "", "end_turn"),
+    )
 ```
 
-OpenAI streams tool call arguments as fragments across multiple chunks, so they must be accumulated and assembled at the end.
+OpenAI streams tool call arguments as fragments across multiple chunks. The `tool_calls_acc` dict accumulates fragments keyed by `tc_delta.index` — `id` and `function.name` arrive on the first chunk for each index, `function.arguments` arrive as string fragments across subsequent chunks. The final assembly parses the concatenated arguments JSON and builds `ToolCall` objects.
 
 ### 5. Streaming `_generate_response` — `wrapper.py`
 
@@ -148,11 +193,17 @@ async def _generate_response(self, payload: dict) -> None:
             # Commit whatever was generated
             if full_body.strip():
                 await self.send_stream_end(local_id, full_body.strip())
-                self._append_context("assistant", full_body.strip())
+                # Append to conversation context (same dict format as _append_context_from_ws)
+                self._append_context({
+                    "sender_id": self._agent_user_id,
+                    "sender_name": self._agent_name,
+                    "sender_role": "agent",
+                    "body": full_body.strip(),
+                })
             else:
-                # Nothing generated — abort the empty stream
-                # (DO will timeout the stream, or we just don't send end)
-                pass
+                # No text generated (tool-only response) — send empty stream_end to close cleanly
+                # (avoids 2-minute timeout leak on the DO's activeStreams)
+                await self.send_stream_end(local_id, "")
 
             # Exit if no tool calls
             if not response or not response.tool_calls:
@@ -164,6 +215,10 @@ async def _generate_response(self, payload: dict) -> None:
                 clean_args = _validate_tool_args(tc.name, tc.arguments)
                 result = await self._mcp_call(tc.name, clean_args)
                 tool_results.append({"tool_call": tc, "result": result})
+                # Preserve brief_update side-effect (from old _process_response)
+                if tc.name == "brief_update" and result and result.get("ok"):
+                    self.room_brief = result.get("brief", self.room_brief)
+                    self.room_brief_version = result.get("version", self.room_brief_version)
 
             # Build follow-up messages for next turn
             follow_up = self._build_tool_result_messages(response, tool_results)
@@ -182,7 +237,7 @@ async def _generate_response(self, payload: dict) -> None:
 - On error mid-stream, commit whatever was generated (partial response is better than nothing)
 - Empty streams (LLM produced no text, only tool calls) skip `send_stream_end`
 - `_build_tool_result_messages()` and `_build_llm_messages()` unchanged
-- `_process_response()` can be removed entirely (replaced by the inline loop)
+- `_process_response()` removed (replaced by the inline loop). Tests in `tests/test_wrapper.py` that call `_process_response` directly must be rewritten to test the new streaming `_generate_response` instead
 
 ### 6. Backwards Compatibility
 
@@ -197,7 +252,7 @@ async def _generate_response(self, payload: dict) -> None:
 |----------|----------|
 | LLM API error mid-stream | Commit partial body via `send_stream_end`, log error, break loop |
 | WS disconnected mid-stream | DO aborts stream on its side; agent reconnects normally |
-| Empty LLM response (only tool_use) | Skip `send_stream_end` for this turn; proceed to tool execution |
+| Empty LLM response (only tool_use) | Send `send_stream_end` with empty body to close stream cleanly; proceed to tool execution |
 | Tool execution fails | Log error, break loop (same as current behavior) |
 | Rate limit exceeded | Skip entirely (same as current) |
 
@@ -212,3 +267,4 @@ async def _generate_response(self, payload: dict) -> None:
 | `martol_agent/providers/anthropic.py` | Implement `stream_chat()` using `messages.stream()` |
 | `martol_agent/providers/openai_compat.py` | Implement `stream_chat()` using `stream=True` |
 | `martol_agent/wrapper.py` | Rewrite `_generate_response` with streaming loop, remove `_process_response` |
+| `tests/test_wrapper.py` | Rewrite tests that called `_process_response` to test streaming `_generate_response` |
