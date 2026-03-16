@@ -32,6 +32,10 @@ const PAD_WIDTH = 20;
 const STORAGE_BATCH_LIMIT = 128;
 const MAX_LOCAL_ID_LENGTH = 64;
 const LOCAL_ID_RE = /^[a-zA-Z0-9_-]+$/;
+const MAX_STREAM_DELTA_SIZE = 4096;
+const MAX_STREAM_BODY_SIZE = MAX_BODY_SIZE; // 32 KB — same limit as regular messages
+const MAX_ACTIVE_STREAMS_PER_USER = 1;
+const STREAM_TIMEOUT_MS = 120_000; // 2 minutes — abort stale streams
 
 function padId(id: number): string {
 	return String(id).padStart(PAD_WIDTH, '0');
@@ -78,6 +82,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	private unflushedIds: number[] = [];
 	private flushFailures = 0;
 	private degraded = false;
+	private activeStreams = new Map<string, {
+		senderId: string;
+		senderName: string;
+		senderRole: string;
+		orgId: string;
+		replyTo?: number;
+		timestamp: string;
+		startedAt: number;
+		accumulatedBytes: number;
+	}>();
 
 	// Per-user rate limiting
 	private userMessageTimestamps = new Map<string, number[]>();
