@@ -59,7 +59,10 @@ private activeStreams = new Map<string, {
 MAX_STREAM_DELTA_SIZE = 4096
 MAX_STREAM_BODY_SIZE = 32 * 1024  (same as MAX_BODY_SIZE)
 MAX_ACTIVE_STREAMS_PER_USER = 1
+STREAM_TIMEOUT_MS = 120_000  (2 minutes — abort stale streams)
 ```
+
+**Stream timeout**: The existing cron alarm or a new periodic check should iterate `activeStreams` and abort any stream older than `STREAM_TIMEOUT_MS`. This handles the case where an agent sends `stream_start` but crashes without disconnecting (TCP keepalive may not fire for minutes). Implementation: check in the existing flush alarm handler (runs every 500ms when active).
 
 **webSocketMessage router** (line 290-323): Add three new cases in the switch:
 - `'stream_start'` → `handleStreamStart(ws, msg)`
@@ -68,41 +71,46 @@ MAX_ACTIVE_STREAMS_PER_USER = 1
 
 **handleStreamStart(ws, msg)**:
 1. Extract identity from WS tags (same pattern as handleChatMessage line 419-423)
-2. Check `this.degraded` → reject
-3. Check `isRateLimited(userId)` → reject (gates stream initiation)
-4. Check WAL capacity → reject if full
-5. Validate `localId` with `LOCAL_ID_RE`
-6. Reject if sender already has an active stream
-7. Create entry in `activeStreams`
-8. Broadcast `{ type: 'stream_start', localId, senderId, senderName, senderRole, replyTo, timestamp }`
+2. Check `this.degraded` → reject with `sendError(ws, 'degraded', ...)`
+3. Reject `viewer` role (same guard as handleChatMessage line 430-433)
+4. Check `isRateLimited(userId)` → reject (gates stream initiation)
+5. Check WAL capacity → reject if full
+6. Validate `localId` with `LOCAL_ID_RE`
+7. Reject if sender already has an active stream (`MAX_ACTIVE_STREAMS_PER_USER`)
+8. Create entry in `activeStreams`
+9. Broadcast `{ type: 'stream_start', localId, senderId, senderName, senderRole, replyTo, timestamp }`
 
 **handleStreamDelta(ws, msg)**:
-1. Look up session by `localId` in `activeStreams`
-2. Validate ownership (senderId matches WS tag)
-3. Validate `delta.length <= MAX_STREAM_DELTA_SIZE`
+1. Look up session by `localId` in `activeStreams`. If not found → silently ignore (delta for unknown/aborted stream)
+2. Validate ownership (senderId matches WS tag). If mismatch → silently ignore
+3. Validate `delta.length <= MAX_STREAM_DELTA_SIZE`. If exceeded → `abortStream(localId, 'delta_too_large')`
 4. `session.accumulatedBytes += delta.length`
 5. If accumulated > `MAX_STREAM_BODY_SIZE` → `abortStream(localId, 'body_too_large')`
 6. Broadcast `{ type: 'stream_delta', localId, delta }`
 7. No rate-limit increment, no WAL write
 
 **handleStreamEnd(ws, msg)**:
-1. Look up and remove session from `activeStreams`
-2. Validate `msg.body.length <= MAX_BODY_SIZE`
-3. Use `msg.body` as canonical final text (not accumulated deltas)
-4. Follow same WAL write + broadcast path as handleChatMessage (lines 495-547):
-   - Create `StoredMessage` with the session's metadata + final body
+1. Look up session by `localId` in `activeStreams`. If not found → silently ignore (end for unknown/aborted stream)
+2. Validate ownership (senderId matches WS tag)
+3. Remove session from `activeStreams`
+4. Validate `msg.body.length <= MAX_BODY_SIZE`
+5. Use `msg.body` as canonical final text (not accumulated deltas)
+6. Use `replyTo` from the `activeStreams` session (captured at `stream_start`), not from `stream_end` message
+7. Follow same WAL write + broadcast path as handleChatMessage (lines 495-547):
+   - Create `StoredMessage` with the session's `senderId`, `senderName`, `senderRole`, `orgId`, `replyTo`, `timestamp` + final body
    - Atomic storage put
    - Broadcast `{ type: 'message', message: payload }`
    - Schedule flush alarm
-5. Skip rate-limit check (already gated at stream_start)
+8. Skip rate-limit check (already gated at stream_start)
 
 **abortStream(localId, reason)**:
 1. Remove from `activeStreams`
 2. Broadcast `{ type: 'stream_abort', localId, reason }`
 
 **webSocketClose / webSocketError** (find existing handlers):
-- Iterate `activeStreams`, find streams owned by closing socket's userId
-- Call `abortStream` for each
+- Extract `userId` from WS tags via `this.ctx.getTags(ws)` (same pattern as other handlers — tags persist through hibernation)
+- Iterate `activeStreams` values, find entries where `senderId === userId`
+- Call `abortStream(localId, 'client_disconnected')` for each
 
 ## Phase 2: Browser Accumulation
 
@@ -110,7 +118,7 @@ MAX_ACTIVE_STREAMS_PER_USER = 1
 
 **DisplayMessage** (line 15-29): Add `streaming?: boolean` field.
 
-**New private state**: `private streamingMessages = new Map<string, DisplayMessage>()`
+**New private state**: `private streamingMessages = new Map<string, number>()` — maps `localId` to index in `this.messages` array. We use an index (not an object reference) because Svelte 5 `$state` arrays are reactive at the element level only when mutated via array methods or index assignment.
 
 **handleServerMessage** (line 89-125): Add three cases:
 - `'stream_start'` → `handleStreamStart(msg)`
@@ -119,24 +127,32 @@ MAX_ACTIVE_STREAMS_PER_USER = 1
 
 **handleStreamStart(msg)**:
 - Create `DisplayMessage` with `streaming: true`, `pending: false`, `failed: false`, `body: ''`, no `serverSeqId`
-- Push to `this.messages`
-- Register in `streamingMessages` map
+- Push to `this.messages` — record its index
+- Register in `streamingMessages` map: `localId → index`
 - Suppress any existing typing indicator for this sender
 
 **handleStreamDelta(msg)**:
-- Look up by `localId` in `streamingMessages`
-- `dm.body += msg.delta` — direct mutation triggers Svelte 5 fine-grained reactivity
+- Look up index by `localId` in `streamingMessages`. If not found → ignore
+- **Reactivity strategy**: Use index assignment to trigger Svelte 5 reactivity:
+  ```
+  const idx = this.streamingMessages.get(msg.localId);
+  const dm = this.messages[idx];
+  this.messages[idx] = { ...dm, body: dm.body + msg.delta };
+  ```
+  Spreading creates a new object reference at that index, which Svelte 5 `$state` arrays detect as a change. This is the same pattern used elsewhere in the store for updating individual messages.
 
 **handleStreamAbort(msg)**:
-- Look up by `localId` in `streamingMessages`
-- Set `streaming = false`, `failed = true`
+- Look up index by `localId` in `streamingMessages`. If not found → ignore
+- Update via index assignment: `this.messages[idx] = { ...dm, streaming: false, failed: true }`
 - Remove from `streamingMessages`
 
 **handleMessage** (line 127-156) — finalization:
-- When a `type: 'message'` arrives for a `localId` in `streamingMessages`:
-  - Remove from `streamingMessages`
-  - Update existing DisplayMessage: `streaming = false`, set `serverSeqId`, `dbId`, final `body`
-  - (The existing dedup logic at line 129 already finds by localId — extend it to also check streamingMessages)
+- **Before** the existing dedup logic, check if `localId` exists in `streamingMessages`
+- If found: remove from `streamingMessages`, update via index assignment with confirmed fields (`streaming: false`, `serverSeqId`, `dbId`, final `body`), and return early (skip creating a new DisplayMessage)
+- If not found: fall through to existing dedup logic (handles normal messages and optimistic sends)
+
+**handleClear** (line 271-279):
+- After resetting `this.messages = []`, also clear `this.streamingMessages` to avoid stale index references
 
 ## Phase 3: UI Rendering
 
@@ -144,7 +160,7 @@ MAX_ACTIVE_STREAMS_PER_USER = 1
 
 **Streaming cursor**: When `message.streaming === true`, append a blinking cursor span after the body content.
 
-**Debounced markdown**: The current `htmlBody = $derived(renderMarkdown(message.body))` re-evaluates on every delta. Add a debounce: show raw text immediately, re-render markdown after 100ms of no deltas. Use a `$state` for `renderedHtml` updated via a debounced `$effect`.
+**Throttled markdown**: The current `htmlBody = $derived(renderMarkdown(message.body))` re-evaluates on every delta (expensive). Replace with a throttled approach: always render markdown (never show raw text), but throttle re-renders to every 150ms during streaming. Use a `$state` for `renderedHtml` updated via a throttled `$effect` that checks `message.streaming` — when streaming stops, do one final render immediately.
 
 **Footer label**: Add a streaming state between pending and confirmed:
 ```
