@@ -12,7 +12,10 @@ export type ClientMessage =
 	| { type: 'command'; name: string; args: string }
 	| { type: 'typing'; active: boolean }
 	| { type: 'read'; lastReadId: number }
-	| { type: 'edit'; serverSeqId: number; body: string };
+	| { type: 'edit'; serverSeqId: number; body: string }
+	| { type: 'stream_start'; localId: string; replyTo?: number }
+	| { type: 'stream_delta'; localId: string; delta: string }
+	| { type: 'stream_end'; localId: string; body: string };
 
 // ── Server → Client ─────────────────────────────────────────────────
 
@@ -38,7 +41,10 @@ export type ServerMessage =
 	| { type: 'clear'; clearedBy: string }
 	| { type: 'brief_changed'; version: number; changedBy: string }
 	| { type: 'document_indexed'; attachmentId: number; filename: string; chunks: number }
-	| { type: 'error'; code: ErrorCode; message: string };
+	| { type: 'error'; code: ErrorCode; message: string }
+	| { type: 'stream_start'; localId: string; senderId: string; senderName: string; senderRole: string; replyTo?: number; timestamp: string }
+	| { type: 'stream_delta'; localId: string; delta: string }
+	| { type: 'stream_abort'; localId: string; reason: string };
 
 export type ErrorCode =
 	| 'rate_limited'
