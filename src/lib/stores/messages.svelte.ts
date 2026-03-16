@@ -54,6 +54,8 @@ export class MessagesStore {
 	private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private streamingMessages = new Set<string>(); // localId set of active streams
+	private streamingLastDelta = new Map<string, number>(); // localId → timestamp
+	private streamTimeoutInterval: ReturnType<typeof setInterval> | null = null;
 	private systemEventCounter = 0;
 
 	constructor(
@@ -139,6 +141,11 @@ export class MessagesStore {
 		// Finalize streaming message — replace placeholder with confirmed version
 		if (this.streamingMessages.has(payload.localId)) {
 			this.streamingMessages.delete(payload.localId);
+			this.streamingLastDelta.delete(payload.localId);
+			if (this.streamingLastDelta.size === 0 && this.streamTimeoutInterval) {
+				clearInterval(this.streamTimeoutInterval);
+				this.streamTimeoutInterval = null;
+			}
 			const streamIdx = this.messages.findIndex((m) => m.localId === payload.localId);
 			if (streamIdx === -1) return;
 			this.messages[streamIdx] = {
@@ -308,6 +315,11 @@ export class MessagesStore {
 	private handleClear(clearedBy: string): void {
 		this.messages = [];
 		this.streamingMessages.clear();
+		this.streamingLastDelta.clear();
+		if (this.streamTimeoutInterval) {
+			clearInterval(this.streamTimeoutInterval);
+			this.streamTimeoutInterval = null;
+		}
 		// Clear all pending timers
 		for (const timer of this.pendingTimers.values()) {
 			clearTimeout(timer);
@@ -332,6 +344,10 @@ export class MessagesStore {
 		};
 		this.messages.push(display);
 		this.streamingMessages.add(msg.localId);
+		this.streamingLastDelta.set(msg.localId, Date.now());
+		if (!this.streamTimeoutInterval) {
+			this.streamTimeoutInterval = setInterval(() => this.checkStreamTimeouts(), 5000);
+		}
 
 		// Suppress typing indicator for this sender
 		this.handleTyping(msg.senderId, msg.senderName, false);
@@ -344,6 +360,7 @@ export class MessagesStore {
 		const dm = this.messages[idx];
 		// Index assignment with spread triggers Svelte 5 $state reactivity
 		this.messages[idx] = { ...dm, body: dm.body + msg.delta };
+		this.streamingLastDelta.set(msg.localId, Date.now());
 	}
 
 	private handleStreamAbort(msg: Extract<ServerMessage, { type: 'stream_abort' }>): void {
@@ -353,6 +370,32 @@ export class MessagesStore {
 		const dm = this.messages[idx];
 		this.messages[idx] = { ...dm, streaming: false, failed: true };
 		this.streamingMessages.delete(msg.localId);
+		this.streamingLastDelta.delete(msg.localId);
+		if (this.streamingLastDelta.size === 0 && this.streamTimeoutInterval) {
+			clearInterval(this.streamTimeoutInterval);
+			this.streamTimeoutInterval = null;
+		}
+	}
+
+	private checkStreamTimeouts(): void {
+		const now = Date.now();
+		for (const [localId, lastDelta] of this.streamingLastDelta) {
+			if (now - lastDelta > 15_000) {
+				// Auto-abort phantom stream
+				const idx = this.messages.findIndex((m) => m.localId === localId);
+				if (idx !== -1) {
+					const dm = this.messages[idx];
+					this.messages[idx] = { ...dm, streaming: false, failed: true };
+				}
+				this.streamingMessages.delete(localId);
+				this.streamingLastDelta.delete(localId);
+			}
+		}
+		// Stop interval if no more streaming messages
+		if (this.streamingLastDelta.size === 0 && this.streamTimeoutInterval) {
+			clearInterval(this.streamTimeoutInterval);
+			this.streamTimeoutInterval = null;
+		}
 	}
 
 	private addSystemEvent(type: 'join' | 'leave' | 'clear', name: string): void {
@@ -489,6 +532,12 @@ export class MessagesStore {
 			clearTimeout(timer);
 		}
 		this.pendingTimers.clear();
+		// Clear stream timeout tracking
+		this.streamingLastDelta.clear();
+		if (this.streamTimeoutInterval) {
+			clearInterval(this.streamTimeoutInterval);
+			this.streamTimeoutInterval = null;
+		}
 		if (this.typingIdleTimer) {
 			clearTimeout(this.typingIdleTimer);
 			this.typingIdleTimer = null;

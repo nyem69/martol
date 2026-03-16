@@ -120,6 +120,23 @@
 		}
 	});
 
+	// [I1] Auto-scroll during streaming deltas — content height grows but timeline length doesn't change
+	$effect(() => {
+		if (!container) return;
+		const contentEl = container.firstElementChild as HTMLElement | null;
+		if (!contentEl) return;
+
+		const observer = new ResizeObserver(() => {
+			const hasStreaming = messages.some((m) => m.streaming);
+			if (hasStreaming && isAtBottom) {
+				scrollToBottom();
+			}
+		});
+		observer.observe(contentEl);
+
+		return () => observer.disconnect();
+	});
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'End') {
 			scrollToBottom();

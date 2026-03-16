@@ -28,27 +28,46 @@
 	let streamThrottleTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const htmlBody = $derived.by(() => {
+		let html: string;
 		if (!message.streaming) {
-			// Not streaming — render immediately (normal path)
 			if (streamThrottleTimer) {
 				clearTimeout(streamThrottleTimer);
 				streamThrottleTimer = null;
 			}
-			return renderMarkdown(message.body);
+			html = renderMarkdown(message.body);
+		} else {
+			html = streamRenderedHtml || renderMarkdown(message.body);
 		}
-		// During streaming, return the last throttled render
-		return streamRenderedHtml || renderMarkdown(message.body);
+		if (message.streaming) {
+			// Inject cursor inside the last closing block tag
+			html = html.replace(/<\/(p|li|td|blockquote|pre|h[1-6])>\s*$/, '<span class="streaming-cursor"></span></$1>');
+			// Fallback if no block tags (plain text)
+			if (!html.includes('streaming-cursor')) {
+				html += '<span class="streaming-cursor"></span>';
+			}
+		}
+		return html;
 	});
+
+	let latestStreamBody = $state('');
 
 	$effect(() => {
 		if (!message.streaming) return;
-		// Throttle: re-render markdown every 150ms during streaming
-		const body = message.body; // track dependency
-		if (streamThrottleTimer) return; // already scheduled
+		latestStreamBody = message.body;
+		if (streamThrottleTimer) return;
 		streamThrottleTimer = setTimeout(() => {
 			streamThrottleTimer = null;
-			streamRenderedHtml = renderMarkdown(body);
+			streamRenderedHtml = renderMarkdown(latestStreamBody);
 		}, 150);
+	});
+
+	$effect(() => {
+		return () => {
+			if (streamThrottleTimer) {
+				clearTimeout(streamThrottleTimer);
+				streamThrottleTimer = null;
+			}
+		};
 	});
 
 	$effect(() => {
@@ -106,6 +125,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
+		aria-busy={message.streaming || undefined}
 		style="background: {message.isOwn
 			? 'var(--bubble-own)'
 			: 'var(--bg-surface)'}; border: 1px solid {message.failed
@@ -142,7 +162,7 @@
 			onclick={(e) => { handleImageClick(e); handleCitationClick(e); }}
 			onkeydown={(e) => { if (e.key === 'Enter') { handleImageClick(e as unknown as MouseEvent); handleCitationClick(e as unknown as MouseEvent); } }}
 		>
-			{@html htmlBody}{#if message.streaming}<span class="streaming-cursor"></span>{/if}
+			{@html htmlBody}
 		</article>
 		{#if message.editedAt}
 			<span class="text-[10px]" style="color: {message.isOwn ? 'color-mix(in oklch, var(--bubble-own-text) 60%, transparent)' : 'var(--text-muted)'};">
@@ -159,16 +179,20 @@
 			</span>
 		{:else if message.failed}
 			<div class="flex items-center gap-1">
-				<span class="text-[10px]" style="color: var(--danger);">{m.chat_failed()}</span>
-				{#if onRetry}
-					<button
-						class="rounded p-0.5"
-						style="color: var(--danger);"
-						onclick={() => onRetry(message.localId)}
-						aria-label={m.chat_retry()}
-					>
-						<RotateCcw size={11} />
-					</button>
+				{#if !message.isOwn && !message.dbId}
+					<span class="text-[10px]" style="color: var(--danger);">{m.chat_stream_interrupted()}</span>
+				{:else}
+					<span class="text-[10px]" style="color: var(--danger);">{m.chat_failed()}</span>
+					{#if onRetry}
+						<button
+							class="rounded p-0.5"
+							style="color: var(--danger);"
+							onclick={() => onRetry(message.localId)}
+							aria-label={m.chat_retry()}
+						>
+							<RotateCcw size={11} />
+						</button>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -304,7 +328,7 @@
 		background: color-mix(in oklch, var(--accent) 18%, transparent);
 	}
 
-	.streaming-cursor {
+	:global(.streaming-cursor) {
 		display: inline-block;
 		width: 2px;
 		height: 1em;

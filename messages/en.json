@@ -42,6 +42,7 @@
   "chat_loading": "Loading messages...",
   "chat_sending": "Sending...",
   "chat_streaming": "generating…",
+  "chat_stream_interrupted": "Response interrupted",
   "chat_edited": "edited",
   "chat_refresh": "Refresh",
   "chat_dismiss": "Dismiss",
