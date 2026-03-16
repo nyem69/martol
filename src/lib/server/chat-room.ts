@@ -331,6 +331,15 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			case 'command':
 				await this.handleCommand(ws, msg.name, msg.args);
 				break;
+			case 'stream_start':
+				await this.handleStreamStart(ws, msg);
+				break;
+			case 'stream_delta':
+				await this.handleStreamDelta(ws, msg);
+				break;
+			case 'stream_end':
+				await this.handleStreamEnd(ws, msg);
+				break;
 			default:
 				await this.sendError(ws, 'invalid_message', 'Unknown message type');
 		}
@@ -342,16 +351,47 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		reason: string,
 		wasClean: boolean
 	): Promise<void> {
+		// Abort any active streams owned by this socket
+		try {
+			const tags = this.ctx.getTags(ws);
+			const userId = this.extractTag(tags, 'user:');
+			if (userId) {
+				for (const [lid, session] of this.activeStreams) {
+					if (session.senderId === userId) {
+						await this.abortStream(lid, 'client_disconnected');
+					}
+				}
+			}
+		} catch { /* socket may already be dead */ }
 		await this.broadcastPresenceOffline(ws);
 	}
 
 	async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+		try {
+			const tags = this.ctx.getTags(ws);
+			const userId = this.extractTag(tags, 'user:');
+			if (userId) {
+				for (const [lid, session] of this.activeStreams) {
+					if (session.senderId === userId) {
+						await this.abortStream(lid, 'client_disconnected');
+					}
+				}
+			}
+		} catch { /* socket may already be dead */ }
 		await this.broadcastPresenceOffline(ws);
 	}
 
 	// ── Alarm: Batch Flush to DB ──────────────────────────────────────
 
 	async alarm(): Promise<void> {
+		// Abort stale streams (agent may have crashed without disconnecting)
+		const now = Date.now();
+		for (const [lid, session] of this.activeStreams) {
+			if (now - session.startedAt > STREAM_TIMEOUT_MS) {
+				await this.abortStream(lid, 'stream_timeout');
+			}
+		}
+
 		// Flush read cursors and pending edits even if no WAL messages
 		if (this.unflushedIds.length === 0) {
 			if (this.pendingReadCursors.size > 0 || this.pendingEdits.size > 0) {
