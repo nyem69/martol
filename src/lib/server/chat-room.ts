@@ -561,6 +561,203 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		}
 	}
 
+	// ── Stream Handlers ─────────────────────────────────────────────
+
+	private async handleStreamStart(
+		ws: WebSocket,
+		msg: Extract<ClientMessage, { type: 'stream_start' }>
+	): Promise<void> {
+		const tags = this.ctx.getTags(ws);
+		const userId = this.extractTag(tags, 'user:');
+		const role = this.extractTag(tags, 'role:');
+		const name = this.extractTag(tags, 'name:');
+		const orgId = this.extractTag(tags, 'org:');
+
+		if (!userId || !role) {
+			await this.sendError(ws, 'unauthorized', 'Missing user identity');
+			return;
+		}
+		if (role === 'viewer') {
+			await this.sendError(ws, 'unauthorized', 'Viewers cannot send messages');
+			return;
+		}
+		if (this.degraded) {
+			await this.sendError(ws, 'degraded', 'Room is in degraded mode — messages paused');
+			return;
+		}
+		if (
+			typeof msg.localId !== 'string' ||
+			msg.localId.length === 0 ||
+			msg.localId.length > MAX_LOCAL_ID_LENGTH ||
+			!LOCAL_ID_RE.test(msg.localId)
+		) {
+			await this.sendError(ws, 'invalid_message', 'Invalid localId');
+			return;
+		}
+		if (msg.replyTo !== undefined && msg.replyTo !== null) {
+			if (typeof msg.replyTo !== 'number' || !Number.isInteger(msg.replyTo) || msg.replyTo <= 0) {
+				await this.sendError(ws, 'invalid_message', 'Invalid replyTo');
+				return;
+			}
+		}
+		if (this.isRateLimited(userId)) {
+			await this.sendError(ws, 'rate_limited', 'Too many messages — slow down');
+			return;
+		}
+		if (
+			this.walMessageCount >= MAX_WAL_MESSAGES ||
+			this.walByteSize >= MAX_WAL_BYTES
+		) {
+			await this.sendError(ws, 'room_full', 'Room buffer full — try again shortly');
+			return;
+		}
+
+		// Enforce one active stream per user
+		for (const [lid, session] of this.activeStreams) {
+			if (session.senderId === userId) {
+				await this.abortStream(lid, 'new_stream_started');
+				break;
+			}
+		}
+
+		// Guard against localId collision with another user's active stream
+		if (this.activeStreams.has(msg.localId)) {
+			await this.sendError(ws, 'invalid_message', 'localId already in use by another stream');
+			return;
+		}
+
+		const timestamp = new Date().toISOString();
+		this.activeStreams.set(msg.localId, {
+			senderId: userId,
+			senderName: name,
+			senderRole: role,
+			orgId,
+			replyTo: msg.replyTo,
+			timestamp,
+			startedAt: Date.now(),
+			accumulatedBytes: 0,
+		});
+
+		await this.broadcast({
+			type: 'stream_start',
+			localId: msg.localId,
+			senderId: userId,
+			senderName: name,
+			senderRole: role,
+			replyTo: msg.replyTo,
+			timestamp,
+		});
+	}
+
+	private async handleStreamDelta(
+		ws: WebSocket,
+		msg: Extract<ClientMessage, { type: 'stream_delta' }>
+	): Promise<void> {
+		const session = this.activeStreams.get(msg.localId);
+		if (!session) return; // Unknown/aborted stream — silently ignore
+
+		const tags = this.ctx.getTags(ws);
+		const userId = this.extractTag(tags, 'user:');
+		if (userId !== session.senderId) return; // Not the stream owner
+
+		const deltaBytes = new TextEncoder().encode(msg.delta ?? '').byteLength;
+		if (typeof msg.delta !== 'string' || deltaBytes > MAX_STREAM_DELTA_SIZE) {
+			await this.abortStream(msg.localId, 'delta_too_large');
+			return;
+		}
+
+		session.accumulatedBytes += deltaBytes;
+		if (session.accumulatedBytes > MAX_STREAM_BODY_SIZE) {
+			await this.abortStream(msg.localId, 'body_too_large');
+			return;
+		}
+
+		await this.broadcast({ type: 'stream_delta', localId: msg.localId, delta: msg.delta });
+	}
+
+	private async handleStreamEnd(
+		ws: WebSocket,
+		msg: Extract<ClientMessage, { type: 'stream_end' }>
+	): Promise<void> {
+		const session = this.activeStreams.get(msg.localId);
+		if (!session) return; // Unknown/aborted stream — silently ignore
+
+		const tags = this.ctx.getTags(ws);
+		const userId = this.extractTag(tags, 'user:');
+		if (userId !== session.senderId) return; // Not the stream owner
+
+		this.activeStreams.delete(msg.localId);
+
+		if (!msg.body || typeof msg.body !== 'string') {
+			return; // Empty body — nothing to commit
+		}
+
+		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
+		if (bodyBytes > MAX_BODY_SIZE) {
+			// Body too large to commit — already sent deltas though, so abort
+			await this.broadcast({ type: 'stream_abort', localId: msg.localId, reason: 'body_too_large' });
+			return;
+		}
+
+		// Commit via the same WAL path as handleChatMessage
+		const seqId = this.nextLocalId++;
+
+		const stored: StoredMessage = {
+			localId: msg.localId,
+			orgId: session.orgId,
+			senderId: session.senderId,
+			senderRole: session.senderRole,
+			senderName: session.senderName,
+			body: msg.body,
+			replyTo: session.replyTo,
+			timestamp: session.timestamp,
+			flushed: false,
+		};
+
+		const entrySize = measureBytes(stored);
+		this.unflushedIds.push(seqId);
+		this.walMessageCount++;
+		this.walByteSize += entrySize;
+
+		await this.ctx.storage.put({
+			[storageKey(seqId)]: stored,
+			'meta:nextId': this.nextLocalId,
+			'meta:walByteSize': this.walByteSize,
+			'meta:walMessageCount': this.walMessageCount,
+			'meta:unflushedIds': this.unflushedIds,
+		});
+
+		const payload: ServerMessagePayload = {
+			localId: msg.localId,
+			serverSeqId: seqId,
+			senderId: session.senderId,
+			senderRole: session.senderRole,
+			senderName: session.senderName,
+			body: msg.body,
+			replyTo: session.replyTo,
+			timestamp: session.timestamp,
+		};
+
+		await this.broadcast({ type: 'message', message: payload });
+
+		// Schedule flush (same logic as handleChatMessage)
+		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (existing) await this.ctx.storage.deleteAlarm();
+			await this.ctx.storage.setAlarm(Date.now());
+		} else if (this.unflushedIds.length === 1) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (!existing) {
+				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+			}
+		}
+	}
+
+	private async abortStream(localId: string, reason: string): Promise<void> {
+		this.activeStreams.delete(localId);
+		await this.broadcast({ type: 'stream_abort', localId, reason });
+	}
+
 	// ── REST Ingest (for MCP chat_send) ──────────────────────────────
 	// Trust boundary: verified via X-Internal-Secret header (shared HMAC_SIGNING_SECRET).
 	// The calling code authenticates the agent via API key before invoking this endpoint.
