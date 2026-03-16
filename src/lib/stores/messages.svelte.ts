@@ -53,7 +53,7 @@ export class MessagesStore {
 	private lastTypingSent = 0;
 	private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-	private streamingMessages = new Map<string, number>(); // localId → index in messages array
+	private streamingMessages = new Set<string>(); // localId set of active streams
 	private systemEventCounter = 0;
 
 	constructor(
@@ -137,9 +137,10 @@ export class MessagesStore {
 
 	private handleMessage(payload: ServerMessagePayload): void {
 		// Finalize streaming message — replace placeholder with confirmed version
-		const streamIdx = this.streamingMessages.get(payload.localId);
-		if (streamIdx !== undefined) {
+		if (this.streamingMessages.has(payload.localId)) {
 			this.streamingMessages.delete(payload.localId);
+			const streamIdx = this.messages.findIndex((m) => m.localId === payload.localId);
+			if (streamIdx === -1) return;
 			this.messages[streamIdx] = {
 				localId: payload.localId,
 				serverSeqId: payload.serverSeqId,
@@ -330,26 +331,26 @@ export class MessagesStore {
 			streaming: true,
 		};
 		this.messages.push(display);
-		this.streamingMessages.set(msg.localId, this.messages.length - 1);
+		this.streamingMessages.add(msg.localId);
 
 		// Suppress typing indicator for this sender
 		this.handleTyping(msg.senderId, msg.senderName, false);
 	}
 
 	private handleStreamDelta(msg: Extract<ServerMessage, { type: 'stream_delta' }>): void {
-		const idx = this.streamingMessages.get(msg.localId);
-		if (idx === undefined) return;
+		if (!this.streamingMessages.has(msg.localId)) return;
+		const idx = this.messages.findIndex((m) => m.localId === msg.localId);
+		if (idx === -1) return;
 		const dm = this.messages[idx];
-		if (!dm) return;
 		// Index assignment with spread triggers Svelte 5 $state reactivity
 		this.messages[idx] = { ...dm, body: dm.body + msg.delta };
 	}
 
 	private handleStreamAbort(msg: Extract<ServerMessage, { type: 'stream_abort' }>): void {
-		const idx = this.streamingMessages.get(msg.localId);
-		if (idx === undefined) return;
+		if (!this.streamingMessages.has(msg.localId)) return;
+		const idx = this.messages.findIndex((m) => m.localId === msg.localId);
+		if (idx === -1) return;
 		const dm = this.messages[idx];
-		if (!dm) return;
 		this.messages[idx] = { ...dm, streaming: false, failed: true };
 		this.streamingMessages.delete(msg.localId);
 	}

@@ -356,10 +356,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			const tags = this.ctx.getTags(ws);
 			const userId = this.extractTag(tags, 'user:');
 			if (userId) {
+				const toAbort: string[] = [];
 				for (const [lid, session] of this.activeStreams) {
 					if (session.senderId === userId) {
-						await this.abortStream(lid, 'client_disconnected');
+						toAbort.push(lid);
 					}
+				}
+				for (const lid of toAbort) {
+					await this.abortStream(lid, 'client_disconnected');
 				}
 			}
 		} catch { /* socket may already be dead */ }
@@ -371,10 +375,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			const tags = this.ctx.getTags(ws);
 			const userId = this.extractTag(tags, 'user:');
 			if (userId) {
+				const toAbort: string[] = [];
 				for (const [lid, session] of this.activeStreams) {
 					if (session.senderId === userId) {
-						await this.abortStream(lid, 'client_disconnected');
+						toAbort.push(lid);
 					}
+				}
+				for (const lid of toAbort) {
+					await this.abortStream(lid, 'client_disconnected');
 				}
 			}
 		} catch { /* socket may already be dead */ }
@@ -386,10 +394,14 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	async alarm(): Promise<void> {
 		// Abort stale streams (agent may have crashed without disconnecting)
 		const now = Date.now();
+		const staleStreams: string[] = [];
 		for (const [lid, session] of this.activeStreams) {
 			if (now - session.startedAt > STREAM_TIMEOUT_MS) {
-				await this.abortStream(lid, 'stream_timeout');
+				staleStreams.push(lid);
 			}
+		}
+		for (const lid of staleStreams) {
+			await this.abortStream(lid, 'stream_timeout');
 		}
 
 		// Flush read cursors and pending edits even if no WAL messages
