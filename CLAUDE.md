@@ -22,6 +22,9 @@ Feature plan: `docs/001-Features.md`
 | Real-time | Durable Objects (WebSocket Hibernation API) |
 | File storage | Cloudflare R2 |
 | Session cache | Cloudflare KV |
+| Embeddings | Workers AI (BGE-base-en-v1.5, 768-dim) |
+| Vector search | Cloudflare Vectorize |
+| Document parsing | unpdf (PDF), @kreuzberg/wasm (DOCX/XLSX/PPTX) |
 | CSS | Tailwind v4 |
 
 ## Commands
@@ -58,12 +61,19 @@ SvelteKit (adapter-cloudflare)
   +-- Drizzle → Hyperdrive → Aiven PostgreSQL
 
 Durable Object (per-room instance, same Worker)
-  +-- WebSocket: real-time messages, typing, presence
+  +-- WebSocket: real-time messages, typing, presence, streaming
   +-- Transactional storage as WAL (crash-safe buffer)
   +-- Batch flush to DB every 500ms or 10 messages
+  +-- Stream handlers: stream_start/delta/end with ephemeral activeStreams map
 
 R2 (file storage)
-  +-- Namespaced: {org_id}/{message_id}/{filename}
+  +-- Namespaced: {org_id}/{timestamp}-{filename}
+
+RAG Pipeline (async, via ctx.waitUntil)
+  +-- Extract: unpdf (PDF), Kreuzberg WASM (DOCX/XLSX/PPTX), TextDecoder (text types)
+  +-- Chunk: 500-word windows, 50-word overlap, char offsets
+  +-- Embed: Workers AI BGE-base-en-v1.5 (768-dim) → Vectorize upsert
+  +-- Search: Vectorize query with org filter + DB chunk join
 ```
 
 ### Key Files
@@ -76,10 +86,15 @@ R2 (file storage)
 | `src/lib/server/db/hyperdrive.ts` | Hyperdrive connection (production) |
 | `src/lib/server/db/direct.ts` | Direct pg.Pool (local dev) |
 | `src/lib/server/email.ts` | Resend API email sending |
-| `src/lib/server/chat-room.ts` | Durable Object stub |
+| `src/lib/server/chat-room.ts` | Durable Object (WS routing, WAL, streaming, flush) |
+| `src/lib/server/rag/process-document.ts` | Async RAG pipeline (extract → chunk → embed → index) |
+| `src/lib/server/rag/kreuzberg-provider.ts` | Extraction provider (unpdf for PDF, Kreuzberg for Office, TextDecoder for text) |
+| `src/lib/stores/messages.svelte.ts` | Reactive chat state (messages, typing, presence, streaming) |
+| `src/lib/types/ws.ts` | WebSocket protocol types (ClientMessage, ServerMessage unions) |
 | `src/lib/auth-client.ts` | Client-side Better Auth |
+| `worker-entry.ts` | Cloudflare Worker entry (Kreuzberg WASM init, cron, DO binding) |
 | `src/routes/login/+page.svelte` | Email OTP login page |
-| `src/routes/chat/+page.svelte` | Chat placeholder |
+| `src/routes/chat/+page.svelte` | Chat page |
 
 ## Coding Patterns
 
@@ -110,6 +125,25 @@ R2 (file storage)
 - CSS custom properties via `var(--accent)` etc.
 - Dark theme only (industrial forge aesthetic)
 
+### Streaming (Agent Responses)
+
+- Agents stream text deltas via WS: `stream_start` → N × `stream_delta` → `stream_end`
+- DO holds ephemeral `activeStreams` map (not persisted to WAL — transient)
+- `stream_end` commits final body to WAL via the same path as regular messages
+- Browser accumulates deltas in `MessagesStore` using index assignment (Svelte 5 reactivity)
+- `MessageBubble` throttles markdown re-rendering to every 150ms during streaming
+- Stream timeout: 2 minutes (abort stale streams in alarm handler)
+- Disconnect mid-stream: DO aborts and broadcasts `stream_abort`
+
+### Document Intelligence (RAG)
+
+- Extraction: unpdf (PDF), Kreuzberg WASM (DOCX/XLSX/PPTX), TextDecoder (text/HTML/JSON/YAML/XML)
+- Kreuzberg WASM initialized manually in `worker-entry.ts` (not via `initWasm()` — it fails on Workers)
+- Worker size: ~9.3 MB gzipped (10 MB limit) — Kreuzberg WASM is ~7.5 MB
+- Cron (every 5 min): stuck job cleanup, pending dispatch, failed retry with backoff
+- `doc_search` MCP tool: agent-facing semantic search with citation support
+- See `docs/018-Document-Intelligence.md` for full reference
+
 ### Database
 
 - BIGSERIAL for message IDs (not UUIDs)
@@ -120,7 +154,18 @@ R2 (file storage)
 ## Configuration
 
 - `.dev.vars` — Environment variables (not committed)
-- `wrangler.toml` — Cloudflare Workers config
+- `wrangler.toml` — Cloudflare Workers config (bindings: AI, VECTORIZE, STORAGE, HYPERDRIVE, CHAT_ROOM)
 - `drizzle.config.ts` — Drizzle ORM config
 - `capacitor.config.ts` — Capacitor mobile config
 - `project.inlang/settings.json` — Paraglide i18n config
+
+## Deployment
+
+- **NEVER run `pnpm cf:deploy` directly** — always commit and push to `main`; CI/CD handles deployment
+- Vectorize metadata index must be created before first document upload: `npx wrangler vectorize create-metadata-index martol-docs --property-name orgId --type string`
+- Monitor Worker gzipped size — currently ~9.3 MB of 10 MB limit
+
+## Related Repos
+
+- `martol-client` — Python agent wrapper (WebSocket + MCP + LLM providers with streaming)
+- See `docs/019-Streaming-Agent-Responses.md` for the streaming architecture
