@@ -12,13 +12,17 @@ import { roomConfig } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { ensureRagUser } from '$lib/server/rag/system-user';
+import { checkOrgLimits } from '$lib/server/feature-gates';
 
 const DEFAULTS = {
 	ragEnabled: false,
 	ragModel: '@cf/meta/llama-3.1-8b-instruct',
 	ragTemperature: 0.3,
 	ragMaxTokens: 2048,
-	ragTrigger: 'explicit' as const
+	ragTrigger: 'explicit' as const,
+	ragProvider: 'workers_ai' as const,
+	ragBaseUrl: null as string | null,
+	ragApiKeyId: null as string | null
 };
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -52,7 +56,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			ragModel: config.ragModel,
 			ragTemperature: config.ragTemperature,
 			ragMaxTokens: config.ragMaxTokens,
-			ragTrigger: config.ragTrigger
+			ragTrigger: config.ragTrigger,
+			ragProvider: config.ragProvider ?? DEFAULTS.ragProvider,
+			ragBaseUrl: config.ragBaseUrl ?? DEFAULTS.ragBaseUrl,
+			ragApiKeyId: config.ragApiKeyId ?? DEFAULTS.ragApiKeyId
 		}
 	});
 };
@@ -62,7 +69,10 @@ const patchSchema = z.object({
 	ragModel: z.string().max(200).optional(),
 	ragTemperature: z.number().min(0).max(2).optional(),
 	ragMaxTokens: z.number().int().min(100).max(8192).optional(),
-	ragTrigger: z.enum(['explicit', 'always']).optional()
+	ragTrigger: z.enum(['explicit', 'always']).optional(),
+	ragProvider: z.enum(['workers_ai', 'openai']).optional(),
+	ragBaseUrl: z.string().url().max(500).optional().nullable(),
+	ragApiKeyId: z.string().max(100).optional().nullable()
 });
 
 export const PATCH: RequestHandler = async ({ params, request, locals, platform }) => {
@@ -95,8 +105,28 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 	}
 	const body = parsed.data;
 
-	// TODO: If ragTrigger === 'always', check that the room creator has Pro plan.
-	// For now, skip this check — billing integration pending.
+	// Validate base URL if provided (SSRF protection)
+	if (body.ragBaseUrl) {
+		const { validateBaseUrl } = await import('$lib/server/rag/responder');
+		if (!validateBaseUrl(body.ragBaseUrl)) {
+			error(400, 'Invalid base URL: must be HTTPS and not a private/internal address');
+		}
+	}
+
+	// Pro-only enforcement: "always" trigger requires Pro plan on the org
+	if (body.ragTrigger === 'always') {
+		try {
+			const orgLimits = await checkOrgLimits(locals.db, orgId, locals.user.id);
+			if (orgLimits.plan !== 'pro') {
+				error(403, 'The "every message" trigger mode requires a Pro subscription');
+			}
+		} catch (e) {
+			// Re-throw SvelteKit errors (from error() helper)
+			if (e && typeof e === 'object' && 'status' in e) throw e;
+			// If billing check fails, reject to be safe
+			error(403, 'Unable to verify subscription status — "every message" trigger requires Pro');
+		}
+	}
 
 	// Read existing config for merge and DO notification
 	const [existing] = await locals.db
@@ -110,7 +140,10 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 		ragModel: body.ragModel ?? existing?.ragModel ?? DEFAULTS.ragModel,
 		ragTemperature: body.ragTemperature ?? existing?.ragTemperature ?? DEFAULTS.ragTemperature,
 		ragMaxTokens: body.ragMaxTokens ?? existing?.ragMaxTokens ?? DEFAULTS.ragMaxTokens,
-		ragTrigger: body.ragTrigger ?? existing?.ragTrigger ?? DEFAULTS.ragTrigger
+		ragTrigger: body.ragTrigger ?? existing?.ragTrigger ?? DEFAULTS.ragTrigger,
+		ragProvider: body.ragProvider ?? existing?.ragProvider ?? DEFAULTS.ragProvider,
+		ragBaseUrl: body.ragBaseUrl !== undefined ? body.ragBaseUrl : (existing?.ragBaseUrl ?? DEFAULTS.ragBaseUrl),
+		ragApiKeyId: body.ragApiKeyId !== undefined ? body.ragApiKeyId : (existing?.ragApiKeyId ?? DEFAULTS.ragApiKeyId)
 	};
 
 	// Upsert: INSERT ... ON CONFLICT UPDATE
@@ -123,6 +156,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 			ragTemperature: merged.ragTemperature,
 			ragMaxTokens: merged.ragMaxTokens,
 			ragTrigger: merged.ragTrigger,
+			ragProvider: merged.ragProvider,
+			ragBaseUrl: merged.ragBaseUrl,
+			ragApiKeyId: merged.ragApiKeyId,
 			updatedAt: new Date(),
 			updatedBy: locals.user.id
 		})
@@ -134,6 +170,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 				ragTemperature: merged.ragTemperature,
 				ragMaxTokens: merged.ragMaxTokens,
 				ragTrigger: merged.ragTrigger,
+				ragProvider: merged.ragProvider,
+				ragBaseUrl: merged.ragBaseUrl,
+				ragApiKeyId: merged.ragApiKeyId,
 				updatedAt: new Date(),
 				updatedBy: locals.user.id
 			}

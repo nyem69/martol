@@ -613,11 +613,18 @@ export const roomConfig = pgTable(
 			.notNull()
 			.default('explicit')
 			.$type<'explicit' | 'always'>(),
+		ragProvider: text('rag_provider')
+			.notNull()
+			.default('workers_ai')
+			.$type<'workers_ai' | 'openai'>(),
+		ragBaseUrl: text('rag_base_url'),
+		ragApiKeyId: text('rag_api_key_id'),
 		updatedAt: timestamp('updated_at').notNull().defaultNow(),
 		updatedBy: text('updated_by').references(() => user.id)
 	},
 	(table) => [
-		check('chk_rag_trigger', sql`rag_trigger IN ('explicit', 'always')`)
+		check('chk_rag_trigger', sql`rag_trigger IN ('explicit', 'always')`),
+		check('chk_rag_provider', sql`rag_provider IN ('workers_ai', 'openai')`)
 	]
 );
 

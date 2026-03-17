@@ -26,6 +26,7 @@
     "cap:android": "CAPACITOR=true vite build && cap sync && cap open android"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.41",
     "@better-auth/api-key": "^1.5.3",
     "@better-auth/drizzle-adapter": "^1.5.3",
     "@better-auth/passkey": "^1.5.3",

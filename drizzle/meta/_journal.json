@@ -169,6 +169,13 @@
       "when": 1773724356376,
       "tag": "0023_lonely_dark_phoenix",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1773728319979,
+      "tag": "0024_dapper_blazing_skull",
+      "breakpoints": true
     }
   ]
 }

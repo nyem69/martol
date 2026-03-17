@@ -1337,14 +1337,25 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			await connectPromise;
 
 			try {
-				// 2a. Check spending cap before LLM call
+				// 2a. Resolve API key for external providers
+			let apiKey: string | undefined;
+			if (config.ragProvider === 'openai' && config.ragApiKeyId) {
+				apiKey = await this.env.CACHE?.get(`rag-key:${config.ragApiKeyId}`) ?? undefined;
+				if (!apiKey) {
+					await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
+						'API key not found. Please reconfigure the RAG provider in room settings.', timestamp);
+					return;
+				}
+			}
+
+			// 2c. Check spending cap before LLM call
 				if (await isAiCapReached(db, orgId)) {
 					await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
 						'Daily AI limit reached. Upgrade to Pro for more.', timestamp);
 					return;
 				}
 
-				// 2b. Search documents
+				// 2d. Search documents
 				const chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 5);
 
 				if (chunks.length === 0) {
@@ -1359,7 +1370,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const prompt = buildUserPrompt(question, chunks);
 
 				// 4. Create model and stream (dynamic import to avoid loading AI SDK for every DO)
-				const model = createRagModel(config.ragModel, this.env.AI);
+				const model = createRagModel(config, this.env.AI, apiKey);
 
 				const { streamText } = await import('ai');
 				const result = streamText({

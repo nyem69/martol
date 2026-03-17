@@ -11,9 +11,11 @@
 		userName,
 		userRole,
 		onlineCount,
+		ragEnabled = false,
 		onToggleMembers,
 		onShowBrief,
-		onToggleDocuments
+		onToggleDocuments,
+		onShowRagConfig
 	}: {
 		roomName: string;
 		roomId: string;
@@ -21,9 +23,11 @@
 		userName: string;
 		userRole: string;
 		onlineCount: number;
+		ragEnabled?: boolean;
 		onToggleMembers: () => void;
 		onShowBrief: () => void;
 		onToggleDocuments: () => void;
+		onShowRagConfig: () => void;
 	} = $props();
 
 	// Derive displayed name from rooms array so it updates after rename + invalidateAll
@@ -316,6 +320,16 @@
 			<FileText size={15} />
 			<span class="hidden md:inline" style="font-family: var(--font-mono);">Docs</span>
 		</button>
+		{#if ragEnabled}
+			<button
+				class="rag-pill rounded-full px-2 py-0.5 text-[9px] uppercase transition-opacity hover:opacity-80"
+				style="background: color-mix(in oklch, var(--warning) 12%, transparent); color: var(--warning); font-family: var(--font-mono);"
+				onclick={onShowRagConfig}
+				data-testid="header-rag-indicator"
+			>
+				{m.rag_active()}
+			</button>
+		{/if}
 		{#if onlineCount > 0}
 			<div class="flex items-center gap-1 sm:gap-1.5" aria-live="polite">
 				<span

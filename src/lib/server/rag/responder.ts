@@ -6,6 +6,7 @@
  */
 
 import { createWorkersAI } from 'workers-ai-provider';
+import { createOpenAI } from '@ai-sdk/openai';
 
 export interface RagConfig {
 	ragEnabled: boolean;
@@ -13,6 +14,9 @@ export interface RagConfig {
 	ragTemperature: number;
 	ragMaxTokens: number;
 	ragTrigger: 'explicit' | 'always';
+	ragProvider: 'workers_ai' | 'openai';
+	ragBaseUrl?: string;
+	ragApiKeyId?: string;
 }
 
 /**
@@ -103,13 +107,49 @@ ${question}`;
 }
 
 /**
- * Create a Workers AI model instance via the Vercel AI SDK.
+ * Create an AI model instance via the Vercel AI SDK.
  *
- * @param ragModel - Model identifier (e.g. '@cf/meta/llama-3.1-8b-instruct')
+ * Supports Workers AI (default) and OpenAI-compatible providers.
+ *
+ * @param config - RAG configuration with provider details
  * @param ai - The Workers AI binding (env.AI)
+ * @param apiKey - Optional API key for external providers (resolved from KV)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createRagModel(ragModel: string, ai: any) {
+export function createRagModel(config: RagConfig, ai: any, apiKey?: string) {
+	if (config.ragProvider === 'openai' && apiKey) {
+		const openai = createOpenAI({
+			baseURL: config.ragBaseUrl || 'https://api.openai.com/v1',
+			apiKey,
+		});
+		return openai(config.ragModel || 'gpt-4o-mini');
+	}
+	// Default: Workers AI
 	const workersai = createWorkersAI({ binding: ai });
-	return workersai(ragModel || '@cf/meta/llama-3.1-8b-instruct');
+	return workersai(config.ragModel || '@cf/meta/llama-3.1-8b-instruct');
+}
+
+/**
+ * Validate a base URL for external AI providers.
+ *
+ * Ensures the URL is HTTPS (localhost exempted for dev) and blocks
+ * private/internal IP addresses to prevent SSRF attacks.
+ */
+export function validateBaseUrl(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		// Must be HTTPS (except localhost for dev)
+		if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost') return false;
+		// Block private IPs
+		const host = parsed.hostname;
+		if (host === '169.254.169.254') return false; // Cloud metadata
+		if (host.startsWith('10.')) return false;
+		if (host.startsWith('172.') && parseInt(host.split('.')[1]) >= 16 && parseInt(host.split('.')[1]) <= 31) return false;
+		if (host.startsWith('192.168.')) return false;
+		if (host === '127.0.0.1' || host === '0.0.0.0') return false;
+		if (host === '[::1]') return false;
+		return true;
+	} catch {
+		return false;
+	}
 }

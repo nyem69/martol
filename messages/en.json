@@ -459,5 +459,22 @@
   "rag_active": "Docs AI active",
   "rag_config_title": "Document AI",
   "rag_config_enable": "Enable Docs AI",
-  "rag_disabled_ask": "Docs AI is not enabled in this room. Ask a room owner to enable it in settings."
+  "rag_disabled_ask": "Docs AI is not enabled in this room. Ask a room owner to enable it in settings.",
+  "rag_config_provider": "Provider",
+  "rag_config_provider_workers_ai": "Workers AI (free)",
+  "rag_config_provider_openai": "OpenAI Compatible",
+  "rag_config_model": "Model",
+  "rag_config_base_url": "Base URL",
+  "rag_config_api_key": "API Key",
+  "rag_config_api_key_set": "Key configured",
+  "rag_config_api_key_none": "No API key set",
+  "rag_config_temperature": "Temperature",
+  "rag_config_max_tokens": "Max tokens",
+  "rag_config_trigger": "Trigger mode",
+  "rag_config_trigger_explicit": "On /ask and @docs only",
+  "rag_config_trigger_always": "Every message (Pro only)",
+  "rag_config_save": "Save",
+  "rag_config_saving": "Saving...",
+  "rag_config_saved": "Saved",
+  "rag_config_error": "Failed to save configuration"
 }

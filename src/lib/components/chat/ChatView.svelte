@@ -10,6 +10,7 @@
 	import MemberPanel from './MemberPanel.svelte';
 	import DocumentPanel from './DocumentPanel.svelte';
 	import BriefModal from './BriefModal.svelte';
+	import RagConfigModal from './RagConfigModal.svelte';
 	import AIDisclosureModal from './AIDisclosureModal.svelte';
 	import ReportModal from './ReportModal.svelte';
 	import OnlineBar from './OnlineBar.svelte';
@@ -91,6 +92,19 @@
 	let uploadFilename = $state('');
 	let showUpgradeModal = $state(false);
 	let upgradeWasCanceled = $state(false);
+	let ragConfigModalOpen = $state(false);
+	let ragConfigData = $state<any>(null);
+
+	async function openRagConfigModal() {
+		try {
+			const res = await fetch(`/api/rooms/${roomId}/rag-config`);
+			const result: { ok?: boolean; config?: Record<string, unknown> } = await res.json();
+			if (result.ok) {
+				ragConfigData = result.config;
+				ragConfigModalOpen = true;
+			}
+		} catch { /* ignore */ }
+	}
 
 	// [I11] All members see action cards; only owner/lead get approve/reject buttons
 	const canApproveActions = userRole === 'owner' || userRole === 'lead';
@@ -317,9 +331,11 @@
 			{userName}
 			{userRole}
 			onlineCount={store.onlineUsers.size}
+			ragEnabled={store.ragEnabled}
 			onToggleMembers={() => (memberPanelOpen = !memberPanelOpen)}
 			onShowBrief={openBriefModal}
 			onToggleDocuments={() => (documentPanelOpen = !documentPanelOpen)}
+			onShowRagConfig={openRagConfigModal}
 		/>
 
 		<OnlineBar
@@ -422,6 +438,20 @@
 
 {#if showUpgradeModal}
 	<UpgradeModal wasCanceled={upgradeWasCanceled} onClose={() => (showUpgradeModal = false)} />
+{/if}
+
+{#if ragConfigModalOpen && ragConfigData}
+	<RagConfigModal
+		{roomId}
+		ragConfig={ragConfigData}
+		{userRole}
+		onClose={() => { ragConfigModalOpen = false; ragConfigData = null; }}
+		onSave={(result) => {
+			if (result.config) {
+				store.ragEnabled = result.config.ragEnabled;
+			}
+		}}
+	/>
 {/if}
 
 {#if briefModalData}
