@@ -519,12 +519,12 @@ export const roomConfig = pgTable('room_config', {
 - [x] Config UI: RagConfigModal with provider selector, model input, API key status
 - [x] BYOK cost model: rate limit only for external keys (TODO: skip spending cap for BYOK)
 
-### Phase 5 — Hardening + polish ✅ (partial)
+### Phase 5 — Hardening + polish ✅
 
-- [ ] Usage indicator in RAG config panel ("X/Y responses used today") — future
+- [x] Usage indicator in RAG config modal ("X / 150 this month")
 - [x] "Beta" label on RAG responses (shipped in Phase 2)
-- [ ] Concurrent response handling — future (existing activeStreams may conflict)
-- [ ] Document deletion: verify Vectorize vector cleanup cascade — manual test
+- [x] Concurrent response handling (`ragResponseActive` mutex per DO)
+- [x] Document deletion: Vectorize vector cleanup in cron orphan job (was missing)
 - [ ] Monitor Workers AI neuron consumption at account level — ops
 - [ ] Load test: 10 concurrent rooms with RAG active — ops
 
