@@ -419,6 +419,30 @@ const worker = {
 			console.error('[Cron] IP/UA purge failed:', err);
 		}
 
+		// Check AI neuron usage — log warning if approaching daily free tier limit (10K neurons)
+		try {
+			const { aiUsage } = await import('./src/lib/server/db/schema');
+			const cronToday = new Date().toISOString().slice(0, 10);
+			const [llmUsage] = await db
+				.select({ total: sql<number>`sum(${aiUsage.count})` })
+				.from(aiUsage)
+				.where(and(
+					eq(aiUsage.operation, 'llm_generation'),
+					eq(aiUsage.periodStart, cronToday)
+				));
+
+			const llmCount = llmUsage?.total ?? 0;
+			const estimatedNeurons = llmCount * 3000; // ~3K neurons per Llama 8B call
+
+			if (estimatedNeurons > 8000) {
+				console.warn(`[Cron] NEURON WARNING: ~${estimatedNeurons} neurons used today (${llmCount} LLM calls). Limit: 10,000`);
+			} else if (estimatedNeurons > 5000) {
+				console.log(`[Cron] Neuron usage: ~${estimatedNeurons}/10,000 (${llmCount} LLM calls)`);
+			}
+		} catch (err) {
+			console.error('[Cron] Neuron check failed:', err);
+		}
+
 		try { await client.end(); } catch { /* already closed */ }
 	}
 };
