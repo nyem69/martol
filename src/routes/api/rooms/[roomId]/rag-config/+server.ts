@@ -183,11 +183,22 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 		await ensureRagUser(locals.db, orgId);
 	}
 
-	// Broadcast config change to connected WebSocket clients
+	// Push full RAG config to the Durable Object (sets this.ragConfig for trigger checks)
+	// AND broadcast config change to connected WebSocket clients
 	if (platform?.env?.CHAT_ROOM && platform?.env?.HMAC_SIGNING_SECRET) {
 		try {
 			const doId = platform.env.CHAT_ROOM.idFromName(orgId);
 			const stub = platform.env.CHAT_ROOM.get(doId);
+			// 1. Push full config to DO (enables/disables RAG trigger in handleChatMessage)
+			await stub.fetch(new Request('https://do/notify-rag-config', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET
+				},
+				body: JSON.stringify(merged)
+			}));
+			// 2. Broadcast change to WS clients (updates UI pill/state)
 			await stub.fetch(new Request('https://do/notify-config', {
 				method: 'POST',
 				headers: {
@@ -197,7 +208,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 				body: JSON.stringify({ field: 'rag_enabled', value: merged.ragEnabled, changedBy: locals.user!.id })
 			}));
 		} catch {
-			// Non-critical — client will see update on next page load
+			// Non-critical — DO will be notified on next config change or restart
 		}
 	}
 

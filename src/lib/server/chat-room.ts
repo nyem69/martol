@@ -642,6 +642,37 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		}
 
 		// RAG responder trigger check (non-blocking, after broadcast so user sees their message)
+		// Lazy-load config from DB if not yet pushed via /notify-rag-config (e.g., after DO hibernation)
+		if (!this.ragConfig && orgId && (msg.body.startsWith('/ask ') || msg.body.includes('@docs'))) {
+			try {
+				const { roomConfig: roomConfigTable } = await import('./db/schema');
+				const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
+				await connectPromise;
+				try {
+					const [row] = await db
+						.select()
+						.from(roomConfigTable)
+						.where(eq(roomConfigTable.orgId, orgId))
+						.limit(1);
+					if (row) {
+						this.ragConfig = {
+							ragEnabled: row.ragEnabled,
+							ragModel: row.ragModel,
+							ragTemperature: row.ragTemperature,
+							ragMaxTokens: row.ragMaxTokens,
+							ragTrigger: row.ragTrigger as 'explicit' | 'always',
+							ragProvider: (row.ragProvider ?? 'workers_ai') as 'workers_ai' | 'openai',
+							ragBaseUrl: row.ragBaseUrl ?? undefined,
+							ragApiKeyId: row.ragApiKeyId ?? undefined,
+						};
+					}
+				} finally {
+					await client.end();
+				}
+			} catch (err) {
+				console.error('[ChatRoom] Failed to lazy-load RAG config:', err);
+			}
+		}
 		if (this.ragConfig?.ragEnabled && shouldRespond(msg.body, true, this.ragConfig.ragTrigger)) {
 			if (!this.isRagRateLimited(userId, this.ragConfig.ragTrigger)) {
 				this.ctx.waitUntil(this.runRagResponse(orgId, msg.body, this.ragConfig).catch(err => {
