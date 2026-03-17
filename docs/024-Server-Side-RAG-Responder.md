@@ -24,17 +24,26 @@ For a user who just wants document Q&A, this is too much friction. The RAG pipel
 
 ## Architecture
 
-**Server-side LLM call via Workers AI or user-provided OpenAI-compatible endpoint, streamed through the existing DO WebSocket path.**
+**Vercel AI SDK (`ai` + `workers-ai-provider`) as the unified LLM abstraction, streamed through the existing DO WebSocket path.**
 
 ```
 User sends message (no agent connected)
   → SvelteKit hook detects "no agent, RAG enabled"
   → doc_search: embed query → Vectorize → get chunks
   → Build prompt: system + chunks + user question
-  → Call LLM (Workers AI or external API)
+  → AI SDK streamText() — Workers AI or OpenAI-compatible
   → Stream response via DO: stream_start → N × stream_delta → stream_end
   → Browser renders progressively (existing streaming UI)
 ```
+
+### Why Vercel AI SDK
+
+- **Unified API** — `streamText()` works identically for Workers AI, OpenAI, Anthropic, Ollama, Groq, etc.
+- **No manual SSE parsing** — the SDK handles streaming for all providers
+- **Structured output** — `generateObject()` with Zod for citation extraction
+- **Tool calling** — `doc_search` can be an AI SDK tool (cleaner than manual orchestration)
+- **Edge-compatible** — `workers-ai-provider` is built for Cloudflare Workers
+- **Future-proof** — swap models by changing one string, not rewriting provider code
 
 ### Why Workers AI as default
 
@@ -42,7 +51,7 @@ User sends message (no agent connected)
 - Free tier: 10K neurons/day on most models
 - No API key management for basic use
 - Llama 3.1 8B and Mistral 7B available
-- Fallback: user-provided OpenAI-compatible endpoint for better models
+- Fallback: any AI SDK provider for better models
 
 ### Why not a separate service
 
@@ -51,9 +60,27 @@ User sends message (no agent connected)
 - Streaming uses the existing DO WebSocket infrastructure
 - One deployment, one codebase
 
+## Dependencies
+
+```bash
+pnpm add ai workers-ai-provider
+# For external OpenAI-compatible providers:
+pnpm add @ai-sdk/openai
+```
+
+| Package | Purpose | Size |
+|---|---|---|
+| `ai` | AI SDK core — `streamText`, `generateText`, `generateObject` | ~50 KB |
+| `workers-ai-provider` | Workers AI provider — `createWorkersAI` | ~5 KB |
+| `@ai-sdk/openai` | OpenAI/compatible provider — GPT-4o, Ollama, Groq, etc. | ~15 KB |
+
+**Worker size impact:** ~70 KB gzipped added to the current ~9.3 MB bundle (well within 10 MB limit).
+
 ## LLM Provider Configuration
 
 ### Per-room settings (organization metadata)
+
+**Workers AI (zero-config default):**
 
 ```json
 {
@@ -67,18 +94,33 @@ User sends message (no agent connected)
 }
 ```
 
-Or for an external provider:
+**OpenAI / any compatible endpoint:**
 
 ```json
 {
   "rag_responder": {
     "enabled": true,
-    "provider": "openai_compat",
+    "provider": "openai",
     "model": "gpt-4o-mini",
     "base_url": "https://api.openai.com/v1",
-    "api_key_ref": "env:OPENAI_API_KEY",
+    "api_key_ref": "env:RAG_API_KEY",
     "temperature": 0.3,
     "max_tokens": 4096
+  }
+}
+```
+
+**Ollama (local):**
+
+```json
+{
+  "rag_responder": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "llama3.2",
+    "base_url": "http://localhost:11434/v1",
+    "temperature": 0.3,
+    "max_tokens": 2048
   }
 }
 ```
@@ -89,14 +131,18 @@ Or for an external provider:
 2. **Instance-level default** (env vars `RAG_PROVIDER`, `RAG_MODEL`) — fallback
 3. **Workers AI** with Llama 3.1 8B — zero-config default
 
-### Supported providers
+### Supported providers (via AI SDK)
 
-| Provider | Config key | Notes |
-|---|---|---|
-| Workers AI | `workers_ai` | Default. Free tier. Models: Llama 3.1 8B, Mistral 7B, Gemma 7B |
-| OpenAI | `openai_compat` | GPT-4o, GPT-4o-mini. Requires API key |
-| Ollama | `openai_compat` | Local. `base_url: http://host:11434/v1` |
-| Any OpenAI-compatible | `openai_compat` | vLLM, Together, Groq, etc. |
+| Provider | AI SDK Package | Config `provider` value | Notes |
+|---|---|---|---|
+| Workers AI | `workers-ai-provider` | `workers_ai` | Default. Free tier. Llama, Mistral, Gemma |
+| OpenAI | `@ai-sdk/openai` | `openai` | GPT-4o, GPT-4o-mini |
+| Ollama | `@ai-sdk/openai` | `openai` | Local. Set `base_url` |
+| Groq | `@ai-sdk/openai` | `openai` | Fast inference. Set `base_url` |
+| Together AI | `@ai-sdk/openai` | `openai` | Open models. Set `base_url` |
+| Any OpenAI-compatible | `@ai-sdk/openai` | `openai` | vLLM, LM Studio, etc. |
+
+All providers use the same `streamText()` call — only the model instance differs.
 
 ## Trigger Logic
 
@@ -141,14 +187,132 @@ If `rag_responder.trigger === "always"`, respond to every message (not just ques
 4. /api/rag/respond handler:
    a. doc_search: embed query → Vectorize → top 5 chunks
    b. Build prompt with chunks as context
-   c. Call LLM (Workers AI or external)
+   c. AI SDK streamText() — unified for all providers
    d. Stream response back to DO:
       - POST /stream-start { localId, senderName: "Docs AI" }
-      - POST /stream-delta { localId, delta } (per chunk)
+      - POST /stream-delta { localId, delta } (per chunk from AI SDK)
       - POST /stream-end { localId, body }
 
 5. DO broadcasts stream events to all connected browsers
    → Existing streaming UI renders progressively
+```
+
+## AI SDK Integration
+
+### Model creation (per-request, from room config)
+
+```typescript
+import { streamText } from 'ai';
+import { createWorkersAI } from 'workers-ai-provider';
+import { createOpenAI } from '@ai-sdk/openai';
+
+function createModel(config: RagConfig, env: Env) {
+  switch (config.provider) {
+    case 'workers_ai': {
+      const workersai = createWorkersAI({ binding: env.AI });
+      return workersai(config.model);
+    }
+    case 'openai': {
+      const openai = createOpenAI({
+        baseURL: config.base_url,
+        apiKey: config.api_key_ref?.startsWith('env:')
+          ? env[config.api_key_ref.slice(4)]
+          : config.api_key_ref,
+      });
+      return openai(config.model);
+    }
+    default: {
+      // Fallback to Workers AI
+      const workersai = createWorkersAI({ binding: env.AI });
+      return workersai('@cf/meta/llama-3.1-8b-instruct');
+    }
+  }
+}
+```
+
+### Streaming response generation
+
+```typescript
+async function generateRagResponse(
+  query: string,
+  chunks: DocChunk[],
+  roomName: string,
+  config: RagConfig,
+  env: Env
+): Promise<AsyncIterable<string>> {
+  const model = createModel(config, env);
+
+  const result = streamText({
+    model,
+    system: buildSystemPrompt(roomName),
+    prompt: buildUserPrompt(query, chunks),
+    temperature: config.temperature ?? 0.3,
+    maxTokens: config.max_tokens ?? 2048,
+  });
+
+  return result.textStream;
+}
+```
+
+### Alternative: doc_search as an AI SDK tool
+
+Instead of pre-fetching chunks, let the LLM decide when to search:
+
+```typescript
+import { tool } from 'ai';
+import { z } from 'zod';
+
+const docSearchTool = tool({
+  description: 'Search uploaded documents for relevant information',
+  parameters: z.object({
+    query: z.string().describe('Search query'),
+    top_k: z.number().min(1).max(10).default(5),
+  }),
+  execute: async ({ query, top_k }) => {
+    const results = await searchDocuments(orgId, query, top_k, env);
+    return results.map(r => ({
+      content: r.content,
+      source: r.filename,
+      citation: r.citation,
+    }));
+  },
+});
+
+const result = streamText({
+  model,
+  system: 'You are a document assistant. Use the doc_search tool to find relevant information before answering.',
+  prompt: userQuestion,
+  tools: { doc_search: docSearchTool },
+  maxSteps: 3, // Allow up to 3 tool calls
+});
+```
+
+**Trade-off:** Tool-based approach is more flexible (LLM decides what to search) but costs an extra round-trip. Pre-fetch approach is faster and cheaper for simple Q&A. Start with pre-fetch; add tool-based as an opt-in later.
+
+### Structured citations with generateObject
+
+For extracting structured citations from a response:
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+const citationSchema = z.object({
+  answer: z.string(),
+  citations: z.array(z.object({
+    filename: z.string(),
+    chunk_index: z.number(),
+    relevance: z.enum(['high', 'medium', 'low']),
+  })),
+  confidence: z.enum(['high', 'medium', 'low']),
+});
+
+// Use for non-streaming structured responses
+const result = await generateObject({
+  model,
+  schema: citationSchema,
+  prompt: buildPrompt(query, chunks),
+});
 ```
 
 ## Prompt Template
@@ -157,7 +321,7 @@ If `rag_responder.trigger === "always"`, respond to every message (not just ques
 You are a document assistant for the "{room_name}" workspace.
 Answer questions based ONLY on the provided document excerpts.
 If the answer is not in the documents, say so clearly.
-Always cite sources using the provided citation format.
+Always cite sources using [📄 filename] format.
 
 ## Document Excerpts
 
@@ -185,25 +349,21 @@ The system uses a microservices architecture with...
 Main orchestrator:
 
 - `shouldRespond(orgId, message, ragConfig, hasAgents)` — trigger logic
-- `generateResponse(orgId, query, ragConfig, env)` — async generator yielding string deltas
-- `buildPrompt(query, chunks, roomName)` — assemble system + context + question
-- `callWorkersAI(prompt, config, env)` — Workers AI text generation
-- `callOpenAICompat(prompt, config)` — fetch-based OpenAI streaming
+- `generateResponse(orgId, query, ragConfig, env)` — uses AI SDK `streamText()`, returns `textStream`
+- `createModel(config, env)` — creates AI SDK model from room config
+- `buildSystemPrompt(roomName)` — system prompt with grounding rules
+- `buildUserPrompt(query, chunks)` — user question with chunk context
 
-### `src/lib/server/rag/responder-providers.ts` (new)
-
-LLM provider abstraction (server-side):
-
-- `WorkersAIProvider` — uses `env.AI.run()` with streaming
-- `OpenAICompatProvider` — uses `fetch()` to OpenAI-compatible endpoints with SSE parsing
+**No manual SSE parsing.** The AI SDK handles all provider-specific streaming protocols internally.
 
 ### `src/routes/api/rag/respond/+server.ts` (new)
 
 Internal-only POST endpoint (called by DO via `ctx.waitUntil`):
 
 - Validates `X-Internal-Secret`
-- Runs doc_search
-- Calls LLM
+- Runs doc_search (existing `searchDocuments()`)
+- Creates model from config via `createModel()`
+- Calls `streamText()` — iterates `textStream`
 - Streams response back to DO via `/stream-start`, `/stream-delta`, `/stream-end`
 
 ### `src/lib/server/chat-room.ts` (modified)
@@ -238,53 +398,6 @@ The RAG responder uses a synthetic sender identity:
 
 This is NOT a real user/agent in the members table. The DO REST ingest endpoint already accepts arbitrary sender info — no schema change needed.
 
-## Workers AI Streaming
-
-Workers AI supports streaming via the `stream: true` option:
-
-```typescript
-const stream = await env.AI.run(model, {
-  messages: [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userQuestion }
-  ],
-  stream: true,
-  temperature: 0.3,
-  max_tokens: 2048
-});
-
-// stream is a ReadableStream of SSE events
-for await (const chunk of stream) {
-  // parse SSE, extract delta text
-  yield delta;
-}
-```
-
-## OpenAI-Compatible Streaming
-
-Standard SSE via fetch:
-
-```typescript
-const res = await fetch(`${baseUrl}/chat/completions`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`
-  },
-  body: JSON.stringify({
-    model,
-    messages,
-    stream: true,
-    temperature,
-    max_tokens
-  })
-});
-
-// Parse SSE stream
-const reader = res.body.getReader();
-// ... parse "data: {...}" lines, extract delta.content
-```
-
 ## Spending Cap Integration
 
 RAG responder calls count against the existing AI usage caps:
@@ -298,32 +411,33 @@ Add `llm_generation` operation type to `aiUsage` table tracking.
 
 ## Build Sequence
 
-### Phase 1 — Server-side LLM providers
+### Phase 1 — AI SDK integration + responder core
 
-- [ ] Create `src/lib/server/rag/responder-providers.ts` with `WorkersAIProvider` and `OpenAICompatProvider`
-- [ ] Unit test: Workers AI streaming mock
-- [ ] Unit test: OpenAI-compatible SSE parsing
-
-### Phase 2 — RAG responder core
-
-- [ ] Create `src/lib/server/rag/responder.ts` with `shouldRespond`, `generateResponse`, `buildPrompt`
+- [ ] `pnpm add ai workers-ai-provider @ai-sdk/openai`
+- [ ] Create `src/lib/server/rag/responder.ts`:
+  - `createModel(config, env)` — Workers AI via `createWorkersAI`, OpenAI via `createOpenAI`
+  - `shouldRespond()` — trigger heuristic
+  - `buildSystemPrompt()`, `buildUserPrompt()`
+  - `generateResponse()` — calls `streamText()`, returns `textStream`
 - [ ] Add `llm_generation` operation type to AI usage tracking
-- [ ] Wire doc_search + LLM into a single flow
+- [ ] Verify: `streamText()` works with Workers AI binding in local `wrangler dev`
 
-### Phase 3 — DO integration
+### Phase 2 — DO integration + streaming
 
 - [ ] Add trigger check in `handleChatMessage` (post-broadcast)
-- [ ] Add internal `/rag-respond` route to DO (or external endpoint)
-- [ ] Stream LLM response via existing stream_start/delta/end protocol
+- [ ] Create `/api/rag/respond` internal endpoint
+- [ ] Iterate `textStream` → POST `/stream-start`, `/stream-delta`, `/stream-end` to DO
 - [ ] Synthetic sender identity for "Docs AI"
+- [ ] Delta coalescing: buffer 50ms before sending delta to DO (same as agent streaming)
 
-### Phase 4 — Configuration
+### Phase 3 — Configuration
 
-- [ ] Create `src/routes/api/rooms/[roomId]/rag-config/+server.ts` (PATCH)
-- [ ] Parse `rag_responder` from org metadata in relevant handlers
+- [ ] Create `src/routes/api/rooms/[roomId]/rag-config/+server.ts` (PATCH + GET)
+- [ ] Parse `rag_responder` from org metadata in DO and respond endpoint
 - [ ] Add env vars: `RAG_PROVIDER`, `RAG_MODEL`, `RAG_API_KEY`, `RAG_BASE_URL`
+- [ ] Validate model connectivity on config save (optional health check)
 
-### Phase 5 — UI
+### Phase 4 — UI
 
 - [ ] Add RAG config section to room settings panel
 - [ ] "Docs AI" badge in MessageBubble for RAG responses
@@ -331,14 +445,22 @@ Add `llm_generation` operation type to `aiUsage` table tracking.
 - [ ] `/ask` slash command
 - [ ] Add i18n keys
 
+### Phase 5 — Tool-based search (optional enhancement)
+
+- [ ] Define `doc_search` as AI SDK `tool()` with Zod schema
+- [ ] Add `maxSteps: 3` to `streamText()` for multi-turn tool use
+- [ ] UI: show tool call grouping (020) for RAG tool calls
+- [ ] Config flag: `rag_responder.use_tools: true` (opt-in)
+
 ### Phase 6 — Hardening
 
 - [ ] Spending cap enforcement for `llm_generation`
 - [ ] Rate limiting (max 5 RAG responses/minute/room)
-- [ ] Timeout: 30s max generation time
+- [ ] Timeout: 30s max generation time (AI SDK `abortSignal`)
 - [ ] Error handling: LLM failure → visible error message in chat
 - [ ] Verify: no response when agent IS connected (agent takes priority)
 - [ ] Verify: works with Workers AI free tier limits
+- [ ] Monitor Worker bundle size (should stay under 10 MB)
 
 ## Files
 
@@ -346,15 +468,16 @@ Add `llm_generation` operation type to `aiUsage` table tracking.
 
 | File | Purpose |
 |---|---|
-| `src/lib/server/rag/responder.ts` | RAG responder orchestrator |
-| `src/lib/server/rag/responder-providers.ts` | Workers AI + OpenAI-compat LLM providers |
-| `src/routes/api/rooms/[roomId]/rag-config/+server.ts` | RAG config PATCH endpoint |
+| `src/lib/server/rag/responder.ts` | RAG responder — model creation, trigger logic, prompt building, `streamText()` |
+| `src/routes/api/rag/respond/+server.ts` | Internal endpoint — doc_search + LLM + stream to DO |
+| `src/routes/api/rooms/[roomId]/rag-config/+server.ts` | RAG config PATCH/GET endpoint |
 
 ### Modify
 
 | File | Change |
 |---|---|
-| `src/lib/server/chat-room.ts` | Trigger check after message broadcast, /rag-respond route |
+| `package.json` | Add `ai`, `workers-ai-provider`, `@ai-sdk/openai` |
+| `src/lib/server/chat-room.ts` | Trigger check after message broadcast, `/rag-respond` route |
 | `src/lib/server/db/schema.ts` | Add `llm_generation` to AI usage operations |
 | `src/lib/components/chat/MessageBubble.svelte` | "Docs AI" badge, citation footer |
 | `src/lib/components/chat/ChatInput.svelte` | `/ask` slash command |
@@ -363,14 +486,18 @@ Add `llm_generation` operation type to `aiUsage` table tracking.
 
 ## Design Decisions
 
-**Why not reuse martol-client's provider abstraction?** It's Python. The server is TypeScript on Cloudflare Workers. A thin fetch-based provider (~50 lines) is simpler than bridging languages.
+**Why Vercel AI SDK instead of raw `env.AI.run()` + `fetch()`?** The AI SDK eliminates ~200 lines of manual SSE parsing, provider switching, and streaming plumbing. `streamText()` is 5 lines and works identically for Workers AI, OpenAI, Ollama, and 40+ other providers. The package cost is ~70 KB — trivial.
+
+**Why `workers-ai-provider` instead of `@ai-sdk/openai` for Workers AI?** The community provider uses the native `env.AI` binding (no HTTP overhead), supports all Workers AI model types (chat, embeddings, image, transcription, TTS, reranking), and handles Workers AI-specific streaming format internally.
+
+**Why `@ai-sdk/openai` for external providers?** It's the official AI SDK provider for OpenAI-compatible APIs. Setting `baseURL` makes it work with Ollama, Groq, Together, vLLM, LM Studio — any endpoint that speaks the OpenAI chat completions protocol.
+
+**Why pre-fetch chunks instead of tool-based search?** Pre-fetch is simpler, faster (1 LLM call vs 2+), and cheaper. Tool-based search is more flexible but costs extra tokens and latency. We start with pre-fetch and add tool-based as Phase 5 opt-in.
 
 **Why trigger heuristic instead of always responding?** Avoids noise. Users send greetings, status updates, file uploads — not everything needs an LLM response. The `@docs` mention and `/ask` command provide explicit control.
 
 **Why synthetic sender instead of a real agent?** No API key, no member row, no billing. The responder is a room feature, not a user. Using the existing REST ingest with arbitrary sender info keeps it simple.
 
 **Why not call the LLM inside the DO?** DOs have a 30-second CPU limit and no external fetch timeout control. Running the LLM call in a regular Worker request (via `ctx.waitUntil` or internal endpoint) is safer and can be independently rate-limited.
-
-**Why not use Cloudflare AI Gateway?** It's an option for future observability/caching, but adds deployment complexity. Direct `env.AI.run()` is simpler for v1.
 
 **Why store config in org metadata (TEXT) instead of a new table?** The RAG config is a small JSON blob (~200 bytes) that changes rarely. A dedicated table is overkill — org metadata already exists and is read at page load. If config grows complex, migrate to a typed table later.
