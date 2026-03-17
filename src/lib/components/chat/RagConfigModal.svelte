@@ -45,6 +45,21 @@
 	let saveStatus = $state<'idle' | 'saved' | 'error'>('idle');
 	let error = $state('');
 
+	let usageCount = $state(0);
+	let usageLimit = $state(150);
+	let loadingUsage = $state(true);
+
+	$effect(() => {
+		fetch(`/api/rooms/${roomId}/rag-usage`)
+			.then(res => res.json() as Promise<{ count?: number; limit?: number }>)
+			.then((data) => {
+				usageCount = data.count ?? 0;
+				usageLimit = data.limit ?? 150;
+			})
+			.catch(() => {})
+			.finally(() => { loadingUsage = false; });
+	});
+
 	let closeBtn: HTMLButtonElement | undefined;
 	let prevFocus: HTMLElement | null = null;
 	let dialogEl: HTMLDivElement | undefined;
@@ -186,6 +201,15 @@
 						<span class="rag-toggle-thumb"></span>
 					</button>
 				</div>
+
+				{#if !loadingUsage}
+					<div class="flex items-center justify-between text-xs" style="color: var(--text-muted); font-family: var(--font-mono);">
+						<span>Usage this month</span>
+						<span style="color: {usageCount >= usageLimit ? 'var(--danger)' : 'var(--text-muted)'};">
+							{usageCount} / {usageLimit}
+						</span>
+					</div>
+				{/if}
 
 				{#if enabled}
 					<!-- Provider -->

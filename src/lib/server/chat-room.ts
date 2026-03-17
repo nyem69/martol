@@ -105,6 +105,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// RAG responder config (loaded via /notify-rag-config internal route)
 	private ragConfig: RagConfig | null = null;
+	private ragResponseActive = false;
 
 	// RAG-specific rate limiting (separate from message rate limiter)
 	private ragRoomTimestamps: number[] = [];
@@ -1318,6 +1319,12 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// ── RAG Responder ────────────────────────────────────────────────
 
 	private async runRagResponse(orgId: string, messageBody: string, config: RagConfig): Promise<void> {
+		if (this.ragResponseActive) {
+			// Already generating a RAG response — skip concurrent request
+			return;
+		}
+		this.ragResponseActive = true;
+
 		const localId = `rag-${crypto.randomUUID().replace(/-/g, '')}`;
 		const senderId = `rag-${orgId}`;
 		const senderName = 'Docs AI';
@@ -1433,6 +1440,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			await this.ingestRagMessage(localId + '-err', senderId, senderName, senderRole, orgId,
 				'Document AI encountered an error. Please try again.', timestamp);
 		} finally {
+			this.ragResponseActive = false;
 			// Clear typing indicator
 			await this.broadcast({
 				type: 'typing', senderId, senderName, active: false

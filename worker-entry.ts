@@ -127,7 +127,7 @@ const worker = {
 		}
 
 		const { createHyperdriveDb } = await import('./src/lib/server/db/hyperdrive');
-		const { pendingActions, attachments } = await import('./src/lib/server/db/schema');
+		const { pendingActions, attachments, documentChunks } = await import('./src/lib/server/db/schema');
 		const { eq, and, lt, isNull, sql } = await import('drizzle-orm');
 
 		const { db, client, connectPromise } = createHyperdriveDb(hyperdrive);
@@ -188,6 +188,26 @@ const worker = {
 				.limit(100);
 
 			const r2Bucket = env.STORAGE as R2Bucket | undefined;
+
+			// Delete vectors from Vectorize before DB cascade removes chunk records
+			if (env.VECTORIZE) {
+				const vectorize = env.VECTORIZE as VectorizeIndex;
+				for (const att of orphans) {
+					try {
+						const chunks = await db
+							.select({ vectorId: documentChunks.vectorId })
+							.from(documentChunks)
+							.where(eq(documentChunks.attachmentId, att.id));
+						if (chunks.length > 0) {
+							const vectorIds = chunks.map(c => c.vectorId);
+							await vectorize.deleteByIds(vectorIds);
+						}
+					} catch (err) {
+						console.error(`[Cron] Vectorize delete failed for attachment ${att.id}:`, err);
+					}
+				}
+			}
+
 			for (const orphan of orphans) {
 				try {
 					if (r2Bucket) {
