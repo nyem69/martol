@@ -7,6 +7,7 @@ export const chatSendSchema = z.object({
 	params: z.object({
 		body: z.string().min(1).max(32768),
 		replyTo: z.number().int().positive().optional(),
+		subtype: z.enum(['tool_call']).optional(),
 	}),
 });
 

@@ -829,6 +829,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			orgId: string;
 			body: string;
 			replyTo?: number;
+			subtype?: string;
 		};
 
 		try {
@@ -899,7 +900,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			body: payload.body,
 			replyTo: payload.replyTo,
 			timestamp,
-			flushed: false
+			flushed: false,
+			...(payload.subtype ? { subtype: payload.subtype } : {})
 		};
 
 		const entrySize = measureBytes(stored);
@@ -925,7 +927,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			senderName: payload.senderName || 'Agent',
 			body: payload.body,
 			replyTo: payload.replyTo,
-			timestamp
+			timestamp,
+			...(payload.subtype ? { subtype: payload.subtype } : {})
 		};
 
 		await this.broadcast({ type: 'message', message: broadcastPayload });
@@ -1497,7 +1500,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				senderName: stored.senderName,
 				body: stored.body,
 				replyTo: stored.replyTo,
-				timestamp: stored.timestamp
+				timestamp: stored.timestamp,
+				...(stored.subtype ? { subtype: stored.subtype } : {})
 			});
 		}
 

@@ -446,5 +446,7 @@
   "chat_brief_placeholder_phase": "What are you working on right now?",
   "chat_brief_placeholder_notes": "Anything else agents should know — constraints, pitfalls, links",
   "chat_brief_ask_agent": "Ask Agent to Fill",
-  "chat_brief_readonly_hint": "Only room owners and leads can edit the brief"
+  "chat_brief_readonly_hint": "Only room owners and leads can edit the brief",
+  "tool_calls_used": "{count} tools used",
+  "tool_calls_running": "{count} tools running…"
 }

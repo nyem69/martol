@@ -2,10 +2,13 @@
 	import { untrack } from 'svelte';
 	import type { DisplayMessage, SystemEvent } from '$lib/stores/messages.svelte';
 	import type { PendingAction } from '$lib/types/chat';
+	import type { TimelineItem, ToolCallGroup } from '$lib/types/timeline';
+	import { isToolCallMessage, parseToolCallBody } from '$lib/utils/tool-call-parser';
 	import * as m from '$lib/paraglide/messages';
 	import MessageBubble from './MessageBubble.svelte';
 	import SystemLine from './SystemLine.svelte';
 	import PendingActionLine from './PendingActionLine.svelte';
+	import ToolCallGroupComponent from './ToolCallGroup.svelte';
 
 	let {
 		messages,
@@ -74,11 +77,6 @@
 
 	// Merge messages, system events, and actions into a single timeline
 	const timeline = $derived.by(() => {
-		type TimelineItem =
-			| { kind: 'message'; data: DisplayMessage }
-			| { kind: 'system'; data: SystemEvent }
-			| { kind: 'action'; data: PendingAction };
-
 		// Deduplicate agent intro messages — keep only the latest per sender.
 		// Agent intros start with "[AI Agent]" and repeat on every reconnect.
 		const lastIntroId = new Map<string, string>();
@@ -104,8 +102,50 @@
 		items.sort(
 			(a, b) => new Date(a.data.timestamp).getTime() - new Date(b.data.timestamp).getTime()
 		);
-		return items;
+
+		return groupToolCalls(items);
 	});
+
+	/** Group consecutive tool-call messages from the same agent into a single ToolCallGroup item. */
+	function groupToolCalls(items: TimelineItem[]): TimelineItem[] {
+		const result: TimelineItem[] = [];
+		let currentGroup: { agentId: string; messages: DisplayMessage[] } | null = null;
+
+		function flushGroup() {
+			if (!currentGroup || currentGroup.messages.length === 0) return;
+			const msgs = currentGroup.messages;
+			const first = msgs[0];
+			const last = msgs[msgs.length - 1];
+			const group: ToolCallGroup = {
+				groupId: first.localId,
+				agentId: first.senderId,
+				agentName: first.senderName,
+				agentRole: first.senderRole,
+				messages: msgs.map(parseToolCallBody),
+				timestamp: last.timestamp,
+				isStreaming: msgs.some((m) => !!m.streaming)
+			};
+			result.push({ kind: 'tool_group', data: group });
+			currentGroup = null;
+		}
+
+		for (const item of items) {
+			if (item.kind === 'message' && isToolCallMessage(item.data)) {
+				const msg = item.data;
+				if (currentGroup && currentGroup.agentId === msg.senderId) {
+					currentGroup.messages.push(msg);
+				} else {
+					flushGroup();
+					currentGroup = { agentId: msg.senderId, messages: [msg] };
+				}
+			} else {
+				flushGroup();
+				result.push(item);
+			}
+		}
+		flushGroup();
+		return result;
+	}
 
 	// Auto-scroll when new messages arrive and user is at bottom
 	// [I8] Only show "new messages" pill for actual messages, not action refreshes
@@ -194,9 +234,11 @@
 			</div>
 		{/if}
 
-		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.kind === 'action' ? `action-${item.data.id}` : item.data.id)}
+		{#each timeline as item (item.kind === 'message' ? item.data.localId : item.kind === 'action' ? `action-${item.data.id}` : item.kind === 'tool_group' ? `tg-${item.data.groupId}` : item.data.id)}
 			{#if item.kind === 'message'}
 				<MessageBubble message={item.data} replyParent={item.data.replyTo ? messageByDbId.get(item.data.replyTo) : undefined} {onRetry} {onReply} {onReport} />
+			{:else if item.kind === 'tool_group'}
+				<ToolCallGroupComponent group={item.data} />
 			{:else if item.kind === 'action'}
 				<PendingActionLine
 					action={item.data}

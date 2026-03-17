@@ -27,6 +27,7 @@ export interface DisplayMessage {
 	failed: boolean;
 	isOwn: boolean;
 	streaming?: boolean;
+	subtype?: string;
 }
 
 export interface SystemEvent {
@@ -161,6 +162,7 @@ export class MessagesStore {
 				failed: false,
 				isOwn: payload.senderId === this.userId,
 				streaming: false,
+				subtype: payload.subtype,
 			};
 			if (payload.serverSeqId > this.lastServerSeqId) {
 				this.lastServerSeqId = payload.serverSeqId;
@@ -182,7 +184,8 @@ export class MessagesStore {
 			timestamp: payload.timestamp,
 			pending: false,
 			failed: false,
-			isOwn: payload.senderId === this.userId
+			isOwn: payload.senderId === this.userId,
+			subtype: payload.subtype,
 		};
 
 		if (existingIdx !== -1) {
@@ -231,7 +234,8 @@ export class MessagesStore {
 					timestamp: p.timestamp,
 					pending: false,
 					failed: false,
-					isOwn: p.senderId === this.userId
+					isOwn: p.senderId === this.userId,
+					subtype: p.subtype,
 				});
 			}
 		}

@@ -10,7 +10,7 @@ import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
  * Falls back to direct DB insert if DO is unavailable.
  */
 export async function chatSend(
-	params: { body: string; replyTo?: number },
+	params: { body: string; replyTo?: number; subtype?: string },
 	agent: AgentContext,
 	db: any,
 	platform?: App.Platform
@@ -47,7 +47,8 @@ export async function chatSend(
 			senderName: agent.agentName,
 			orgId: agent.orgId,
 			body: params.body,
-			replyTo: params.replyTo
+			replyTo: params.replyTo,
+			...(params.subtype ? { subtype: params.subtype } : {})
 		};
 
 		const doResponse = await stub.fetch(new Request('https://do/ingest', {

@@ -28,6 +28,7 @@ export interface ServerMessagePayload {
 	body: string;
 	replyTo?: number;
 	timestamp: string;
+	subtype?: string;
 }
 
 export type ServerMessage =
@@ -69,4 +70,5 @@ export interface StoredMessage {
 	editedAt?: string;
 	flushed: boolean;
 	dbId?: number;
+	subtype?: string;
 }
