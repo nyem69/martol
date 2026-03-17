@@ -2,7 +2,7 @@
 	import type { DisplayMessage } from '$lib/stores/messages.svelte';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import * as m from '$lib/paraglide/messages';
-	import { Flag, Reply, RotateCcw } from '@lucide/svelte';
+	import { BookOpen, Flag, Reply, RotateCcw } from '@lucide/svelte';
 	import ImageModal from './ImageModal.svelte';
 
 	let {
@@ -130,7 +130,7 @@
 			? 'var(--bubble-own)'
 			: 'var(--bg-surface)'}; border: 1px solid {message.failed
 			? 'var(--danger)'
-			: 'var(--border-subtle)'};"
+			: 'var(--border-subtle)'};{message.subtype === 'rag_response' ? ' border-left: 2px solid var(--warning);' : ''}"
 	>
 		{#if replyParent}
 			<button
@@ -147,12 +147,28 @@
 				<span class="text-[11px] font-medium" style="color: var(--accent);">
 					{message.senderName}
 				</span>
-				<span
-					class="rounded px-1 text-[9px] uppercase"
-					style="background: var(--bg-elevated); color: var(--text-muted); font-family: var(--font-mono);"
-				>
-					{message.senderRole}
-				</span>
+				{#if message.subtype === 'rag_response'}
+					<span
+						class="rounded px-1 text-[9px] uppercase flex items-center gap-0.5"
+						style="background: color-mix(in oklch, var(--warning) 15%, transparent); color: var(--warning); font-family: var(--font-mono);"
+					>
+						<BookOpen size={9} />
+						{m.rag_docs_ai()}
+					</span>
+					<span
+						class="rounded px-0.5 text-[8px] uppercase"
+						style="color: var(--text-muted); font-family: var(--font-mono);"
+					>
+						{m.rag_beta()}
+					</span>
+				{:else}
+					<span
+						class="rounded px-1 text-[9px] uppercase"
+						style="background: var(--bg-elevated); color: var(--text-muted); font-family: var(--font-mono);"
+					>
+						{message.senderRole}
+					</span>
+				{/if}
 			</div>
 		{/if}
 		<article
@@ -195,6 +211,14 @@
 					{/if}
 				{/if}
 			</div>
+		{/if}
+		{#if message.subtype === 'rag_response' && !message.streaming && !message.failed}
+			{@const citationCount = (message.body.match(/\[📄[^\]]*\]/g) || []).length}
+			{#if citationCount > 0}
+				<span class="text-[10px]" style="color: var(--text-muted); font-family: var(--font-mono);">
+					{m.rag_based_on({ count: String(citationCount) })}
+				</span>
+			{/if}
 		{/if}
 	</div>
 

@@ -15,6 +15,7 @@ import {
 	timestamp,
 	bigint,
 	integer,
+	real,
 	boolean,
 	jsonb,
 	date,
@@ -584,13 +585,39 @@ export const aiUsage = pgTable(
 		orgId: text('org_id').notNull(),
 		operation: text('operation')
 			.notNull()
-			.$type<'doc_process' | 'vector_query'>(),
+			.$type<'doc_process' | 'vector_query' | 'llm_generation'>(),
 		count: integer('count').default(0).notNull(),
 		periodStart: date('period_start').notNull()
 	},
 	(table) => [
 		uniqueIndex('idx_ai_usage_org_op_period').on(table.orgId, table.operation, table.periodStart),
 		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
+	]
+);
+
+/**
+ * Room Config — per-room feature configuration.
+ * Stores RAG responder settings and future room-level feature flags.
+ */
+export const roomConfig = pgTable(
+	'room_config',
+	{
+		orgId: text('org_id')
+			.primaryKey()
+			.references(() => organization.id, { onDelete: 'cascade' }),
+		ragEnabled: boolean('rag_enabled').notNull().default(false),
+		ragModel: text('rag_model').notNull().default('@cf/meta/llama-3.1-8b-instruct'),
+		ragTemperature: real('rag_temperature').notNull().default(0.3),
+		ragMaxTokens: integer('rag_max_tokens').notNull().default(2048),
+		ragTrigger: text('rag_trigger')
+			.notNull()
+			.default('explicit')
+			.$type<'explicit' | 'always'>(),
+		updatedAt: timestamp('updated_at').notNull().defaultNow(),
+		updatedBy: text('updated_by').references(() => user.id)
+	},
+	(table) => [
+		check('chk_rag_trigger', sql`rag_trigger IN ('explicit', 'always')`)
 	]
 );
 

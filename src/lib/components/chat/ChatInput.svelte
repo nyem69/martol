@@ -103,6 +103,15 @@
 		// Check if it's a slash command
 		const parsed = parseCommand(body);
 		if (parsed && onCommand) {
+			// /ask is sent as a regular message so the DO can detect and trigger RAG
+			if (parsed.command === 'ask') {
+				onSend(body, replyTo?.dbId);
+				value = '';
+				showSlashMenu = false;
+				resize();
+				onCancelReply?.();
+				return;
+			}
 			onCommand(parsed.command, parsed.args);
 			value = '';
 			showSlashMenu = false;

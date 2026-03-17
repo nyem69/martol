@@ -69,6 +69,13 @@ export const COMMANDS: SlashCommand[] = [
 		roles: ['owner'],
 		requiresArg: false,
 		argPlaceholder: '[drop]'
+	},
+	{
+		name: 'ask',
+		description: 'chat_slash_ask',
+		roles: ['owner', 'lead', 'member'],
+		requiresArg: true,
+		argPlaceholder: '<question>'
 	}
 ];
 

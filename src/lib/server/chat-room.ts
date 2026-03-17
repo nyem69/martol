@@ -17,6 +17,8 @@ import type {
 import { createHyperdriveDb } from './db/hyperdrive';
 import { messages as messagesTable, readCursors, pendingActions, attachments, supportTickets } from './db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
+import { shouldRespond, extractQuestion, buildSystemPrompt, buildUserPrompt, createRagModel, type RagConfig } from './rag/responder';
+import { searchDocuments } from './rag/search';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -92,6 +94,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		startedAt: number;
 		accumulatedBytes: number;
 	}>();
+
+	// RAG responder config (loaded via /notify-rag-config internal route)
+	private ragConfig: RagConfig | null = null;
 
 	// Per-user rate limiting
 	private userMessageTimestamps = new Map<string, number[]>();
@@ -175,6 +180,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// REST config-changed broadcast — used by room settings endpoints
 		if (request.method === 'POST' && url.pathname.endsWith('/notify-config')) {
 			return this.handleNotifyConfig(request);
+		}
+
+		// REST RAG config notification — used by rag-config endpoints
+		if (request.method === 'POST' && url.pathname.endsWith('/notify-rag-config')) {
+			return this.handleNotifyRagConfig(request);
 		}
 
 		// REST document-indexed notification — used after RAG pipeline completes
@@ -615,6 +625,13 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			if (!existing) {
 				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
 			}
+		}
+
+		// RAG responder trigger check (non-blocking, after broadcast so user sees their message)
+		if (this.ragConfig?.ragEnabled && shouldRespond(msg.body, true, this.ragConfig.ragTrigger)) {
+			this.ctx.waitUntil(this.runRagResponse(orgId, msg.body, this.ragConfig).catch(err => {
+				console.error('[ChatRoom] RAG response error:', err);
+			}));
 		}
 	}
 
@@ -1266,6 +1283,156 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			JSON.stringify({ ok: true }),
 			{ status: 200, headers: { 'Content-Type': 'application/json' } }
 		);
+	}
+
+	// ── REST RAG Config Notification ────────────────────────────────
+
+	private async handleNotifyRagConfig(request: Request): Promise<Response> {
+		const internalSecret = request.headers.get('X-Internal-Secret');
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
+			return new Response('Unauthorized', { status: 403 });
+		}
+		try {
+			this.ragConfig = await request.json() as RagConfig;
+		} catch {
+			return new Response('Invalid JSON', { status: 400 });
+		}
+		return new Response('OK', { status: 200 });
+	}
+
+	// ── RAG Responder ────────────────────────────────────────────────
+
+	private async runRagResponse(orgId: string, messageBody: string, config: RagConfig): Promise<void> {
+		const localId = `rag-${crypto.randomUUID().replace(/-/g, '')}`;
+		const senderId = `rag-${orgId}`;
+		const senderName = 'Docs AI';
+		const senderRole = 'agent';
+		const timestamp = new Date().toISOString();
+
+		const question = extractQuestion(messageBody);
+
+		// 1. Emit synthetic typing indicator
+		await this.broadcast({
+			type: 'typing', senderId, senderName, active: true
+		});
+
+		try {
+			// 2. Search documents — requires a DB connection for chunk content lookup
+			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
+			await connectPromise;
+			let chunks;
+			try {
+				chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 5);
+			} finally {
+				try { await client.end(); } catch { /* already closed */ }
+			}
+
+			if (chunks.length === 0) {
+				// No chunks found — send visible error message
+				await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
+					'No relevant documents found for your question.', timestamp);
+				return;
+			}
+
+			// 3. Build prompt
+			const system = buildSystemPrompt('');
+			const prompt = buildUserPrompt(question, chunks);
+
+			// 4. Create model and stream (dynamic import to avoid loading AI SDK for every DO)
+			const model = createRagModel(config.ragModel, this.env.AI);
+
+			const { streamText } = await import('ai');
+			const result = streamText({
+				model,
+				system,
+				prompt,
+				temperature: config.ragTemperature ?? 0.3,
+				maxOutputTokens: config.ragMaxTokens ?? 2048,
+				abortSignal: AbortSignal.timeout(30_000),
+			});
+
+			// 5. Broadcast stream_start
+			await this.broadcast({
+				type: 'stream_start', localId, senderId, senderName, senderRole, timestamp
+			});
+
+			// 6. Stream deltas
+			let fullBody = '';
+			let buffer = '';
+			let lastFlush = Date.now();
+
+			for await (const delta of result.textStream) {
+				fullBody += delta;
+				buffer += delta;
+				if (Date.now() - lastFlush >= 100 || buffer.length > 200) {
+					await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
+					buffer = '';
+					lastFlush = Date.now();
+				}
+			}
+			if (buffer) {
+				await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
+			}
+
+			// 7. Commit final body to WAL via ingest helper
+			await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId, fullBody, timestamp);
+
+		} catch (err) {
+			console.error('[ChatRoom] RAG generation error:', err);
+			// Send abort for the stream
+			await this.broadcast({ type: 'stream_abort', localId, reason: 'generation_failed' });
+			// Send visible error message
+			await this.ingestRagMessage(localId + '-err', senderId, senderName, senderRole, orgId,
+				'Document AI encountered an error. Please try again.', timestamp);
+		} finally {
+			// Clear typing indicator
+			await this.broadcast({
+				type: 'typing', senderId, senderName, active: false
+			});
+		}
+	}
+
+	private async ingestRagMessage(
+		localId: string, senderId: string, senderName: string, senderRole: string,
+		orgId: string, body: string, timestamp: string
+	): Promise<void> {
+		const seqId = this.nextLocalId++;
+		const stored: StoredMessage = {
+			localId, orgId, senderId, senderRole, senderName, body,
+			timestamp, flushed: false, subtype: 'rag_response'
+		};
+
+		const entrySize = measureBytes(stored);
+		this.unflushedIds.push(seqId);
+		this.walMessageCount++;
+		this.walByteSize += entrySize;
+
+		await this.ctx.storage.put({
+			[storageKey(seqId)]: stored,
+			'meta:nextId': this.nextLocalId,
+			'meta:walByteSize': this.walByteSize,
+			'meta:walMessageCount': this.walMessageCount,
+			'meta:unflushedIds': this.unflushedIds
+		});
+
+		const payload: ServerMessagePayload = {
+			localId, serverSeqId: seqId, senderId, senderRole, senderName,
+			body, timestamp, subtype: 'rag_response'
+		};
+
+		await this.broadcast({ type: 'message', message: payload });
+
+		// Schedule flush
+		if (this.unflushedIds.length >= FLUSH_BATCH_THRESHOLD) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (existing) await this.ctx.storage.deleteAlarm();
+			await this.ctx.storage.setAlarm(Date.now());
+		} else if (this.unflushedIds.length === 1) {
+			const existing = await this.ctx.storage.getAlarm();
+			if (!existing) {
+				await this.ctx.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+			}
+		}
 	}
 
 	// ── Flush to PostgreSQL ───────────────────────────────────────────
