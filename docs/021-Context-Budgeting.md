@@ -1,7 +1,7 @@
 # Tiered Context Budgeting
 
 **Date:** 2026-03-17
-**Status:** Complete (Phase 1-3)
+**Status:** Complete
 **Priority:** 3
 **Inspired by:** [jinn](https://github.com/lanteanio/jinn) — tiered ESSENTIAL/STANDARD/OPTIONAL system prompt budgeting
 **Repo:** martol-client (`/Users/azmi/PROJECTS/LLM/martol-client`)
@@ -113,9 +113,9 @@ _generate_response() called
 - [x] Add `--context-budget` and `--brief-max` arguments to `main()`
 - [x] Update `.env.example` with new variables
 
-### Phase 4 — Validation
+### Phase 4 — Validation ✅
 
-- [ ] Unit tests for `render_brief()`: no brief, short, at limit, over (section truncation), way over (stub)
+- [x] Unit tests for `render_brief()`: no brief, short, at limit, over (section truncation), way over (stub)
 - [ ] Smoke test against a room with a large brief
 
 ## Design Decisions

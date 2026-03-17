@@ -1,7 +1,7 @@
 # Tool Call Grouping in Chat UI
 
 **Date:** 2026-03-17
-**Status:** Phase 1+2+3 complete; Phase 4 (agent emission) pending
+**Status:** Complete
 **Priority:** 2
 **Inspired by:** [jinn](https://github.com/lanteanio/jinn) — groups consecutive tool calls with collapsible summary
 
@@ -137,10 +137,10 @@ When docs/019 streaming lands:
 - [x] Implement auto-collapse `$effect`
 - [x] Verify reactivity under streaming updates
 
-### Phase 4 — Agent emission (martol-client)
+### Phase 4 — Agent emission (martol-client) ✅
 
-- [ ] Add `chat_send` MCP tool with `subtype: 'tool_call'` to agent wrapper
-- [ ] Emit tool call messages with `[tool:<name>]` prefix during tool loop
+- [x] Add `chat_send` MCP tool with `subtype: 'tool_call'` to agent wrapper
+- [x] Emit tool call messages with `[tool:<name>]` prefix during tool loop
 - [ ] End-to-end verification: agent tool calls render as grouped pills in browser
 
 ## Files
