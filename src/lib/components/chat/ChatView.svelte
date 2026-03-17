@@ -21,7 +21,7 @@
 	// These values are stable for this component instance.
 	// When roomId changes, the parent {#key} destroys and recreates this component.
 	// svelte-ignore state_referenced_locally — intentional: {#key} guarantees fresh instance per room.
-	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret, enableUploads } = data;
+	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret, enableUploads, ocrEnabled } = data;
 
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
@@ -42,7 +42,7 @@
 		isOwn: msg.senderId === userId
 	}));
 
-	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages);
+	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages, roomName, ocrEnabled ?? false);
 
 	let memberPanelOpen = $state(false);
 	let documentPanelOpen = $state(false);
@@ -307,11 +307,11 @@
 	});
 </script>
 
-<main class="h-dvh overflow-hidden" aria-label="Chat room: {roomName}">
+<main class="h-dvh overflow-hidden" aria-label="Chat room: {store.roomName}">
 	<div class="flex h-full flex-col overflow-hidden">
 		<ConnectionBanner status={store.ws.status} reconnectAttempt={store.ws.reconnectAttempt} />
 		<ChatHeader
-			{roomName}
+			roomName={store.roomName}
 			{roomId}
 			rooms={userRooms}
 			{userName}

@@ -45,6 +45,8 @@ export class MessagesStore {
 	systemEvents = $state<SystemEvent[]>([]);
 	error = $state<string | null>(null);
 	briefVersion = $state(0);
+	roomName = $state<string>('');
+	ocrEnabled = $state<boolean>(false);
 
 	readonly ws: WebSocketStore;
 
@@ -64,11 +66,15 @@ export class MessagesStore {
 		userId: string,
 		userName: string,
 		userRole: string,
-		initialMessages?: DisplayMessage[]
+		initialMessages?: DisplayMessage[],
+		initialRoomName?: string,
+		initialOcrEnabled?: boolean
 	) {
 		this.userId = userId;
 		this.userName = userName;
 		this.userRole = userRole;
+		if (initialRoomName !== undefined) this.roomName = initialRoomName;
+		if (initialOcrEnabled !== undefined) this.ocrEnabled = initialOcrEnabled;
 
 		// Add self to onlineUsers (self is never received via WS presence)
 		this.onlineUsers.set(userId, { name: userName, role: userRole });
@@ -131,6 +137,9 @@ export class MessagesStore {
 				break;
 			case 'stream_abort':
 				this.handleStreamAbort(msg);
+				break;
+			case 'room_config_changed':
+				this.handleRoomConfigChanged(msg);
 				break;
 			case 'error':
 				this.error = msg.message;
@@ -378,6 +387,17 @@ export class MessagesStore {
 		if (this.streamingLastDelta.size === 0 && this.streamTimeoutInterval) {
 			clearInterval(this.streamTimeoutInterval);
 			this.streamTimeoutInterval = null;
+		}
+	}
+
+	private handleRoomConfigChanged(msg: Extract<ServerMessage, { type: 'room_config_changed' }>): void {
+		switch (msg.field) {
+			case 'name':
+				this.roomName = msg.value as string;
+				break;
+			case 'ocr_enabled':
+				this.ocrEnabled = msg.value as boolean;
+				break;
 		}
 	}
 

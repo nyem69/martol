@@ -172,6 +172,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return this.handleNotifyBrief(request);
 		}
 
+		// REST config-changed broadcast — used by room settings endpoints
+		if (request.method === 'POST' && url.pathname.endsWith('/notify-config')) {
+			return this.handleNotifyConfig(request);
+		}
+
 		// REST document-indexed notification — used after RAG pipeline completes
 		if (request.method === 'POST' && url.pathname.endsWith('/notify-document')) {
 			return this.handleNotifyDocumentIndexed(request);
@@ -1136,6 +1141,34 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		await this.broadcast({
 			type: 'brief_changed',
 			version: payload.version,
+			changedBy: payload.changedBy
+		});
+
+		return new Response(
+			JSON.stringify({ ok: true }),
+			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
+	// ── REST Config Changed Notification ────────────────────────────
+
+	private async handleNotifyConfig(request: Request): Promise<Response> {
+		const internalSecret = request.headers.get('X-Internal-Secret');
+		if (!internalSecret || internalSecret !== this.env.HMAC_SIGNING_SECRET) {
+			return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 });
+		}
+
+		let payload: { field: 'name' | 'ocr_enabled'; value: string | boolean; changedBy: string };
+		try {
+			payload = await request.json();
+		} catch {
+			return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
+		}
+
+		await this.broadcast({
+			type: 'room_config_changed',
+			field: payload.field,
+			value: payload.value,
 			changedBy: payload.changedBy
 		});
 

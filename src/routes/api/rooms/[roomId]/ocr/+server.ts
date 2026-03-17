@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	return json({ ok: true, ocrEnabled: meta.ocrEnabled === true });
 };
 
-export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
 	if (!locals.db) error(503, 'Database unavailable');
 
@@ -86,6 +86,24 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		.update(organization)
 		.set({ metadata: JSON.stringify(meta) })
 		.where(eq(organization.id, orgId));
+
+	// Broadcast config change to connected WebSocket clients
+	if (platform?.env?.CHAT_ROOM && platform?.env?.HMAC_SIGNING_SECRET) {
+		try {
+			const doId = platform.env.CHAT_ROOM.idFromName(orgId);
+			const stub = platform.env.CHAT_ROOM.get(doId);
+			await stub.fetch(new Request('https://do/notify-config', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Internal-Secret': platform.env.HMAC_SIGNING_SECRET
+				},
+				body: JSON.stringify({ field: 'ocr_enabled', value: body.enabled, changedBy: locals.user!.id })
+			}));
+		} catch {
+			// Non-critical — client will see update on next panel open
+		}
+	}
 
 	return json({ ok: true, ocrEnabled: body.enabled });
 };

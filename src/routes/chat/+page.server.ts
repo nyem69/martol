@@ -125,12 +125,21 @@ export const load: PageServerLoad = async (event) => {
 		locals.session.activeOrganizationId = roomId;
 	}
 
-	// Get org name for header
+	// Get org name and metadata for header + config
 	const [org] = await db
-		.select({ name: organization.name })
+		.select({ name: organization.name, metadata: organization.metadata })
 		.from(organization)
 		.where(eq(organization.id, roomId))
 		.limit(1);
+
+	// Parse OCR enabled from org metadata
+	let ocrEnabled = false;
+	if (org?.metadata) {
+		try {
+			const meta = JSON.parse(org.metadata);
+			ocrEnabled = meta?.ocrEnabled === true;
+		} catch { /* ignore malformed metadata */ }
+	}
 
 	// Auto-fix stale room names: if owner's room still has a different user's auto-generated name
 	const currentUserName = locals.user.username || locals.user.name;
@@ -344,6 +353,7 @@ export const load: PageServerLoad = async (event) => {
 		hmacSecret,
 		enableUploads: orgLimits?.limits.uploadsEnabled ?? false,
 		canSend: orgLimits ? withinLimit(orgLimits.usage.msgsToday, orgLimits.limits.maxMsgsPerDay) : true,
-		plan: orgLimits?.plan ?? 'free'
+		plan: orgLimits?.plan ?? 'free',
+		ocrEnabled
 	};
 };
