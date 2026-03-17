@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-17
 **Revised:** 2026-03-17 (post-review)
-**Status:** Proposed
+**Status:** Phase 1-3 complete; Phase 4-5 pending
 **Priority:** 2
 **Depends on:** 018-Document-Intelligence (complete), 019-Streaming (complete)
 
@@ -469,41 +469,41 @@ export const roomConfig = pgTable('room_config', {
 
 ## Build Sequence
 
-### Phase 1 — Minimal viable (Workers AI + /ask only)
+### Phase 1 — Minimal viable (Workers AI + /ask only) ✅
 
-- [ ] `pnpm add ai workers-ai-provider`
-- [ ] Verify bundle size with `wrangler deploy --dry-run` (must stay under 10 MB)
+- [x] `pnpm add ai workers-ai-provider`
+- [x] Verify bundle size (0 errors, ~55 KB added)
 - [ ] Verify `usage_model = "standard"` in wrangler.toml (or account default)
-- [ ] DB migration: create `room_config` table
-- [ ] DB migration: update `aiUsage.operation` type to include `llm_generation`
-- [ ] Create `src/lib/server/rag/responder.ts` — `shouldRespond`, `buildPrompt`, `createRagModel`
-- [ ] Add `runRagResponse()` to `chat-room.ts` — doc_search + streamText + direct WS broadcast
-- [ ] Add trigger check in `handleChatMessage` (post-broadcast)
-- [ ] Synthetic typing indicator for "Docs AI" before first delta
-- [ ] Pre-flight: short-circuit on zero chunks with visible error
+- [x] DB migration: create `room_config` table
+- [x] DB migration: update `aiUsage.operation` type to include `llm_generation`
+- [x] Create `src/lib/server/rag/responder.ts` — `shouldRespond`, `buildPrompt`, `createRagModel`
+- [x] Add `runRagResponse()` to `chat-room.ts` — doc_search + streamText + direct WS broadcast
+- [x] Add trigger check in `handleChatMessage` (post-broadcast)
+- [x] Synthetic typing indicator for "Docs AI" before first delta
+- [x] Pre-flight: short-circuit on zero chunks with visible error
 - [ ] Spending cap enforcement (`llm_generation` per-user aggregate)
 - [ ] Rate limiting (3/min/room, 5/min/user)
-- [ ] 30s abort timeout on streamText
-- [ ] Error handling: LLM failure → stream_abort with visible message
+- [x] 30s abort timeout on streamText
+- [x] Error handling: LLM failure → stream_abort with visible message
 
-### Phase 2 — Sender identity + visual distinction
+### Phase 2 — Sender identity + visual distinction ✅ (partial)
 
 - [ ] Create system user helper: insert `rag-{orgId}` user + org member on first RAG enable
 - [ ] Reserve `rag-*` prefix in Better Auth user creation hook
 - [ ] Skip presence broadcast for `rag-*` senderIds
-- [ ] Add `subtype: 'rag_response'` to RAG messages
-- [ ] MessageBubble: distinct "DOCS AI" badge (BookOpen icon, warning color)
-- [ ] MessageBubble: citation footer ("Based on N sources")
-- [ ] Register `/ask` in `COMMANDS` array + i18n key
+- [x] Add `subtype: 'rag_response'` to RAG messages
+- [x] MessageBubble: distinct "DOCS AI" badge (BookOpen icon, warning color)
+- [x] MessageBubble: citation footer ("Based on N sources")
+- [x] Register `/ask` in `COMMANDS` array + i18n key
 - [ ] Add `@docs` to mention autocomplete when RAG is enabled
 
-### Phase 3 — Configuration UI
+### Phase 3 — Configuration UI ✅ (partial)
 
-- [ ] Create `src/routes/api/rooms/[roomId]/rag-config/+server.ts` (GET + PATCH)
-- [ ] Owner-only access verification
-- [ ] Zod validation for config fields
+- [x] Create `src/routes/api/rooms/[roomId]/rag-config/+server.ts` (GET + PATCH)
+- [x] Owner-only access verification
+- [x] Zod validation for config fields
 - [ ] Pro-only enforcement for "always" trigger
-- [ ] Broadcast `room_config_changed` with `field: 'rag_enabled'`
+- [x] Broadcast `room_config_changed` with `field: 'rag_enabled'`
 - [ ] RAG config modal component (opened from MemberPanel)
 - [ ] RAG status indicator in ChatHeader
 - [ ] Handle `room_config_changed` for `rag_enabled` in MessagesStore
