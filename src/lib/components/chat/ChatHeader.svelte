@@ -326,8 +326,19 @@
 				style="background: color-mix(in oklch, var(--warning) 12%, transparent); color: var(--warning); font-family: var(--font-mono);"
 				onclick={onShowRagConfig}
 				data-testid="header-rag-indicator"
+				title={m.rag_config_title()}
 			>
 				{m.rag_active()}
+			</button>
+		{:else if userRole === 'owner' || userRole === 'admin'}
+			<button
+				class="rag-pill rounded-full px-2 py-0.5 text-[9px] uppercase transition-opacity hover:opacity-80"
+				style="background: color-mix(in oklch, var(--bg-surface) 60%, transparent); color: var(--text-muted); font-family: var(--font-mono);"
+				onclick={onShowRagConfig}
+				data-testid="header-rag-setup"
+				title={m.rag_config_title()}
+			>
+				{m.rag_docs_ai()}
 			</button>
 		{/if}
 		{#if onlineCount > 0}
