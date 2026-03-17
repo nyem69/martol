@@ -1,7 +1,7 @@
 # Hot-Reload Room Config Broadcasting
 
 **Date:** 2026-03-17
-**Status:** Proposed
+**Status:** Complete (Phase 1-6; Phase 7 verification pending)
 **Priority:** 4
 **Inspired by:** [jinn](https://github.com/lanteanio/jinn) — watches config files, broadcasts changes via WebSocket, all clients refresh automatically
 
@@ -89,33 +89,33 @@ Derive displayed room name from `store.roomName`. OCR toggle state from `store.o
 
 ## Build Sequence
 
-### Phase 1 — Type contract
+### Phase 1 — Type contract ✅
 
-- [ ] Add `room_config_changed` to `ServerMessage` in `ws.ts`
+- [x] Add `room_config_changed` to `ServerMessage` in `ws.ts`
 
-### Phase 2 — DO internal handler
+### Phase 2 — DO internal handler ✅
 
-- [ ] Add `/notify-config` branch in `fetch()` dispatcher in `chat-room.ts`
-- [ ] Implement `handleNotifyConfig()` private method
+- [x] Add `/notify-config` branch in `fetch()` dispatcher in `chat-room.ts`
+- [x] Implement `handleNotifyConfig()` private method
 
-### Phase 3 — Wire OCR endpoint
+### Phase 3 — Wire OCR endpoint ✅
 
-- [ ] Add DO notify-config call to `PATCH /ocr` after DB write
+- [x] Add DO notify-config call to `PATCH /ocr` after DB write
 
-### Phase 4 — Room name endpoint
+### Phase 4 — Room name endpoint ✅
 
-- [ ] Create `src/routes/api/rooms/[roomId]/name/+server.ts`
+- [x] Create `src/routes/api/rooms/[roomId]/name/+server.ts`
 
-### Phase 5 — Client store
+### Phase 5 — Client store ✅
 
-- [ ] Add `roomName` and `ocrEnabled` state to `MessagesStore`
-- [ ] Add constructor params for initial values
-- [ ] Add `case 'room_config_changed'` handler
+- [x] Add `roomName` and `ocrEnabled` state to `MessagesStore`
+- [x] Add constructor params for initial values
+- [x] Add `case 'room_config_changed'` handler
 
-### Phase 6 — Chat page wiring
+### Phase 6 — Chat page wiring ✅
 
-- [ ] Pass initial values from `+page.server.ts` load to `MessagesStore`
-- [ ] Bind UI elements to `store.roomName` and `store.ocrEnabled`
+- [x] Pass initial values from `+page.server.ts` load to `MessagesStore`
+- [x] Bind UI elements to `store.roomName` and `store.ocrEnabled`
 
 ### Phase 7 — Verification
 

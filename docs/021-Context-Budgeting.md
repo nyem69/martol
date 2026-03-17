@@ -1,7 +1,7 @@
 # Tiered Context Budgeting
 
 **Date:** 2026-03-17
-**Status:** Proposed
+**Status:** Complete (Phase 1-3)
 **Priority:** 3
 **Inspired by:** [jinn](https://github.com/lanteanio/jinn) — tiered ESSENTIAL/STANDARD/OPTIONAL system prompt budgeting
 **Repo:** martol-client (`/Users/azmi/PROJECTS/LLM/martol-client`)
@@ -95,23 +95,23 @@ _generate_response() called
 
 ## Build Sequence
 
-### Phase 1 — Core module
+### Phase 1 — Core module ✅
 
-- [ ] Create `martol_agent/context_budget.py`
-- [ ] Define `TierLevel` enum, `ContextBudget` dataclass
-- [ ] Implement `measure()`, `render_brief()`, `check_budget()`
+- [x] Create `martol_agent/context_budget.py`
+- [x] Define `TierLevel` enum, `ContextBudget` dataclass
+- [x] Implement `measure()`, `render_brief()`, `check_budget()`
 
-### Phase 2 — Wire into wrapper
+### Phase 2 — Wire into wrapper ✅
 
-- [ ] Add `context_budget` instance to `AgentWrapper.__init__`
-- [ ] Replace inline brief render in `_build_system_prompt()` with `render_brief()`
-- [ ] Add `check_budget()` call with `log.warning` when over
-- [ ] Log tier level when degradation fires
+- [x] Add `context_budget` instance to `AgentWrapper.__init__`
+- [x] Replace inline brief render in `_build_system_prompt()` with `render_brief()`
+- [x] Add `check_budget()` call with `log.warning` when over
+- [x] Log tier level when degradation fires
 
-### Phase 3 — CLI exposure
+### Phase 3 — CLI exposure ✅
 
-- [ ] Add `--context-budget` and `--brief-max` arguments to `main()`
-- [ ] Update `.env.example` with new variables
+- [x] Add `--context-budget` and `--brief-max` arguments to `main()`
+- [x] Update `.env.example` with new variables
 
 ### Phase 4 — Validation
 
