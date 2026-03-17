@@ -525,8 +525,8 @@ export const roomConfig = pgTable('room_config', {
 - [x] "Beta" label on RAG responses (shipped in Phase 2)
 - [x] Concurrent response handling (`ragResponseActive` mutex per DO)
 - [x] Document deletion: Vectorize vector cleanup in cron orphan job (was missing)
-- [ ] Monitor Workers AI neuron consumption at account level — ops
-- [ ] Load test: 10 concurrent rooms with RAG active — ops
+- [x] Monitor Workers AI neuron consumption — admin endpoint + cron alert at 50%/80%
+- [x] Load test script — `scripts/load-test-rag.ts` (concurrent rooms, P50/P95 stats)
 
 ## Files
 
