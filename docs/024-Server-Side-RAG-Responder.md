@@ -481,8 +481,8 @@ export const roomConfig = pgTable('room_config', {
 - [x] Add trigger check in `handleChatMessage` (post-broadcast)
 - [x] Synthetic typing indicator for "Docs AI" before first delta
 - [x] Pre-flight: short-circuit on zero chunks with visible error
-- [ ] Spending cap enforcement (`llm_generation` per-user aggregate)
-- [ ] Rate limiting (3/min/room, 5/min/user)
+- [x] Spending cap enforcement (`llm_generation` 150/month free, 3¢ overage)
+- [x] Rate limiting (3/min/room, 5/min/user, 30s always-mode cooldown)
 - [x] 30s abort timeout on streamText
 - [x] Error handling: LLM failure → stream_abort with visible message
 
