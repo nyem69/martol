@@ -15,10 +15,11 @@ import type {
 	ErrorCode
 } from '../types/ws';
 import { createHyperdriveDb } from './db/hyperdrive';
-import { messages as messagesTable, readCursors, pendingActions, attachments, supportTickets } from './db/schema';
+import { messages as messagesTable, readCursors, pendingActions, attachments, supportTickets, aiUsage } from './db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { shouldRespond, extractQuestion, buildSystemPrompt, buildUserPrompt, createRagModel, type RagConfig } from './rag/responder';
 import { searchDocuments } from './rag/search';
+import { isAiCapReached } from './ai-billing';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -38,6 +39,13 @@ const MAX_STREAM_DELTA_SIZE = 4096;
 const MAX_STREAM_BODY_SIZE = MAX_BODY_SIZE; // 32 KB — same limit as regular messages
 const MAX_ACTIVE_STREAMS_PER_USER = 1;
 const STREAM_TIMEOUT_MS = 120_000; // 2 minutes — abort stale streams
+
+// RAG-specific rate limiting (separate from message rate limiter)
+const RAG_RATE_LIMIT_ROOM_MAX = 3;        // Max 3 RAG responses per minute per room
+const RAG_RATE_LIMIT_ROOM_WINDOW_MS = 60_000;
+const RAG_RATE_LIMIT_USER_MAX = 5;        // Max 5 RAG responses per minute per user (across rooms not enforced here — per-DO)
+const RAG_RATE_LIMIT_USER_WINDOW_MS = 60_000;
+const RAG_ALWAYS_COOLDOWN_MS = 30_000;    // Min 30s between RAG responses in "always" mode
 
 function padId(id: number): string {
 	return String(id).padStart(PAD_WIDTH, '0');
@@ -97,6 +105,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 	// RAG responder config (loaded via /notify-rag-config internal route)
 	private ragConfig: RagConfig | null = null;
+
+	// RAG-specific rate limiting (separate from message rate limiter)
+	private ragRoomTimestamps: number[] = [];
+	private ragUserTimestamps = new Map<string, number[]>();
+	private ragLastResponseTime = 0;
 
 	// Per-user rate limiting
 	private userMessageTimestamps = new Map<string, number[]>();
@@ -629,9 +642,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 		// RAG responder trigger check (non-blocking, after broadcast so user sees their message)
 		if (this.ragConfig?.ragEnabled && shouldRespond(msg.body, true, this.ragConfig.ragTrigger)) {
-			this.ctx.waitUntil(this.runRagResponse(orgId, msg.body, this.ragConfig).catch(err => {
-				console.error('[ChatRoom] RAG response error:', err);
-			}));
+			if (!this.isRagRateLimited(userId, this.ragConfig.ragTrigger)) {
+				this.ctx.waitUntil(this.runRagResponse(orgId, msg.body, this.ragConfig).catch(err => {
+					console.error('[ChatRoom] RAG response error:', err);
+				}));
+			}
 		}
 	}
 
@@ -1317,65 +1332,87 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		});
 
 		try {
-			// 2. Search documents — requires a DB connection for chunk content lookup
+			// 2. Open DB connection (used for cap check, search, and usage recording)
 			const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
 			await connectPromise;
-			let chunks;
+
 			try {
-				chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 5);
+				// 2a. Check spending cap before LLM call
+				if (await isAiCapReached(db, orgId)) {
+					await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
+						'Daily AI limit reached. Upgrade to Pro for more.', timestamp);
+					return;
+				}
+
+				// 2b. Search documents
+				const chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 5);
+
+				if (chunks.length === 0) {
+					// No chunks found — send visible error message
+					await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
+						'No relevant documents found for your question.', timestamp);
+					return;
+				}
+
+				// 3. Build prompt
+				const system = buildSystemPrompt('');
+				const prompt = buildUserPrompt(question, chunks);
+
+				// 4. Create model and stream (dynamic import to avoid loading AI SDK for every DO)
+				const model = createRagModel(config.ragModel, this.env.AI);
+
+				const { streamText } = await import('ai');
+				const result = streamText({
+					model,
+					system,
+					prompt,
+					temperature: config.ragTemperature ?? 0.3,
+					maxOutputTokens: config.ragMaxTokens ?? 2048,
+					abortSignal: AbortSignal.timeout(30_000),
+				});
+
+				// 5. Broadcast stream_start
+				await this.broadcast({
+					type: 'stream_start', localId, senderId, senderName, senderRole, timestamp
+				});
+
+				// 6. Stream deltas
+				let fullBody = '';
+				let buffer = '';
+				let lastFlush = Date.now();
+
+				for await (const delta of result.textStream) {
+					fullBody += delta;
+					buffer += delta;
+					if (Date.now() - lastFlush >= 100 || buffer.length > 200) {
+						await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
+						buffer = '';
+						lastFlush = Date.now();
+					}
+				}
+				if (buffer) {
+					await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
+				}
+
+				// 7. Commit final body to WAL via ingest helper
+				await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId, fullBody, timestamp);
+
+				// 8. Record LLM generation usage
+				const today = new Date().toISOString().slice(0, 10);
+				try {
+					await db
+						.insert(aiUsage)
+						.values({ orgId, operation: 'llm_generation' as const, count: 1, periodStart: today })
+						.onConflictDoUpdate({
+							target: [aiUsage.orgId, aiUsage.operation, aiUsage.periodStart],
+							set: { count: sql`${aiUsage.count} + 1` },
+						});
+				} catch (err) {
+					console.error('[ChatRoom] Failed to record LLM usage:', err);
+				}
 			} finally {
 				try { await client.end(); } catch { /* already closed */ }
 			}
-
-			if (chunks.length === 0) {
-				// No chunks found — send visible error message
-				await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
-					'No relevant documents found for your question.', timestamp);
-				return;
-			}
-
-			// 3. Build prompt
-			const system = buildSystemPrompt('');
-			const prompt = buildUserPrompt(question, chunks);
-
-			// 4. Create model and stream (dynamic import to avoid loading AI SDK for every DO)
-			const model = createRagModel(config.ragModel, this.env.AI);
-
-			const { streamText } = await import('ai');
-			const result = streamText({
-				model,
-				system,
-				prompt,
-				temperature: config.ragTemperature ?? 0.3,
-				maxOutputTokens: config.ragMaxTokens ?? 2048,
-				abortSignal: AbortSignal.timeout(30_000),
-			});
-
-			// 5. Broadcast stream_start
-			await this.broadcast({
-				type: 'stream_start', localId, senderId, senderName, senderRole, timestamp
-			});
-
-			// 6. Stream deltas
-			let fullBody = '';
-			let buffer = '';
-			let lastFlush = Date.now();
-
-			for await (const delta of result.textStream) {
-				fullBody += delta;
-				buffer += delta;
-				if (Date.now() - lastFlush >= 100 || buffer.length > 200) {
-					await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
-					buffer = '';
-					lastFlush = Date.now();
-				}
-			}
-			if (buffer) {
-				await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
-			}
-
-			// 7. Commit final body to WAL via ingest helper
-			await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId, fullBody, timestamp);
 
 		} catch (err) {
 			console.error('[ChatRoom] RAG generation error:', err);
@@ -2247,6 +2284,38 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		}
 		timestamps.push(now);
 		this.userMessageTimestamps.set(userId, timestamps);
+		return false;
+	}
+
+	// ── RAG Rate Limiting ────────────────────────────────────────────
+
+	private isRagRateLimited(userId: string, trigger: string): boolean {
+		const now = Date.now();
+
+		// "always" mode cooldown
+		if (trigger === 'always' && now - this.ragLastResponseTime < RAG_ALWAYS_COOLDOWN_MS) {
+			return true;
+		}
+
+		// Per-room rate limit
+		this.ragRoomTimestamps = this.ragRoomTimestamps.filter(t => now - t < RAG_RATE_LIMIT_ROOM_WINDOW_MS);
+		if (this.ragRoomTimestamps.length >= RAG_RATE_LIMIT_ROOM_MAX) {
+			return true;
+		}
+
+		// Per-user rate limit
+		const userTs = (this.ragUserTimestamps.get(userId) ?? []).filter(t => now - t < RAG_RATE_LIMIT_USER_WINDOW_MS);
+		if (userTs.length >= RAG_RATE_LIMIT_USER_MAX) {
+			this.ragUserTimestamps.set(userId, userTs);
+			return true;
+		}
+
+		// Record this request
+		this.ragRoomTimestamps.push(now);
+		userTs.push(now);
+		this.ragUserTimestamps.set(userId, userTs);
+		this.ragLastResponseTime = now;
+
 		return false;
 	}
 

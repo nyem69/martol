@@ -4,10 +4,12 @@
  * Free allowances (per org per month):
  * - doc_process: 50
  * - vector_query: 500
+ * - llm_generation: 150
  *
  * Overage rates:
  * - doc_process: $0.05/doc
  * - vector_query: $0.005/query
+ * - llm_generation: $0.03/call
  */
 
 import { aiUsage, subscriptions } from '$lib/server/db/schema';
@@ -17,13 +19,14 @@ import { createStripe } from '$lib/server/stripe';
 const FREE_ALLOWANCES = {
 	doc_process: 50,
 	vector_query: 500,
+	llm_generation: 150,
 } as const;
 
 export async function getAiUsageForOrg(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	db: any,
 	orgId: string
-): Promise<{ doc_process: number; vector_query: number }> {
+): Promise<{ doc_process: number; vector_query: number; llm_generation: number }> {
 	const periodStart = new Date().toISOString().slice(0, 8) + '01'; // First of current month
 
 	const rows = await db
@@ -31,7 +34,7 @@ export async function getAiUsageForOrg(
 		.from(aiUsage)
 		.where(and(eq(aiUsage.orgId, orgId), gte(aiUsage.periodStart, periodStart)));
 
-	const usage = { doc_process: 0, vector_query: 0 };
+	const usage = { doc_process: 0, vector_query: 0, llm_generation: 0 };
 	for (const row of rows) {
 		if (row.operation in usage) {
 			usage[row.operation as keyof typeof usage] += row.count;
@@ -62,7 +65,8 @@ export async function isAiCapReached(
 	const cap = sub?.cap ?? 5000; // $50 default
 	const docOverage = Math.max(0, usage.doc_process - FREE_ALLOWANCES.doc_process) * 5; // 5 cents each
 	const queryOverage = Math.max(0, usage.vector_query - FREE_ALLOWANCES.vector_query) * 0.5; // 0.5 cents each
-	const totalCents = docOverage + queryOverage;
+	const llmOverage = Math.max(0, usage.llm_generation - FREE_ALLOWANCES.llm_generation) * 3; // 3 cents each
+	const totalCents = docOverage + queryOverage + llmOverage;
 
 	return totalCents >= cap;
 }
@@ -71,6 +75,7 @@ export async function isAiCapReached(
 const OVERAGE_RATES = {
 	doc_process: 5,     // 5 cents per doc
 	vector_query: 0.5,  // 0.5 cents per query
+	llm_generation: 3,  // 3 cents per call
 } as const;
 
 /**
@@ -117,7 +122,8 @@ export async function reportAiUsageToStripe(db: any, stripeKey: string, meterId:
 			// Calculate overage in cents
 			const docOverage = Math.max(0, (usage['doc_process'] ?? 0) - FREE_ALLOWANCES.doc_process);
 			const queryOverage = Math.max(0, (usage['vector_query'] ?? 0) - FREE_ALLOWANCES.vector_query);
-			const totalCents = Math.round(docOverage * OVERAGE_RATES.doc_process + queryOverage * OVERAGE_RATES.vector_query);
+			const llmOverage = Math.max(0, (usage['llm_generation'] ?? 0) - FREE_ALLOWANCES.llm_generation);
+			const totalCents = Math.round(docOverage * OVERAGE_RATES.doc_process + queryOverage * OVERAGE_RATES.vector_query + llmOverage * OVERAGE_RATES.llm_generation);
 
 			if (totalCents <= 0) continue;
 
