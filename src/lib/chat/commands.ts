@@ -86,7 +86,8 @@ export function getAvailableCommands(userRole: string): SlashCommand[] {
 
 /** Match commands by prefix (for autocomplete) */
 export function matchCommands(input: string, userRole: string): SlashCommand[] {
-	const prefix = input.startsWith('/') ? input.slice(1).toLowerCase() : input.toLowerCase();
+	const raw = input.startsWith('/') ? input.slice(1) : input;
+	const prefix = raw.split(/\s/)[0].toLowerCase(); // Match against command name only, not args
 	return getAvailableCommands(userRole).filter((cmd) => cmd.name.startsWith(prefix));
 }
 
