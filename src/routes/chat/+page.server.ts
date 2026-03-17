@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import { generateId } from 'better-auth';
 import { user, member, organization, invitation, session as sessionTable } from '$lib/server/db/auth-schema';
-import { messages as messagesTable, readCursors } from '$lib/server/db/schema';
+import { messages as messagesTable, readCursors, roomConfig } from '$lib/server/db/schema';
 import { eq, and, desc, isNull, inArray, sql, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
@@ -132,16 +132,25 @@ export const load: PageServerLoad = async (event) => {
 		.where(eq(organization.id, roomId))
 		.limit(1);
 
-	// Parse OCR/RAG enabled from org metadata
+	// Parse OCR enabled from org metadata
 	let ocrEnabled = false;
-	let ragEnabled = false;
 	if (org?.metadata) {
 		try {
 			const meta = JSON.parse(org.metadata);
 			ocrEnabled = meta?.ocrEnabled === true;
-			ragEnabled = meta?.ragEnabled === true;
 		} catch { /* ignore malformed metadata */ }
 	}
+
+	// Load RAG enabled from room_config table
+	let ragEnabled = false;
+	try {
+		const [ragRow] = await db
+			.select({ ragEnabled: roomConfig.ragEnabled })
+			.from(roomConfig)
+			.where(eq(roomConfig.orgId, roomId))
+			.limit(1);
+		ragEnabled = ragRow?.ragEnabled ?? false;
+	} catch { /* room_config may not exist yet */ }
 
 	// Auto-fix stale room names: if owner's room still has a different user's auto-generated name
 	const currentUserName = locals.user.username || locals.user.name;

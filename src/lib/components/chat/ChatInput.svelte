@@ -144,6 +144,9 @@
 	function onKeydown(e: KeyboardEvent) {
 		// Slash menu keyboard navigation
 		if (showSlashMenu && slashMatches.length > 0) {
+			// Check if user has already typed args after the command name (e.g., "/ask some question")
+			const hasArgs = value.startsWith('/') && value.slice(1).includes(' ') && value.slice(1).split(/\s/, 2)[1]?.length > 0;
+
 			if (e.key === 'ArrowUp') {
 				e.preventDefault();
 				slashMenuIndex = (slashMenuIndex - 1 + slashMatches.length) % slashMatches.length;
@@ -154,7 +157,13 @@
 				slashMenuIndex = (slashMenuIndex + 1) % slashMatches.length;
 				return;
 			}
-			if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+			if (e.key === 'Tab') {
+				e.preventDefault();
+				selectSlashCommand(slashMatches[slashMenuIndex]);
+				return;
+			}
+			if (e.key === 'Enter' && !e.shiftKey && !hasArgs) {
+				// Only intercept Enter for command selection when no args typed yet
 				e.preventDefault();
 				selectSlashCommand(slashMatches[slashMenuIndex]);
 				return;
