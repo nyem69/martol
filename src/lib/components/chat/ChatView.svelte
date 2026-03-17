@@ -21,7 +21,7 @@
 	// These values are stable for this component instance.
 	// When roomId changes, the parent {#key} destroys and recreates this component.
 	// svelte-ignore state_referenced_locally — intentional: {#key} guarantees fresh instance per room.
-	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret, enableUploads, ocrEnabled } = data;
+	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret, enableUploads, ocrEnabled, ragEnabled } = data;
 
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
@@ -42,7 +42,7 @@
 		isOwn: msg.senderId === userId
 	}));
 
-	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages, roomName, ocrEnabled ?? false);
+	const store = new MessagesStore(roomId, userId, userName, userRole, dbMessages, roomName, ocrEnabled ?? false, ragEnabled ?? false);
 
 	let memberPanelOpen = $state(false);
 	let documentPanelOpen = $state(false);
@@ -363,6 +363,7 @@
 			{pendingMention}
 			onMentionConsumed={() => (pendingMention = null)}
 			uploadEnabled={enableUploads}
+			ragEnabled={store.ragEnabled}
 		/>
 
 		{#if store.error}

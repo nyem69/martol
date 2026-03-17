@@ -46,7 +46,7 @@ export type ServerMessage =
 	| { type: 'stream_start'; localId: string; senderId: string; senderName: string; senderRole: string; replyTo?: number; timestamp: string }
 	| { type: 'stream_delta'; localId: string; delta: string }
 	| { type: 'stream_abort'; localId: string; reason: string }
-	| { type: 'room_config_changed'; field: 'name' | 'ocr_enabled'; value: string | boolean; changedBy: string };
+	| { type: 'room_config_changed'; field: 'name' | 'ocr_enabled' | 'rag_enabled'; value: string | boolean; changedBy: string };
 
 export type ErrorCode =
 	| 'rate_limited'

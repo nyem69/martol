@@ -11,6 +11,7 @@ import { member } from '$lib/server/db/auth-schema';
 import { roomConfig } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { ensureRagUser } from '$lib/server/rag/system-user';
 
 const DEFAULTS = {
 	ragEnabled: false,
@@ -137,6 +138,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals, platform 
 				updatedBy: locals.user.id
 			}
 		});
+
+	// Ensure RAG system user exists when enabling RAG
+	if (merged.ragEnabled) {
+		await ensureRagUser(locals.db, orgId);
+	}
 
 	// Broadcast config change to connected WebSocket clients
 	if (platform?.env?.CHAT_ROOM && platform?.env?.HMAC_SIGNING_SECRET) {

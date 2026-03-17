@@ -455,5 +455,9 @@
   "rag_beta": "Beta",
   "rag_no_documents": "No relevant documents found for your question.",
   "rag_limit_reached": "Daily AI limit reached. Upgrade to Pro for more.",
-  "rag_error": "Document AI encountered an error. Please try again."
+  "rag_error": "Document AI encountered an error. Please try again.",
+  "rag_active": "Docs AI active",
+  "rag_config_title": "Document AI",
+  "rag_config_enable": "Enable Docs AI",
+  "rag_disabled_ask": "Docs AI is not enabled in this room. Ask a room owner to enable it in settings."
 }

@@ -32,7 +32,8 @@
 		onCancelReply,
 		pendingMention = null,
 		onMentionConsumed,
-		uploadEnabled = false
+		uploadEnabled = false,
+		ragEnabled = false
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
@@ -46,6 +47,7 @@
 		pendingMention?: string | null;
 		onMentionConsumed?: () => void;
 		uploadEnabled?: boolean;
+		ragEnabled?: boolean;
 	} = $props();
 
 	let value = $state('');
@@ -105,6 +107,11 @@
 		if (parsed && onCommand) {
 			// /ask is sent as a regular message so the DO can detect and trigger RAG
 			if (parsed.command === 'ask') {
+				if (!ragEnabled) {
+					uploadError = m.rag_disabled_ask();
+					setTimeout(() => (uploadError = ''), 6000);
+					return;
+				}
 				onSend(body, replyTo?.dbId);
 				value = '';
 				showSlashMenu = false;
@@ -239,10 +246,11 @@
 			if (atIdx !== -1 && (atIdx === 0 || textBeforeCursor[atIdx - 1] === ' ')) {
 				const query = textBeforeCursor.slice(atIdx + 1).toLowerCase();
 				const allEntry = 'all'.startsWith(query) ? [{ id: 'all', name: 'all' }] : [];
+				const docsEntry = ragEnabled && 'docs'.startsWith(query) ? [{ id: 'docs', name: 'docs' }] : [];
 				const matches = [...onlineUsers.entries()]
 					.filter(([_, u]) => u.name.toLowerCase().startsWith(query))
 					.map(([id, u]) => ({ id, name: u.name }));
-				const combined = [...allEntry, ...matches].slice(0, 8);
+				const combined = [...allEntry, ...docsEntry, ...matches].slice(0, 8);
 				mentionMatches = combined;
 				mentionIndex = 0;
 				mentionStart = atIdx;

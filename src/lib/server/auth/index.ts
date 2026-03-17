@@ -189,6 +189,10 @@ export function createAuth(
 			user: {
 				create: {
 					before: async (user) => {
+						// Reject reserved rag-* prefix (used by RAG system users)
+						if (user.id?.startsWith('rag-')) {
+							throw new Error('Reserved user ID prefix');
+						}
 						// Auto-generate username if not set (e.g. user-3f82d9a1)
 						if (!user.username) {
 							const random = crypto.randomUUID().slice(0, 8);

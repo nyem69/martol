@@ -132,12 +132,14 @@ export const load: PageServerLoad = async (event) => {
 		.where(eq(organization.id, roomId))
 		.limit(1);
 
-	// Parse OCR enabled from org metadata
+	// Parse OCR/RAG enabled from org metadata
 	let ocrEnabled = false;
+	let ragEnabled = false;
 	if (org?.metadata) {
 		try {
 			const meta = JSON.parse(org.metadata);
 			ocrEnabled = meta?.ocrEnabled === true;
+			ragEnabled = meta?.ragEnabled === true;
 		} catch { /* ignore malformed metadata */ }
 	}
 
@@ -354,6 +356,7 @@ export const load: PageServerLoad = async (event) => {
 		enableUploads: orgLimits?.limits.uploadsEnabled ?? false,
 		canSend: orgLimits ? withinLimit(orgLimits.usage.msgsToday, orgLimits.limits.maxMsgsPerDay) : true,
 		plan: orgLimits?.plan ?? 'free',
-		ocrEnabled
+		ocrEnabled,
+		ragEnabled
 	};
 };

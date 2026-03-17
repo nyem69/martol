@@ -47,6 +47,7 @@ export class MessagesStore {
 	briefVersion = $state(0);
 	roomName = $state<string>('');
 	ocrEnabled = $state<boolean>(false);
+	ragEnabled = $state<boolean>(false);
 
 	readonly ws: WebSocketStore;
 
@@ -68,13 +69,15 @@ export class MessagesStore {
 		userRole: string,
 		initialMessages?: DisplayMessage[],
 		initialRoomName?: string,
-		initialOcrEnabled?: boolean
+		initialOcrEnabled?: boolean,
+		initialRagEnabled?: boolean
 	) {
 		this.userId = userId;
 		this.userName = userName;
 		this.userRole = userRole;
 		if (initialRoomName !== undefined) this.roomName = initialRoomName;
 		if (initialOcrEnabled !== undefined) this.ocrEnabled = initialOcrEnabled;
+		if (initialRagEnabled !== undefined) this.ragEnabled = initialRagEnabled;
 
 		// Add self to onlineUsers (self is never received via WS presence)
 		this.onlineUsers.set(userId, { name: userName, role: userRole });
@@ -397,6 +400,9 @@ export class MessagesStore {
 				break;
 			case 'ocr_enabled':
 				this.ocrEnabled = msg.value as boolean;
+				break;
+			case 'rag_enabled':
+				this.ragEnabled = msg.value as boolean;
 				break;
 		}
 	}
