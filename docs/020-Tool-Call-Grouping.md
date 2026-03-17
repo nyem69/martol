@@ -1,7 +1,7 @@
 # Tool Call Grouping in Chat UI
 
 **Date:** 2026-03-17
-**Status:** Proposed
+**Status:** Phase 1+2+3 complete; Phase 4 (agent emission) pending
 **Priority:** 2
 **Inspired by:** [jinn](https://github.com/lanteanio/jinn) — groups consecutive tool calls with collapsible summary
 
@@ -115,27 +115,33 @@ When docs/019 streaming lands:
 
 ## Build Sequence
 
-### Phase 1 — Client heuristic (no server changes)
+### Phase 1 — Client heuristic (no server changes) ✅
 
-- [ ] Create `src/lib/types/timeline.ts` with `ToolCallGroup`, `ToolCallMessage`, `TimelineItem`
-- [ ] Create `src/lib/utils/tool-call-parser.ts` with `isToolCallMessage`, `parseToolCallBody`
-- [ ] Add i18n keys to `messages/en.json`: `tool_calls_used`, `tool_calls_running`
-- [ ] Create `src/lib/components/chat/ToolCallGroup.svelte`
-- [ ] Modify `MessageList.svelte` — add `groupToolCalls()` pass and `tool_group` branch
+- [x] Create `src/lib/types/timeline.ts` with `ToolCallGroup`, `ToolCallMessage`, `TimelineItem`
+- [x] Create `src/lib/utils/tool-call-parser.ts` with `isToolCallMessage`, `parseToolCallBody`
+- [x] Add i18n keys to `messages/en.json`: `tool_calls_used`, `tool_calls_running`
+- [x] Create `src/lib/components/chat/ToolCallGroup.svelte`
+- [x] Modify `MessageList.svelte` — add `groupToolCalls()` pass and `tool_group` branch
 
-### Phase 2 — Wire field (server change, no migration)
+### Phase 2 — Wire field (server change, no migration) ✅
 
-- [ ] Add `subtype?: 'tool_call'` to `chatSendSchema` in `mcp.ts`
-- [ ] Add `subtype?: string` to `ServerMessagePayload` and `StoredMessage` in `ws.ts`
-- [ ] Update `handleMessage` / `handleHistory` in `messages.svelte.ts` to map `subtype`
-- [ ] Update DO ingest handler in `chat-room.ts` to pass through `subtype`
-- [ ] Update `isToolCallMessage` to check `subtype` first
+- [x] Add `subtype?: 'tool_call'` to `chatSendSchema` in `mcp.ts`
+- [x] Add `subtype?: string` to `ServerMessagePayload` and `StoredMessage` in `ws.ts`
+- [x] Update `handleMessage` / `handleHistory` in `messages.svelte.ts` to map `subtype`
+- [x] Update DO ingest handler in `chat-room.ts` to pass through `subtype`
+- [x] Update `isToolCallMessage` to check `subtype` first
 
-### Phase 3 — Streaming (after docs/019)
+### Phase 3 — Streaming (after docs/019) ✅
 
-- [ ] Add `isStreaming` prop to `ToolCallGroup`
-- [ ] Implement auto-collapse `$effect`
-- [ ] Verify reactivity under streaming updates
+- [x] Add `isStreaming` prop to `ToolCallGroup`
+- [x] Implement auto-collapse `$effect`
+- [x] Verify reactivity under streaming updates
+
+### Phase 4 — Agent emission (martol-client)
+
+- [ ] Add `chat_send` MCP tool with `subtype: 'tool_call'` to agent wrapper
+- [ ] Emit tool call messages with `[tool:<name>]` prefix during tool loop
+- [ ] End-to-end verification: agent tool calls render as grouped pills in browser
 
 ## Files
 

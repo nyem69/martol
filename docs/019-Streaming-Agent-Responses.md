@@ -1,7 +1,7 @@
 # Streaming Agent Responses
 
 **Date:** 2026-03-17
-**Status:** Proposed
+**Status:** Complete
 **Priority:** 1 (highest)
 **Inspired by:** [jinn](https://github.com/lanteanio/jinn) — streams Claude Code JSONL deltas to browser in real-time
 
