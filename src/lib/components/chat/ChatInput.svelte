@@ -362,8 +362,12 @@
 
 	function onFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (file) uploadFile(file);
+		const files = input.files;
+		if (files) {
+			for (const file of files) {
+				uploadFile(file);
+			}
+		}
 		// Reset so the same file can be re-selected
 		input.value = '';
 	}
@@ -401,8 +405,12 @@
 		if (!uploadEnabled) return;
 		e.preventDefault();
 		draggingOver = false;
-		const file = e.dataTransfer?.files?.[0];
-		if (file) uploadFile(file);
+		const files = e.dataTransfer?.files;
+		if (files) {
+			for (const file of files) {
+				uploadFile(file);
+			}
+		}
 	}
 </script>
 
@@ -487,6 +495,7 @@
 			<input
 				bind:this={fileInput}
 				type="file"
+				multiple
 				accept="image/jpeg,image/png,image/gif,image/webp,image/tiff,application/pdf,text/plain,text/markdown,text/csv,text/html,application/json,text/yaml,application/xml,message/rfc822,application/zip,application/gzip,.docx,.xlsx,.pptx,.odt,.eml,.md,.csv,.json,.yaml,.yml"
 				class="hidden"
 				onchange={onFileSelect}
