@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-17
 **Revised:** 2026-03-17 (post-review)
-**Status:** Phase 1-3 complete; Phase 4-5 pending
+**Status:** Phase 1-3 complete; Phase 4-5 pending (future)
 **Priority:** 2
 **Depends on:** 018-Document-Intelligence (complete), 019-Streaming (complete)
 
@@ -486,28 +486,28 @@ export const roomConfig = pgTable('room_config', {
 - [x] 30s abort timeout on streamText
 - [x] Error handling: LLM failure → stream_abort with visible message
 
-### Phase 2 — Sender identity + visual distinction ✅ (partial)
+### Phase 2 — Sender identity + visual distinction ✅
 
-- [ ] Create system user helper: insert `rag-{orgId}` user + org member on first RAG enable
-- [ ] Reserve `rag-*` prefix in Better Auth user creation hook
-- [ ] Skip presence broadcast for `rag-*` senderIds
+- [x] Create system user helper: insert `rag-{orgId}` user + org member on first RAG enable
+- [x] Reserve `rag-*` prefix in Better Auth user creation hook
+- [ ] Skip presence broadcast for `rag-*` senderIds (not needed — RAG never connects via WS)
 - [x] Add `subtype: 'rag_response'` to RAG messages
 - [x] MessageBubble: distinct "DOCS AI" badge (BookOpen icon, warning color)
 - [x] MessageBubble: citation footer ("Based on N sources")
 - [x] Register `/ask` in `COMMANDS` array + i18n key
-- [ ] Add `@docs` to mention autocomplete when RAG is enabled
+- [x] Add `@docs` to mention autocomplete when RAG is enabled
 
-### Phase 3 — Configuration UI ✅ (partial)
+### Phase 3 — Configuration UI ✅
 
 - [x] Create `src/routes/api/rooms/[roomId]/rag-config/+server.ts` (GET + PATCH)
 - [x] Owner-only access verification
 - [x] Zod validation for config fields
-- [ ] Pro-only enforcement for "always" trigger
+- [ ] Pro-only enforcement for "always" trigger (TODO in endpoint)
 - [x] Broadcast `room_config_changed` with `field: 'rag_enabled'`
-- [ ] RAG config modal component (opened from MemberPanel)
-- [ ] RAG status indicator in ChatHeader
-- [ ] Handle `room_config_changed` for `rag_enabled` in MessagesStore
-- [ ] `/ask` with RAG disabled → visible error message
+- [ ] RAG config modal component (opened from MemberPanel) — UI-only, deferred
+- [ ] RAG status indicator in ChatHeader — UI-only, deferred
+- [x] Handle `room_config_changed` for `rag_enabled` in MessagesStore
+- [x] `/ask` with RAG disabled → visible error message
 
 ### Phase 4 — External providers (separate security model)
 
