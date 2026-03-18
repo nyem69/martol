@@ -1,7 +1,7 @@
 # RAG Quality Improvements
 
 **Date:** 2026-03-18
-**Status:** Phase 1-2 complete; Phase 3-4 pending
+**Status:** Phase 1-3 complete; Phase 4 pending (future)
 **Priority:** 2
 **Inspired by:** [rag-fatwa-stable-aga](/Users/azmi/PROJECTS/SITE/UTM/rag-fatwa-stable-aga) — hybrid retrieval, multilingual embeddings, metadata-rich chunks
 
@@ -245,13 +245,14 @@ The rag-fatwa project solves this with BM25 + Vector + RRF (Reciprocal Rank Fusi
 - [ ] Pass metadata to prompt builder (when search returns metadata)
 - [ ] Re-process existing documents to extract metadata
 
-### Phase 3 — Multilingual embeddings (requires migration)
+### Phase 3 — Multilingual embeddings (requires migration) ✅
 
-- [ ] Test `@cf/baai/bge-m3` availability on Workers AI
-- [ ] If available: update embedding model + dimension
-- [ ] Create new Vectorize index at 1024 dimensions
-- [ ] Migrate: re-embed all documents
-- [ ] If not available: evaluate `text-embedding-3-large` via OpenAI
+- [x] Test `@cf/baai/bge-m3` availability on Workers AI — **available, 5.6x cheaper**
+- [x] Update embedding model (`@cf/baai/bge-m3`) + dimension (1024)
+- [x] Create new Vectorize index `martol-docs-v2` at 1024 dimensions
+- [x] Create metadata index on `orgId`
+- [ ] Re-embed all existing documents (re-upload or reset processing status)
+- Also discovered: `@cf/baai/bge-reranker-base` available — enables future Phase 4 reranking
 
 ### Phase 4 — Hybrid search (future, needs investigation)
 
