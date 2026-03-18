@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages';
-	import { Send, Paperclip } from '@lucide/svelte';
+	import { Send, Paperclip, X } from '@lucide/svelte';
 	import { matchCommands, parseCommand, type SlashCommand } from '$lib/chat/commands';
 	import SlashMenu from './SlashMenu.svelte';
 	import MentionPopup from './MentionPopup.svelte';
@@ -553,6 +553,17 @@
 				class="flex-1 resize-none border-0 bg-transparent leading-relaxed"
 				style="color: var(--text); font-family: var(--font-sans); font-size: 16px; max-height: 144px;{isViewer ? ' opacity: 0.5;' : ''}"
 			></textarea>
+			{#if value.trim()}
+				<button
+					onclick={() => { value = ''; resize(); showSlashMenu = false; onCancelReply?.(); }}
+					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-70 active:scale-95"
+					style="color: var(--text-muted);"
+					aria-label="Clear"
+					data-testid="clear-input"
+				>
+					<X size={14} />
+				</button>
+			{/if}
 			<button
 				onclick={send}
 				disabled={!canSend}
