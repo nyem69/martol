@@ -1404,8 +1404,10 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				}
 
 				// 3. Build prompt
+				console.log(`[ChatRoom] RAG: ${chunks.length} chunks found, building prompt for: "${question.slice(0, 80)}"`);
 				const system = buildSystemPrompt('');
 				const prompt = buildUserPrompt(question, chunks);
+				console.log(`[ChatRoom] RAG: prompt length ${prompt.length} chars, model: ${config.ragModel}`);
 
 				// 4. Create model and stream (dynamic import to avoid loading AI SDK for every DO)
 				const model = createRagModel(config, this.env.AI, apiKey);
@@ -1444,6 +1446,10 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				}
 
 				// 7. Commit final body to WAL via ingest helper
+				if (!fullBody.trim()) {
+					console.error('[ChatRoom] RAG generation produced empty response — model may have failed silently');
+					fullBody = 'I was unable to generate a response. Please try again.';
+				}
 				await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId, fullBody, timestamp);
 
 				// 8. Record LLM generation usage
