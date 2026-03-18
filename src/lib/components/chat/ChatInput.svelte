@@ -277,8 +277,21 @@
 		uploadProgress = 0;
 	}
 
+	let uploadQueue: File[] = [];
+
+	function processNextUpload() {
+		if (uploadQueue.length > 0) {
+			const next = uploadQueue.shift()!;
+			uploadFile(next);
+		}
+	}
+
 	function uploadFile(file: File) {
-		if (uploading) return; // Prevent concurrent uploads
+		if (uploading) {
+			// Queue file for sequential upload
+			uploadQueue.push(file);
+			return;
+		}
 
 		if (!ALLOWED_TYPES.has(file.type)) {
 			uploadError = m.chat_upload_type_not_allowed();
@@ -307,6 +320,7 @@
 		xhr.onload = () => {
 			activeXhr = null;
 			uploading = false;
+			processNextUpload();
 			console.log(`[Upload] Response status=${xhr.status}`);
 			if (xhr.status >= 200 && xhr.status < 300) {
 				try {
@@ -352,6 +366,7 @@
 		xhr.onerror = () => {
 			activeXhr = null;
 			uploading = false;
+			processNextUpload();
 			uploadError = m.chat_upload_failed();
 			setTimeout(() => (uploadError = ''), 4000);
 		};
