@@ -24,7 +24,8 @@
 		onReport,
 		onLoadMore,
 		onApproveAction,
-		onRejectAction
+		onRejectAction,
+		processingFiles = []
 	}: {
 		messages: DisplayMessage[];
 		systemEvents: SystemEvent[];
@@ -34,6 +35,7 @@
 		loadingHistory?: boolean;
 		hasMoreHistory?: boolean;
 		canApproveActions?: boolean;
+		processingFiles?: string[];
 		onRetry?: (localId: string) => void;
 		onReply?: (message: DisplayMessage) => void;
 		onReport?: (messageId: number, messageBody: string) => void;
@@ -259,6 +261,19 @@
 				/>
 			{/if}
 		{/each}
+		{#if processingFiles.length > 0}
+			<div class="flex items-center gap-2 px-4 py-2" aria-live="polite">
+				<span
+					class="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+					style="color: var(--accent);"
+				></span>
+				<span class="text-xs" style="color: var(--text-muted); font-family: var(--font-mono);">
+					{processingFiles.length === 1
+						? `Indexing ${processingFiles[0]}…`
+						: `Indexing ${processingFiles.length} files…`}
+				</span>
+			</div>
+		{/if}
 	</div>
 
 	{#if hasNewMessages}

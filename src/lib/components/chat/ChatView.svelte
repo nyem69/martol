@@ -361,6 +361,7 @@
 			onLoadMore={loadMoreHistory}
 			onApproveAction={handleApproveAction}
 			onRejectAction={handleRejectAction}
+			processingFiles={store.processingFiles}
 		/>
 
 		<ChatInput
@@ -380,6 +381,7 @@
 			onMentionConsumed={() => (pendingMention = null)}
 			uploadEnabled={enableUploads}
 			ragEnabled={store.ragEnabled}
+			onFileProcessing={(filename) => store.addProcessingFile(filename)}
 		/>
 
 		{#if store.error}

@@ -33,7 +33,8 @@
 		pendingMention = null,
 		onMentionConsumed,
 		uploadEnabled = false,
-		ragEnabled = false
+		ragEnabled = false,
+		onFileProcessing
 	}: {
 		onSend: (body: string, replyTo?: number) => void;
 		onTyping: () => void;
@@ -48,6 +49,7 @@
 		onMentionConsumed?: () => void;
 		uploadEnabled?: boolean;
 		ragEnabled?: boolean;
+		onFileProcessing?: (filename: string) => void;
 	} = $props();
 
 	let value = $state('');
@@ -328,6 +330,9 @@
 					console.log('[Upload] Server response:', JSON.stringify(json, null, 2));
 					if (json.rag) {
 						console.log(`[Upload] RAG pipeline: ${json.rag.status} — ${json.rag.reason}`);
+						if (json.rag.status === 'queued' && json.filename) {
+							onFileProcessing?.(json.filename as string);
+						}
 					}
 					if (json.ok && json.key) {
 						// Use server-sanitized filename to avoid markdown injection from raw file.name

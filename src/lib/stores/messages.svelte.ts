@@ -48,6 +48,7 @@ export class MessagesStore {
 	roomName = $state<string>('');
 	ocrEnabled = $state<boolean>(false);
 	ragEnabled = $state<boolean>(false);
+	processingFiles = $state<string[]>([]);
 
 	readonly ws: WebSocketStore;
 
@@ -130,6 +131,7 @@ export class MessagesStore {
 				this.briefVersion = msg.version;
 				break;
 			case 'document_indexed':
+				this.processingFiles = this.processingFiles.filter(f => f !== msg.filename);
 				window.dispatchEvent(new CustomEvent('document-indexed', { detail: msg }));
 				break;
 			case 'stream_start':
@@ -546,6 +548,13 @@ export class MessagesStore {
 	}
 
 	typingNames = $derived([...this.typingUsers.values()].map((t) => t.name).sort());
+
+	/** Track a file as being processed by the RAG pipeline */
+	addProcessingFile(filename: string): void {
+		if (!this.processingFiles.includes(filename)) {
+			this.processingFiles = [...this.processingFiles, filename];
+		}
+	}
 
 	connect(): void {
 		this.ws.connect();
