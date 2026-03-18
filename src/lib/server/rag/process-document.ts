@@ -14,6 +14,7 @@ import { kreuzbergProvider, ExtractionError } from './kreuzberg-provider';
 import { chunkText } from './chunker';
 import { embedAndIndex, getEmbeddingModel, getEmbeddingDim } from './embedder';
 import { isAiCapReached } from '$lib/server/ai-billing';
+import { extractDocumentMetadata } from './metadata-extractor';
 
 // Register Kreuzberg as the primary provider for PDF, Office, HTML, etc.
 // Prepended to the registry so it takes priority over the built-in PDF stub.
@@ -138,6 +139,9 @@ export async function processDocument(
 			})
 			.where(eq(attachments.id, attachmentId));
 
+		// 6b. Extract document-level metadata (regex-only, <100ms)
+		const metadata = extractDocumentMetadata(extracted.text, att.filename);
+
 		// 7. Chunk
 		const chunks = chunkText(extracted.text, 500, 50);
 		console.log(`[RAG] Chunked into ${chunks.length} segments`);
@@ -172,6 +176,9 @@ export async function processDocument(
 				chunkHash: null, // TODO: add per-chunk hashing for dedup
 				embeddingModel,
 				embeddingDim,
+				documentDate: metadata.documentDate,
+				documentTitle: metadata.documentTitle,
+				language: metadata.language,
 			}))
 		);
 

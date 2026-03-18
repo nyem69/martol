@@ -176,6 +176,13 @@
       "when": 1773728319979,
       "tag": "0024_dapper_blazing_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1773804985615,
+      "tag": "0025_overrated_terrax",
+      "breakpoints": true
     }
   ]
 }

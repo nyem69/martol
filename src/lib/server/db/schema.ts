@@ -649,6 +649,9 @@ export const documentChunks = pgTable(
 		chunkHash: text('chunk_hash'),
 		embeddingModel: text('embedding_model'),
 		embeddingDim: integer('embedding_dim'),
+		documentDate: text('document_date'),
+		documentTitle: text('document_title'),
+		language: text('language'),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 	},
 	(table) => [
