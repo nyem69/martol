@@ -1,7 +1,7 @@
 # RAG Quality Improvements
 
 **Date:** 2026-03-18
-**Status:** Proposed
+**Status:** Phase 1-2 complete; Phase 3-4 pending
 **Priority:** 2
 **Inspired by:** [rag-fatwa-stable-aga](/Users/azmi/PROJECTS/SITE/UTM/rag-fatwa-stable-aga) — hybrid retrieval, multilingual embeddings, metadata-rich chunks
 
@@ -229,19 +229,20 @@ The rag-fatwa project solves this with BM25 + Vector + RRF (Reciprocal Rank Fusi
 
 ## Build Sequence
 
-### Phase 1 — Quick wins (no migration)
+### Phase 1 — Quick wins (no migration) ✅
 
-- [ ] Increase `topK` from 5 to 10 in search
-- [ ] Update prompt template with few-shot example
-- [ ] Update chunk formatting with richer headers
-- [ ] Add "include important details" instruction
+- [x] Increase `topK` from 5 to 10 in search
+- [x] Update prompt template with few-shot example
+- [x] Update chunk formatting with richer headers (`[📄 filename | Chunk N]`)
+- [x] Add "include important details" instruction
+- [x] Add 8,000-word context cap
 
-### Phase 2 — Metadata extraction
+### Phase 2 — Metadata extraction ✅
 
-- [ ] Create `metadata-extractor.ts` (regex-based)
-- [ ] DB migration: add metadata columns to `documentChunks`
-- [ ] Wire into `processDocument()` pipeline
-- [ ] Pass metadata to prompt builder
+- [x] Create `metadata-extractor.ts` (regex-based: date, title, language)
+- [x] DB migration: add `documentDate`, `documentTitle`, `language` columns to `documentChunks`
+- [x] Wire into `processDocument()` pipeline (step 6b)
+- [ ] Pass metadata to prompt builder (when search returns metadata)
 - [ ] Re-process existing documents to extract metadata
 
 ### Phase 3 — Multilingual embeddings (requires migration)
