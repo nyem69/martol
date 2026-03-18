@@ -9,7 +9,8 @@ import { documentChunks } from '$lib/server/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 
 const RERANKER_MODEL = '@cf/baai/bge-reranker-base';
-const OVERSAMPLE_FACTOR = 2; // Retrieve 2x topK from Vectorize, rerank down to topK
+const OVERSAMPLE_FACTOR = 4; // Retrieve 4x topK from Vectorize, rerank down to topK
+const MAX_VECTORIZE_TOPK = 100; // Vectorize maximum results per query
 
 export interface SearchResult {
 	content: string;
@@ -33,8 +34,9 @@ export async function searchDocuments(
 	// 1. Embed the query
 	const queryVector = await embedQuery(ai, query);
 
-	// 2. Oversample from Vectorize (retrieve 2x, rerank to topK)
-	const oversampleK = topK * OVERSAMPLE_FACTOR;
+	// 2. Oversample from Vectorize (retrieve 4x, rerank to topK)
+	const effectiveTopK = Math.min(topK, 20); // Hard cap to prevent expensive queries
+	const oversampleK = Math.min(effectiveTopK * OVERSAMPLE_FACTOR, MAX_VECTORIZE_TOPK);
 	const results = await vectorize.query(queryVector, {
 		topK: oversampleK,
 		filter: { orgId },
@@ -97,6 +99,10 @@ export async function searchDocuments(
 /**
  * Rerank search results using Workers AI cross-encoder model.
  * Takes query + candidate results, returns top-N sorted by reranker score.
+ *
+ * Workers AI reranker response format:
+ *   { response: [{ id: number, score: number }, ...] }
+ * where `id` maps to the index in the input `contexts` array.
  */
 async function rerankResults(
 	ai: Ai,
@@ -110,28 +116,30 @@ async function rerankResults(
 			text: c.content.slice(0, 1500),
 		}));
 
-		const response = await ai.run(RERANKER_MODEL, {
-			query,
-			contexts,
+		// Workers AI types don't include 'query' for reranker yet — cast needed
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		} as any);
+		const response = await ai.run(RERANKER_MODEL, { query, contexts } as any);
 
-		// Response is an array of { score: number } in the same order as contexts
+		// Unwrap the Workers AI reranker response: { response: [{ id, score }] }
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const scores = response as any as Array<{ score: number }>;
+		const raw = response as any;
+		const scores: Array<{ id: number; score: number }> | undefined =
+			raw?.response ?? (Array.isArray(raw) ? raw : undefined);
 
-		if (Array.isArray(scores) && scores.length === candidates.length) {
-			// Attach reranker scores and sort descending
-			const scored = candidates.map((c, i) => ({
-				...c,
-				score: scores[i].score, // Replace vector score with reranker score
-			}));
+		if (Array.isArray(scores) && scores.length > 0 && typeof scores[0]?.score === 'number') {
+			// Map reranker scores back to candidates using the id field
+			const scored = scores
+				.filter((s) => typeof s.id === 'number' && s.id >= 0 && s.id < candidates.length)
+				.map((s) => ({
+					...candidates[s.id],
+					score: s.score,
+				}));
 			scored.sort((a, b) => b.score - a.score);
 			return scored.slice(0, topN);
 		}
 
 		// Fallback: reranker response unexpected, return original order
-		console.warn('[Search] Reranker response unexpected, using vector scores');
+		console.warn('[Search] Reranker response format unexpected:', JSON.stringify(raw).slice(0, 200));
 		return candidates.slice(0, topN);
 	} catch (err) {
 		// Reranker failed — gracefully degrade to vector-only scores
