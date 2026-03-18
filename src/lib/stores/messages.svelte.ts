@@ -553,6 +553,10 @@ export class MessagesStore {
 	addProcessingFile(filename: string): void {
 		if (!this.processingFiles.includes(filename)) {
 			this.processingFiles = [...this.processingFiles, filename];
+			// Auto-clear after 3 minutes (fallback for failed indexing that never sends document_indexed)
+			setTimeout(() => {
+				this.processingFiles = this.processingFiles.filter(f => f !== filename);
+			}, 180_000);
 		}
 	}
 

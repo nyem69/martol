@@ -330,7 +330,7 @@
 					console.log('[Upload] Server response:', JSON.stringify(json, null, 2));
 					if (json.rag) {
 						console.log(`[Upload] RAG pipeline: ${json.rag.status} — ${json.rag.reason}`);
-						if (json.rag.status === 'queued' && json.filename) {
+						if (json.rag.status === 'triggered' && json.filename) {
 							onFileProcessing?.(json.filename as string);
 						}
 					}
@@ -546,7 +546,7 @@
 				onkeydown={onKeydown}
 				onpaste={onPaste}
 				placeholder={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
-				rows="1"
+				rows="2"
 				disabled={disabled || isViewer}
 				data-testid="chat-input"
 				aria-label={isViewer ? m.chat_viewer_readonly() : m.chat_placeholder()}
