@@ -1,12 +1,17 @@
 /**
  * Embedding generation and Vectorize indexing.
- * Uses Workers AI BGE-base-en model (768 dimensions).
+ * Uses Workers AI BGE-M3 multilingual model (1024 dimensions, 100+ languages).
+ *
+ * Migration from BGE-base-en-v1.5 (768-dim, English-only):
+ * - Vectorize index recreated at 1024 dimensions
+ * - All documents re-embedded with BGE-M3
+ * - 5.6x cheaper per token ($0.012 vs $0.067 per M input tokens)
  */
 
 import type { TextChunk } from './chunker';
 
-const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
-const EMBEDDING_DIM = 768;
+const EMBEDDING_MODEL = '@cf/baai/bge-m3';
+const EMBEDDING_DIM = 1024;
 
 export interface IndexedChunk extends TextChunk {
 	vectorId: string;

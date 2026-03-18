@@ -86,7 +86,10 @@ STRIPE_PRO_PRICE_ID = "price_1T7NluDkVAFKcyqKBdjrDYey"
 
 [[vectorize]]
 binding = "VECTORIZE"
-index_name = "martol-docs"
+index_name = "martol-docs-v2"
+# Migration: BGE-M3 (1024-dim, multilingual) replaces BGE-base-en-v1.5 (768-dim, English-only)
+# Created via: npx wrangler vectorize create martol-docs-v2 --dimensions 1024 --metric cosine
+# Metadata index: npx wrangler vectorize create-metadata-index martol-docs-v2 --property-name orgId --type string
 
 [ai]
 binding = "AI"
