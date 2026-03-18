@@ -258,10 +258,11 @@ const worker = {
 			console.error('[Cron] Ingestion job purge failed:', err);
 		}
 
-		// Clean up stuck processing jobs (>5 minutes without progress)
+		// Clean up stuck processing jobs (>10 minutes without progress)
+		// Increased from 5min to 10min for BGE-M3 embedding which is slower than BGE-base
 		try {
 			const { ingestionJobs, attachments } = await import('./src/lib/server/db/schema');
-			const stuckCutoff = new Date(Date.now() - 5 * 60 * 1000);
+			const stuckCutoff = new Date(Date.now() - 10 * 60 * 1000);
 
 			const stuckJobs = await db
 				.select({
@@ -309,7 +310,7 @@ const worker = {
 					SELECT 1 FROM ingestion_jobs ij
 					WHERE ij.attachment_id = a.id AND ij.status IN ('running', 'pending')
 				  )
-				LIMIT 10
+				LIMIT 3
 			`);
 
 			if (orphaned.rows.length > 0 && ai && vectorize && r2) {
