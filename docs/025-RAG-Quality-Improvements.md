@@ -1,7 +1,7 @@
 # RAG Quality Improvements
 
 **Date:** 2026-03-18
-**Status:** Phase 1-3 complete; Phase 4 pending (future)
+**Status:** Complete (Phase 1-4)
 **Priority:** 2
 **Inspired by:** [rag-fatwa-stable-aga](/Users/azmi/PROJECTS/SITE/UTM/rag-fatwa-stable-aga) — hybrid retrieval, multilingual embeddings, metadata-rich chunks
 
@@ -254,12 +254,14 @@ The rag-fatwa project solves this with BM25 + Vector + RRF (Reciprocal Rank Fusi
 - [ ] Re-embed all existing documents (re-upload or reset processing status)
 - Also discovered: `@cf/baai/bge-reranker-base` available — enables future Phase 4 reranking
 
-### Phase 4 — Hybrid search (future, needs investigation)
+### Phase 4 — Reranking (simpler than hybrid search) ✅
 
-- [ ] Investigate D1 FTS5 feasibility
-- [ ] Prototype keyword index + RRF fusion
-- [ ] Evaluate external reranking APIs
-- [ ] Benchmark retrieval quality
+- [x] Use Workers AI `@cf/baai/bge-reranker-base` ($0.0031/M tokens)
+- [x] Oversample: retrieve 2× topK from Vectorize (20 candidates)
+- [x] Rerank with cross-encoder → return top 10
+- [x] Graceful degradation: if reranker fails, fall back to vector scores
+- [ ] D1 FTS5 keyword search — deferred (reranking gives most of the benefit)
+- [ ] RRF fusion — deferred (needs keyword index infrastructure)
 
 ## Files
 
