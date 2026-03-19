@@ -33,7 +33,7 @@ export async function searchDocuments(
 	vectorize: VectorizeIndex,
 	orgId: string,
 	query: string,
-	topK: number = 7
+	topK: number = 15
 ): Promise<SearchResult[]> {
 	// 1. Embed the query
 	const queryVector = await embedQuery(ai, query);

@@ -1394,7 +1394,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				}
 
 				// 2d. Search documents
-				const chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 7);
+				const chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 15);
 
 				if (chunks.length === 0) {
 					// No chunks found — send visible error message
