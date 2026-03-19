@@ -1470,12 +1470,13 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			}
 
 		} catch (err) {
-			console.error('[ChatRoom] RAG generation error:', err);
+			const errMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+			console.error('[ChatRoom] RAG generation error:', errMsg);
 			// Send abort for the stream
 			await this.broadcast({ type: 'stream_abort', localId, reason: 'generation_failed' });
-			// Send visible error message
+			// Send visible error with details for debugging
 			await this.ingestRagMessage(localId + '-err', senderId, senderName, senderRole, orgId,
-				'Document AI encountered an error. Please try again.', timestamp);
+				`Document AI error: ${errMsg.slice(0, 300)}`, timestamp);
 		} finally {
 			this.ragResponseActive = false;
 			// Clear typing indicator
