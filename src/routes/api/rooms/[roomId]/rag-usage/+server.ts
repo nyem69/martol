@@ -30,6 +30,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		))
 		.limit(1);
 
-	// TODO: determine limit from subscription plan
+	// Hardcoded limit — will be derived from the room creator's subscription plan
+	// once billing tier gates are implemented (see billing model in CLAUDE.md).
 	return json({ count: Number(usage?.total ?? 0), limit: 150 });
 };

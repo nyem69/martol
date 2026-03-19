@@ -5,7 +5,8 @@
  * We define the application-specific tables here.
  */
 
-// TODO: LO-09 — Add CHECK(length(id) <= 128) to auth table PKs (deferred: Better Auth managed)
+// Deferred (LO-09): CHECK(length(id) <= 128) on auth table PKs — cannot add without
+// forking Better Auth's schema generation. IDs are UUIDs (36 chars), so no practical risk.
 
 import {
 	pgTable,

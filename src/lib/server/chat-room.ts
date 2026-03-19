@@ -2390,6 +2390,10 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 						{ type: 'presence', senderId: userId, senderName: name, senderRole: role, status: 'offline' },
 						ws
 					);
+					// Clean up per-user rate limiter entries to prevent unbounded Map growth
+					// over long DO lifetimes with many unique users (P-19)
+					this.userMessageTimestamps.delete(userId);
+					this.ragUserTimestamps.delete(userId);
 				}
 			}
 		} catch {

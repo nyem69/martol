@@ -236,7 +236,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 		if (!withinLimit(roomCount, maxRooms)) {
 			return new Response(
-				JSON.stringify({ error: { message: `Room limit reached (${maxRooms === -1 ? 'unlimited' : maxRooms}). Remove a room before creating another.` } }),
+				JSON.stringify({ error: { message: 'Room limit reached. Remove a room before creating another, or upgrade your plan.' } }),
 				{ status: 403, headers: { 'Content-Type': 'application/json' } }
 			);
 		}
@@ -478,7 +478,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 			if (kv) {
 				const mcpLimit = await checkRateLimit(kv, {
-					key: `mcp:${apiKey.slice(-8)}`,
+					// NOTE: Last 8 chars used as key — theoretical collision risk if two keys share
+				// the same suffix, but probability is negligible with current key format.
+				// A full-key hash would be safer but adds latency for minimal benefit.
+				key: `mcp:${apiKey.slice(-8)}`,
 					maxRequests: 60,
 					windowSeconds: 60
 				});
@@ -607,6 +610,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const response = await resolve(event);
 
 		// ── Audit logging for OTP verify ──
+		// LIMITATION: This only logs when event.locals.user is already set (i.e., user
+		// is authenticated). For unauthenticated OTP attempts (the common case for login),
+		// locals.user is null and the audit entry is skipped. To fix properly, extract
+		// the email from the request body and log independently of session state.
 		if (isOtpVerify && event.locals.user && event.locals.db) {
 			const auditAction = response.ok ? 'login_success' : 'login_failed';
 			try {

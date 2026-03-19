@@ -34,7 +34,8 @@ const renderer: import('marked').RendererObject = {
 			const safeTitle = title ? ` title="${esc(title)}"` : '';
 			return `<a href="${url}"${safeTitle} class="r2-file" download="${safeText}">📎 ${safeText}</a>`;
 		}
-		// Default link rendering (let DOMPurify handle validation)
+		// Default link rendering (let DOMPurify handle validation).
+		// `marked` renderer API requires string return, but `false` signals "use default" — cast is intentional.
 		return false as unknown as string;
 	}
 };

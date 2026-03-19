@@ -178,7 +178,7 @@ export async function processDocument(
 				tokenCount: c.tokenEstimate,
 				charStart: c.charStart,
 				charEnd: c.charEnd,
-				chunkHash: null, // TODO: add per-chunk hashing for dedup
+				chunkHash: null, // Deferred: per-chunk content hashing for dedup (low priority — re-upload overwrites entire doc)
 				embeddingModel,
 				embeddingDim,
 				documentDate: metadata.documentDate,

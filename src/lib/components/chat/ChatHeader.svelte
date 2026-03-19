@@ -187,7 +187,7 @@
 							onsubmit={(e) => { e.preventDefault(); renameRoom(); }}
 						>
 							<span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style="background: var(--accent);"></span>
-							<!-- svelte-ignore a11y_autofocus -->
+							<!-- svelte-ignore a11y_autofocus — user-initiated rename action; immediate focus is expected UX -->
 							<input
 								type="text"
 								bind:value={renameValue}
@@ -258,7 +258,7 @@
 							class="flex items-center gap-1.5 px-3 py-2"
 							onsubmit={(e) => { e.preventDefault(); createRoom(); }}
 						>
-							<!-- svelte-ignore a11y_autofocus -->
+							<!-- svelte-ignore a11y_autofocus — user-initiated create room action; immediate focus is expected UX -->
 							<input
 								type="text"
 								bind:value={newRoomName}

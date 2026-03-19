@@ -122,7 +122,7 @@
 	data-dbid={message.dbId ?? undefined}
 >
 	<!-- Bubble -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_no_static_element_interactions — click handler delegates to image lightbox and citation links within rendered markdown; role="presentation" is set -->
 	<div
 		class="bubble max-w-[75%] min-w-0 rounded-lg px-3 py-1.5"
 		aria-busy={message.streaming || undefined}

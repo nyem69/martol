@@ -176,7 +176,7 @@ export const POST: RequestHandler = async ({ params, locals, platform }) => {
 		const { processDocument } = await import('$lib/server/rag/process-document');
 		for (const att of imageAttachments) {
 			ctx.waitUntil(
-				processDocument(locals.db, ai, vectorize, r2, att.id, orgId, platform?.env as unknown as Record<string, unknown>)
+				processDocument(locals.db, ai, vectorize, r2, att.id, orgId, platform?.env as unknown as Record<string, unknown>) // SvelteKit Platform types lack CF bindings
 					.catch((err: unknown) => console.error(`[OCR] Reindex failed for attachment ${att.id}:`, err))
 			);
 		}

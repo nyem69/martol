@@ -429,7 +429,7 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions — has role="region" with drag/drop handlers for file upload; not a generic interactive div -->
 <div
 	class="relative px-4 pt-2"
 	style="background: var(--bg-surface); border-top: 1px solid var(--border); padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"

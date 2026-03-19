@@ -265,6 +265,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			// Create a dedicated DB connection for background processing.
 			// The request's Hyperdrive client is closed in hooks.server.ts finally{},
 			// which runs BEFORE waitUntil completes — so locals.db is dead by then.
+			// Cast needed: SvelteKit's Platform.env types don't include Cloudflare bindings (HYPERDRIVE, AI, etc.)
 			const hyperdrive = (platform.env as unknown as Record<string, unknown>).HYPERDRIVE as { connectionString: string };
 			ctx.waitUntil((async () => {
 				console.log(`[RAG:waitUntil] START — attachment ${insertedId}`);
@@ -281,7 +282,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 						platform.env.STORAGE,
 						insertedId,
 						activeOrgId,
-						platform?.env as unknown as Record<string, unknown>
+						platform?.env as unknown as Record<string, unknown> // SvelteKit Platform types lack CF bindings
 					);
 					console.log(`[RAG:waitUntil] DONE — result:`, JSON.stringify(result));
 				} catch (err) {
