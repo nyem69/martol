@@ -1413,14 +1413,22 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const model = createRagModel(config, this.env.AI, apiKey);
 
 				const { streamText } = await import('ai');
-				const result = streamText({
-					model,
-					system,
-					prompt,
-					temperature: config.ragTemperature ?? 0.3,
-					maxOutputTokens: config.ragMaxTokens ?? 2048,
-					abortSignal: AbortSignal.timeout(30_000),
-				});
+				let result;
+				try {
+					result = streamText({
+						model,
+						system,
+						prompt,
+						temperature: config.ragTemperature ?? 0.3,
+						maxOutputTokens: config.ragMaxTokens ?? 2048,
+						abortSignal: AbortSignal.timeout(30_000),
+					});
+				} catch (modelErr) {
+					console.error('[ChatRoom] RAG streamText() call failed:', modelErr);
+					await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
+						'Document AI encountered an error calling the language model. Please try again.', timestamp);
+					return;
+				}
 
 				// 5. Broadcast stream_start
 				await this.broadcast({
@@ -1432,23 +1440,51 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				let buffer = '';
 				let lastFlush = Date.now();
 
-				for await (const delta of result.textStream) {
-					fullBody += delta;
-					buffer += delta;
-					if (Date.now() - lastFlush >= 100 || buffer.length > 200) {
-						await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
-						buffer = '';
-						lastFlush = Date.now();
+				let deltaCount = 0;
+				try {
+					for await (const delta of result.textStream) {
+						deltaCount++;
+						fullBody += delta;
+						buffer += delta;
+						if (Date.now() - lastFlush >= 100 || buffer.length > 200) {
+							await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
+							buffer = '';
+							lastFlush = Date.now();
+						}
 					}
+				} catch (streamErr) {
+					console.error(`[ChatRoom] RAG stream error after ${deltaCount} deltas (${fullBody.length} chars):`, streamErr);
 				}
 				if (buffer) {
 					await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
 				}
+				console.log(`[ChatRoom] RAG stream complete: ${deltaCount} deltas, ${fullBody.length} chars`);
 
 				// 7. Commit final body to WAL via ingest helper
 				if (!fullBody.trim()) {
-					console.error('[ChatRoom] RAG generation produced empty response — model may have failed silently');
-					fullBody = 'I was unable to generate a response. Please try again.';
+					console.error('[ChatRoom] RAG generation produced empty response — check Workers AI logs for model errors');
+					// Try a direct AI.run() as a fallback test
+					try {
+						const directResult = await this.env.AI.run(config.ragModel as Parameters<Ai['run']>[0], {
+							messages: [
+								{ role: 'system', content: system },
+								{ role: 'user', content: prompt.slice(0, 4000) }
+							],
+							max_tokens: 512,
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						} as any);
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						const directText = (directResult as any)?.response ?? '';
+						console.log(`[ChatRoom] RAG direct fallback: ${directText.length} chars`);
+						if (directText) {
+							fullBody = directText;
+						} else {
+							fullBody = 'I was unable to generate a response. Please try again.';
+						}
+					} catch (directErr) {
+						console.error('[ChatRoom] RAG direct fallback also failed:', directErr);
+						fullBody = 'I was unable to generate a response. Please try again.';
+					}
 				}
 				await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId, fullBody, timestamp);
 
