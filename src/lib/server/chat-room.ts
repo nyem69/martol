@@ -17,7 +17,7 @@ import type {
 import { createHyperdriveDb } from './db/hyperdrive';
 import { messages as messagesTable, readCursors, pendingActions, attachments, supportTickets, aiUsage } from './db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
-import { shouldRespond, extractQuestion, buildSystemPrompt, buildUserPrompt, createRagModel, type RagConfig } from './rag/responder';
+import { shouldRespond, extractQuestion, buildSystemPrompt, buildUserPrompt, type RagConfig } from './rag/responder';
 import { searchDocuments } from './rag/search';
 import { isAiCapReached } from './ai-billing';
 
@@ -1409,82 +1409,42 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				const prompt = buildUserPrompt(question, chunks);
 				console.log(`[ChatRoom] RAG: prompt length ${prompt.length} chars, model: ${config.ragModel}`);
 
-				// 4. Create model and stream (dynamic import to avoid loading AI SDK for every DO)
-				const model = createRagModel(config, this.env.AI, apiKey);
+				// 4. Call Workers AI directly (env.AI.run) instead of AI SDK streamText()
+				// AI SDK streamText() produces zero tokens with Workers AI — reason unknown.
+				// Direct env.AI.run() works reliably.
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const aiResult = await this.env.AI.run(config.ragModel as Parameters<Ai['run']>[0], {
+					messages: [
+						{ role: 'system', content: system },
+						{ role: 'user', content: prompt }
+					],
+					temperature: config.ragTemperature ?? 0.3,
+					max_tokens: config.ragMaxTokens ?? 2048,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				} as any);
 
-				const { streamText } = await import('ai');
-				let result;
-				try {
-					result = streamText({
-						model,
-						system,
-						prompt,
-						temperature: config.ragTemperature ?? 0.3,
-						maxOutputTokens: config.ragMaxTokens ?? 2048,
-						abortSignal: AbortSignal.timeout(30_000),
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				let fullBody = (aiResult as any)?.response ?? '';
+				if (typeof fullBody !== 'string') fullBody = '';
+				console.log(`[ChatRoom] RAG generation: ${fullBody.length} chars from ${config.ragModel}`);
+
+				// 5. Broadcast the complete response as a stream (start → delta → message)
+				if (fullBody.trim()) {
+					await this.broadcast({
+						type: 'stream_start', localId, senderId, senderName, senderRole, timestamp
 					});
-				} catch (modelErr) {
-					console.error('[ChatRoom] RAG streamText() call failed:', modelErr);
-					await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId,
-						'Document AI encountered an error calling the language model. Please try again.', timestamp);
-					return;
-				}
-
-				// 5. Broadcast stream_start
-				await this.broadcast({
-					type: 'stream_start', localId, senderId, senderName, senderRole, timestamp
-				});
-
-				// 6. Stream deltas
-				let fullBody = '';
-				let buffer = '';
-				let lastFlush = Date.now();
-
-				let deltaCount = 0;
-				try {
-					for await (const delta of result.textStream) {
-						deltaCount++;
-						fullBody += delta;
-						buffer += delta;
-						if (Date.now() - lastFlush >= 100 || buffer.length > 200) {
-							await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
-							buffer = '';
-							lastFlush = Date.now();
-						}
+					// Send body in chunks for progressive rendering
+					const chunkSize = 200;
+					for (let i = 0; i < fullBody.length; i += chunkSize) {
+						const delta = fullBody.slice(i, i + chunkSize);
+						await this.broadcast({ type: 'stream_delta', localId, delta });
 					}
-				} catch (streamErr) {
-					console.error(`[ChatRoom] RAG stream error after ${deltaCount} deltas (${fullBody.length} chars):`, streamErr);
 				}
-				if (buffer) {
-					await this.broadcast({ type: 'stream_delta', localId, delta: buffer });
-				}
-				console.log(`[ChatRoom] RAG stream complete: ${deltaCount} deltas, ${fullBody.length} chars`);
 
 				// 7. Commit final body to WAL via ingest helper
 				if (!fullBody.trim()) {
-					console.error('[ChatRoom] RAG generation produced empty response — check Workers AI logs for model errors');
-					// Try a direct AI.run() as a fallback test
-					try {
-						const directResult = await this.env.AI.run(config.ragModel as Parameters<Ai['run']>[0], {
-							messages: [
-								{ role: 'system', content: system },
-								{ role: 'user', content: prompt.slice(0, 4000) }
-							],
-							max_tokens: 512,
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						} as any);
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						const directText = (directResult as any)?.response ?? '';
-						console.log(`[ChatRoom] RAG direct fallback: ${directText.length} chars`);
-						if (directText) {
-							fullBody = directText;
-						} else {
-							fullBody = 'I was unable to generate a response. Please try again.';
-						}
-					} catch (directErr) {
-						console.error('[ChatRoom] RAG direct fallback also failed:', directErr);
-						fullBody = 'I was unable to generate a response. Please try again.';
-					}
+					console.error('[ChatRoom] RAG generation produced empty response from Workers AI');
+					fullBody = 'I was unable to generate a response. Please try again.';
 				}
 				await this.ingestRagMessage(localId, senderId, senderName, senderRole, orgId, fullBody, timestamp);
 
