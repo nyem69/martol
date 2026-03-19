@@ -3,6 +3,7 @@ name = "martol"
 main = "worker-entry.ts"
 compatibility_date = "2025-12-01"
 compatibility_flags = ["nodejs_compat"]
+usage_model = "standard" # Required for RAG (30s CPU limit vs 50ms on Bundled)
 
 # Sentry requires version metadata for release tracking
 [version_metadata]

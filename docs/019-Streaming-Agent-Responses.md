@@ -145,46 +145,46 @@ Remove `send_typing` calls from `_generate_response` — `stream_start` replaces
 
 ## Build Sequence
 
-### Phase 1 — Protocol (verify end-to-end with logs)
+### Phase 1 — Protocol ✅
 
-- [ ] Add `stream_start`, `stream_delta`, `stream_end` to `ClientMessage` in `ws.ts`
-- [ ] Add `stream_start`, `stream_delta`, `stream_abort` to `ServerMessage` in `ws.ts`
-- [ ] Add `activeStreams` map and constants to `chat-room.ts`
-- [ ] Implement `handleStreamStart`, `handleStreamDelta`, `handleStreamEnd`, `abortStream`
-- [ ] Wire into `webSocketMessage` router
-- [ ] Add abort-on-disconnect to `webSocketClose` / `webSocketError`
-- [ ] Add streaming methods to `base_wrapper.py`
+- [x] Add `stream_start`, `stream_delta`, `stream_end` to `ClientMessage` in `ws.ts`
+- [x] Add `stream_start`, `stream_delta`, `stream_abort` to `ServerMessage` in `ws.ts`
+- [x] Add `activeStreams` map and constants to `chat-room.ts`
+- [x] Implement `handleStreamStart`, `handleStreamDelta`, `handleStreamEnd`, `abortStream`
+- [x] Wire into `webSocketMessage` router
+- [x] Add abort-on-disconnect to `webSocketClose` / `webSocketError`
+- [x] Add streaming methods to `base_wrapper.py`
 
-### Phase 2 — Browser accumulation
+### Phase 2 — Browser accumulation ✅
 
-- [ ] Add `streaming` field to `DisplayMessage`
-- [ ] Add `streamingMessages` SvelteMap to `MessagesStore`
-- [ ] Implement `handleStreamStart`, `handleStreamDelta`, `handleStreamAbort`
-- [ ] Update `handleMessage` finalization to clear streaming entry
+- [x] Add `streaming` field to `DisplayMessage`
+- [x] Add `streamingMessages` Set to `MessagesStore`
+- [x] Implement `handleStreamStart`, `handleStreamDelta`, `handleStreamAbort`
+- [x] Update `handleMessage` finalization to clear streaming entry
 
-### Phase 3 — UI rendering
+### Phase 3 — UI rendering ✅
 
-- [ ] Add streaming cursor + `chat_streaming` footer label to `MessageBubble.svelte`
-- [ ] Add debounced markdown rendering `$effect`
-- [ ] Guard reply/report buttons behind `!message.streaming`
-- [ ] Add `chat_streaming` key to `messages/en.json`
+- [x] Add streaming cursor + `chat_streaming` footer label to `MessageBubble.svelte`
+- [x] Add throttled markdown rendering `$effect`
+- [x] Guard reply/report buttons behind `!message.streaming`
+- [x] Add `chat_streaming` key to `messages/en.json`
 
-### Phase 4 — Provider streaming
+### Phase 4 — Provider streaming ✅
 
-- [ ] Add `stream_chat` to `LLMProvider` ABC
-- [ ] Implement in `providers/anthropic.py`
-- [ ] Implement in `providers/openai_compat.py`
-- [ ] Replace `_generate_response` with streaming version in `wrapper.py`
-- [ ] Wire streaming into `claude_code_wrapper.py`
+- [x] Add `stream_chat` to `LLMProvider` ABC
+- [x] Implement in `providers/anthropic.py`
+- [x] Implement in `providers/openai_compat.py`
+- [x] Replace `_generate_response` with streaming version in `wrapper.py`
+- [ ] Wire streaming into `claude_code_wrapper.py` — deferred (different execution model)
 
-### Phase 5 — Hardening
+### Phase 5 — Hardening ✅
 
-- [ ] Verify rate-limit counter not incremented for deltas
-- [ ] Verify WAL byte size guard on `stream_end` only
-- [ ] Verify `stream_abort` fires on WS disconnect mid-stream
-- [ ] Verify late-joining browser gets completed message from history
-- [ ] Verify simultaneous streams from two agents render separately
-- [ ] Add `data-testid="streaming-bubble"` and `data-testid="stream-cursor"`
+- [x] Verify rate-limit counter not incremented for deltas
+- [x] Verify WAL byte size guard on `stream_end` only
+- [x] Verify `stream_abort` fires on WS disconnect mid-stream
+- [x] Verify late-joining browser gets completed message from history
+- [x] Verify simultaneous streams from two agents render separately
+- [x] Add `data-testid` attributes
 
 ## Files
 

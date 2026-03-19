@@ -473,7 +473,7 @@ export const roomConfig = pgTable('room_config', {
 
 - [x] `pnpm add ai workers-ai-provider`
 - [x] Verify bundle size (0 errors, ~55 KB added)
-- [ ] Verify `usage_model = "standard"` in wrangler.toml (or account default)
+- [x] Verify `usage_model = "standard"` in wrangler.toml — added explicitly
 - [x] DB migration: create `room_config` table
 - [x] DB migration: update `aiUsage.operation` type to include `llm_generation`
 - [x] Create `src/lib/server/rag/responder.ts` — `shouldRespond`, `buildPrompt`, `createRagModel`

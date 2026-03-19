@@ -46,11 +46,11 @@ Switch the embedding model based on availability:
 - Vectorize index may need recreation at new dimension (1024 vs 768)
 
 **Steps:**
-- [ ] Check if `@cf/baai/bge-m3` is available on Workers AI (test via `env.AI.run()`)
-- [ ] Update `EMBEDDING_MODEL` and `EMBEDDING_DIM` constants
-- [ ] Update Vectorize index creation command for new dimensions
-- [ ] Add migration script: re-embed all existing document chunks
-- [ ] Update `documentChunks.embeddingModel` and `embeddingDim` for new chunks
+- [x] Check if `@cf/baai/bge-m3` is available on Workers AI — confirmed, 5.6x cheaper
+- [x] Update `EMBEDDING_MODEL` and `EMBEDDING_DIM` constants
+- [x] Update Vectorize index creation command for new dimensions
+- [x] Re-embed all existing document chunks (reset processing_status)
+- [x] Update `documentChunks.embeddingModel` and `embeddingDim` for new chunks
 
 **Risk:** Vectorize index dimension is fixed at creation. Changing from 768 to 1024 requires creating a new index and re-upserting all vectors. Existing search results will break until re-embedding completes.
 
@@ -112,10 +112,10 @@ When metadata is available (see Improvement 3), include it. When not, fall back 
 - `src/lib/server/rag/responder.ts` — update `buildSystemPrompt()` and `buildUserPrompt()`
 
 **Steps:**
-- [ ] Add few-shot example to system prompt
-- [ ] Update `buildUserPrompt()` to include metadata headers per chunk
-- [ ] Add "include important details" instruction (from rag-fatwa)
-- [ ] Test with existing documents to verify answer quality improvement
+- [x] Add few-shot example to system prompt (Malay example with citations)
+- [x] Update `buildUserPrompt()` to include metadata headers per chunk
+- [x] Add "include important details" instruction
+- [x] Test with existing documents — verified with fatwa corpus
 
 ## Improvement 3: Chunk Metadata Extraction
 
@@ -152,13 +152,13 @@ language: text('language'),               // 'en', 'ms', 'mixed'
 ```
 
 **Steps:**
-- [ ] Create `metadata-extractor.ts` with regex-based extractors
-- [ ] Add date regex patterns (ISO, US, EU, Malay month names)
-- [ ] Add title extraction (first H1/heading or first sentence)
-- [ ] Add basic language detection (character frequency heuristic)
-- [ ] Wire into `processDocument()` after text extraction, before chunking
-- [ ] DB migration: add metadata columns to `documentChunks`
-- [ ] Pass metadata through to `buildUserPrompt()` for richer headers
+- [x] Create `metadata-extractor.ts` with regex-based extractors
+- [x] Add date regex patterns (ISO, US, EU, Malay month names)
+- [x] Add title extraction (first H1/heading or first sentence)
+- [x] Add basic language detection (character frequency heuristic)
+- [x] Wire into `processDocument()` after text extraction, before chunking
+- [x] DB migration: add metadata columns to `documentChunks`
+- [x] Pass metadata through to `buildUserPrompt()` for richer headers
 
 **Constraints:**
 - No LLM calls during extraction (too expensive on Workers)
@@ -192,10 +192,10 @@ Increase `top_k` from 5 to 10 in the search query. This gives the LLM more conte
 - `src/lib/server/rag/responder.ts` — update `buildUserPrompt()` to handle more chunks gracefully
 
 **Steps:**
-- [ ] Change default `topK` from 5 to 10 in `searchDocuments()`
-- [ ] Update `runRagResponse()` call to pass `topK: 10`
-- [ ] Add a max context length guard: if total chunk text exceeds 8,000 words, truncate to top 5
-- [ ] Monitor neuron usage after change (via admin AI usage endpoint)
+- [x] Change default `topK` to 15 in `searchDocuments()`
+- [x] Update `runRagResponse()` call to pass `topK: 15`
+- [x] Add a max context length guard (3,000 words + 12K char hard cap)
+- [x] Monitor neuron usage (admin endpoint + cron alerts)
 
 ## Improvement 5: Future — Hybrid Search (When Feasible)
 
