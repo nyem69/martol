@@ -19,7 +19,7 @@ import { createStripe } from '$lib/server/stripe';
 const FREE_ALLOWANCES = {
 	doc_process: 50,
 	vector_query: 500,
-	llm_generation: 150,
+	llm_generation: 500, // Increased from 150 for testing — adjust after validating neuron costs
 } as const;
 
 export async function getAiUsageForOrg(

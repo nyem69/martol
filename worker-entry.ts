@@ -435,10 +435,10 @@ const worker = {
 			const llmCount = llmUsage?.total ?? 0;
 			const estimatedNeurons = llmCount * 3000; // ~3K neurons per Llama 8B call
 
-			if (estimatedNeurons > 8000) {
-				console.warn(`[Cron] NEURON WARNING: ~${estimatedNeurons} neurons used today (${llmCount} LLM calls). Limit: 10,000`);
-			} else if (estimatedNeurons > 5000) {
-				console.log(`[Cron] Neuron usage: ~${estimatedNeurons}/10,000 (${llmCount} LLM calls)`);
+			if (estimatedNeurons > 50000) {
+				console.warn(`[Cron] NEURON WARNING: ~${estimatedNeurons} neurons used today (${llmCount} LLM calls)`);
+			} else if (estimatedNeurons > 25000) {
+				console.log(`[Cron] Neuron usage: ~${estimatedNeurons} (${llmCount} LLM calls)`);
 			}
 		} catch (err) {
 			console.error('[Cron] Neuron check failed:', err);
