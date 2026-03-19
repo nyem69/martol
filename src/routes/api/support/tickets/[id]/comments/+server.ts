@@ -13,7 +13,7 @@ import { eq, asc } from 'drizzle-orm';
 
 /** Check that the caller owns the ticket or is admin */
 async function verifyTicketAccess(
-	db: App.Locals['db'],
+	db: NonNullable<App.Locals['db']>,
 	ticketId: string,
 	userId: string,
 	isAdmin: boolean

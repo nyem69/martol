@@ -19,6 +19,7 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 		const returnUrl = `/open?repo=${encodeURIComponent(repo)}`;
 		redirect(302, `/login?redirect=${encodeURIComponent(returnUrl)}`);
 	}
+	const currentUser = locals.user;
 
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
@@ -30,7 +31,7 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 		.innerJoin(member, eq(member.organizationId, organization.id))
 		.where(and(
 			eq(organization.name, repo),
-			eq(member.userId, locals.user.id),
+			eq(member.userId, currentUser.id),
 			eq(member.role, 'owner')
 		))
 		.limit(1);
@@ -48,7 +49,7 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 	const [{ count: ownedRooms }] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(member)
-		.where(and(eq(member.userId, locals.user.id), eq(member.role, 'owner')));
+		.where(and(eq(member.userId, currentUser.id), eq(member.role, 'owner')));
 
 	if ((ownedRooms ?? 0) >= MAX_ROOMS_PER_USER) {
 		error(403, `Room limit reached (max ${MAX_ROOMS_PER_USER}). Delete unused rooms first.`);
@@ -80,7 +81,7 @@ export const load: PageServerLoad = async ({ url, locals, setHeaders }) => {
 		await tx.insert(member).values({
 			id: memberId,
 			organizationId: orgId,
-			userId: locals.user.id,
+			userId: currentUser.id,
 			role: 'owner',
 			createdAt: now
 		});

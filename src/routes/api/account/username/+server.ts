@@ -49,6 +49,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 		error(503, 'Database unavailable');
 	}
 
+	const currentUser = locals.user;
 	const db = locals.db;
 
 	// Parse body
@@ -91,7 +92,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 	const [lastChange] = await db
 		.select({ changedAt: usernameHistory.changedAt })
 		.from(usernameHistory)
-		.where(eq(usernameHistory.userId, locals.user.id))
+		.where(eq(usernameHistory.userId, currentUser.id))
 		.orderBy(desc(usernameHistory.changedAt))
 		.limit(1);
 
@@ -132,7 +133,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 		.from(usernameHistory)
 		.where(
 			sql`LOWER(${usernameHistory.oldUsername}) = LOWER(${newUsername})
-				AND ${usernameHistory.userId} != ${locals.user.id}
+				AND ${usernameHistory.userId} != ${currentUser.id}
 				AND (${usernameHistory.releasedAt} IS NULL OR ${usernameHistory.releasedAt} > ${now})`
 		)
 		.limit(1);
@@ -155,10 +156,10 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 			await tx
 				.update(user)
 				.set({ username: newUsername, updatedAt: now })
-				.where(eq(user.id, locals.user.id));
+				.where(eq(user.id, currentUser.id));
 
 			await tx.insert(usernameHistory).values({
-				userId: locals.user.id,
+				userId: currentUser.id,
 				oldUsername: currentUsername,
 				newUsername: newUsername,
 				changedAt: now,
@@ -166,7 +167,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 			});
 
 			await tx.insert(accountAudit).values({
-				userId: locals.user.id,
+				userId: currentUser.id,
 				action: 'username_change',
 				oldValue: currentUsername,
 				newValue: newUsername,
@@ -181,7 +182,7 @@ export const PUT: RequestHandler = async ({ locals, request }) => {
 				.select({ orgId: member.organizationId, orgName: organization.name })
 				.from(member)
 				.innerJoin(organization, eq(organization.id, member.organizationId))
-				.where(and(eq(member.userId, locals.user.id), eq(member.role, 'owner')));
+				.where(and(eq(member.userId, currentUser.id), eq(member.role, 'owner')));
 
 			for (const org of ownedOrgs) {
 				// Rename if it ends with "'s Room" (auto-generated pattern)

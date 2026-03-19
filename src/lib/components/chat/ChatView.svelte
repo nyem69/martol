@@ -22,7 +22,7 @@
 	// These values are stable for this component instance.
 	// When roomId changes, the parent {#key} destroys and recreates this component.
 	// svelte-ignore state_referenced_locally — intentional: {#key} guarantees fresh instance per room.
-	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, hmacSecret, enableUploads, ocrEnabled, ragEnabled } = data;
+	const { roomId, userId, userName, userRole, roomName, userRooms, roomInvitations, initialMessages, hasAgents, enableUploads, ocrEnabled, ragEnabled } = data;
 
 	// AI disclosure modal: show if room has agents and user hasn't acknowledged yet
 	let showAIDisclosure = $state(false);
@@ -410,7 +410,6 @@
 		{userRole}
 		{roomId}
 		invitations={roomInvitations}
-		{hmacSecret}
 		onShowBriefModal={(brief: string, version: number) => { briefModalData = { brief, version }; }}
 	/>
 

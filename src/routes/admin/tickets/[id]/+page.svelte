@@ -9,7 +9,7 @@
 	let statusLoading = $state(false);
 	let errorMsg = $state('');
 
-	async function changeStatus(newStatus: string) {
+	async function changeStatus(newStatus: 'open' | 'in_progress' | 'resolved' | 'closed') {
 		statusLoading = true;
 		errorMsg = '';
 		try {

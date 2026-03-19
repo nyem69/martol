@@ -28,7 +28,7 @@ export const POST: RequestHandler = async ({ locals, platform, url }) => {
 		.where(eq(subscriptions.orgId, orgId))
 		.limit(1);
 
-	if (existing?.plan === 'image_upload' && existing.status === 'active') {
+	if (existing?.plan === 'pro' && existing.status === 'active') {
 		error(400, 'Already subscribed');
 	}
 

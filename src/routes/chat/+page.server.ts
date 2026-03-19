@@ -9,6 +9,7 @@ import { checkOrgLimits, withinLimit } from '$lib/server/feature-gates';
 export const load: PageServerLoad = async (event) => {
 	const { locals, platform } = event;
 	if (!locals.user || !locals.session) redirect(302, '/login');
+	const currentUser = locals.user;
 
 	const db = locals.db;
 	if (!db) error(503, 'Database unavailable');
@@ -24,7 +25,7 @@ export const load: PageServerLoad = async (event) => {
 		const [firstMembership] = await db
 			.select({ orgId: member.organizationId })
 			.from(member)
-			.where(eq(member.userId, locals.user.id))
+			.where(eq(member.userId, currentUser.id))
 			.limit(1);
 
 		if (firstMembership) {
@@ -40,7 +41,7 @@ export const load: PageServerLoad = async (event) => {
 				.from(invitation)
 				.where(
 					and(
-						sql`LOWER(${invitation.email}) = LOWER(${locals.user.email!})`,
+						sql`LOWER(${invitation.email}) = LOWER(${currentUser.email!})`,
 						eq(invitation.status, 'pending'),
 						gt(invitation.expiresAt, new Date())
 					)
@@ -65,13 +66,13 @@ export const load: PageServerLoad = async (event) => {
 				// Advisory lock prevents duplicate creation from concurrent requests
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			await db.transaction(async (tx: any) => {
-					await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${locals.user.id}))`);
+					await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${currentUser.id}))`);
 
 					// Re-check membership after acquiring lock
 					const [recheck] = await tx
 						.select({ orgId: member.organizationId })
 						.from(member)
-						.where(eq(member.userId, locals.user.id))
+						.where(eq(member.userId, currentUser.id))
 						.limit(1);
 
 					if (recheck) {
@@ -80,7 +81,7 @@ export const load: PageServerLoad = async (event) => {
 						const orgId = generateId();
 						const memberId = generateId();
 						const now = new Date();
-						const userName = locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`;
+						const userName = currentUser.username || currentUser.name || `User-${currentUser.id.slice(0, 6)}`;
 						const slug = `${userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-room`;
 
 						await tx.insert(organization).values({
@@ -92,7 +93,7 @@ export const load: PageServerLoad = async (event) => {
 						await tx.insert(member).values({
 							id: memberId,
 							organizationId: orgId,
-							userId: locals.user.id,
+							userId: currentUser.id,
 							role: 'owner',
 							createdAt: now
 						});
@@ -109,7 +110,7 @@ export const load: PageServerLoad = async (event) => {
 	const [memberRecord] = await db
 		.select({ role: member.role })
 		.from(member)
-		.where(and(eq(member.organizationId, roomId), eq(member.userId, locals.user.id)))
+		.where(and(eq(member.organizationId, roomId), eq(member.userId, currentUser.id)))
 		.limit(1);
 
 	if (memberRecord) {
@@ -153,7 +154,7 @@ export const load: PageServerLoad = async (event) => {
 	} catch { /* room_config may not exist yet */ }
 
 	// Auto-fix stale room names: if owner's room still has a different user's auto-generated name
-	const currentUserName = locals.user.username || locals.user.name;
+	const currentUserName = currentUser.username || currentUser.name;
 	if (org?.name && userRole === 'owner' && currentUserName) {
 		const endsWithRoom = org.name.endsWith('\u2019s Room') || org.name.endsWith("'s Room");
 		const expectedName = `${currentUserName}'s Room`;
@@ -167,13 +168,13 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	// Auto-accept any pending invitations for this user
-	if (locals.user.email) {
+	if (currentUser.email) {
 		const pendingInvites = await db
 			.select({ id: invitation.id })
 			.from(invitation)
 			.where(
 				and(
-					sql`LOWER(${invitation.email}) = LOWER(${locals.user.email})`,
+					sql`LOWER(${invitation.email}) = LOWER(${currentUser.email})`,
 					eq(invitation.status, 'pending'),
 					gt(invitation.expiresAt, new Date())
 				)
@@ -196,7 +197,7 @@ export const load: PageServerLoad = async (event) => {
 		.select({ id: organization.id, name: organization.name })
 		.from(member)
 		.innerJoin(organization, eq(organization.id, member.organizationId))
-		.where(eq(member.userId, locals.user.id));
+		.where(eq(member.userId, currentUser.id));
 
 	// Load unread counts for all rooms
 	const unreadCounts = new Map<string, number>();
@@ -209,24 +210,30 @@ export const load: PageServerLoad = async (event) => {
 			})
 			.from(readCursors)
 			.where(
-				and(eq(readCursors.userId, locals.user.id), inArray(readCursors.orgId, roomIds))
+				and(eq(readCursors.userId, currentUser.id), inArray(readCursors.orgId, roomIds))
 			);
 
 		const cursorMap = new Map(counts.map((c: typeof counts[number]) => [c.orgId, c.lastReadId]));
 
-		for (const room of userRooms) {
-			const lastRead = cursorMap.get(room.id) ?? 0;
-			const [{ count }] = await db
-				.select({ count: sql<number>`count(*)::int` })
-				.from(messagesTable)
-				.where(
-					and(
-						eq(messagesTable.orgId, room.id),
-						isNull(messagesTable.deletedAt),
-						sql`${messagesTable.id} > ${lastRead}`
-					)
-				);
-			if (count > 0) unreadCounts.set(room.id, count);
+		// Build a VALUES list pairing each room with its last-read cursor
+		const cursorValues = roomIds.map((id: string) => {
+			const lastRead = cursorMap.get(id) ?? 0;
+			return sql`(${id}, ${lastRead}::bigint)`;
+		});
+		const cursorValuesSql = sql.join(cursorValues, sql`, `);
+
+		// Single aggregate query: count unread messages per room
+		const unreadRows = await db.execute(sql`
+			SELECT m.org_id, count(*)::int AS count
+			FROM (VALUES ${cursorValuesSql}) AS cursors(org_id, last_read)
+			JOIN ${messagesTable} m ON m.org_id = cursors.org_id
+			WHERE m.deleted_at IS NULL
+			  AND m.id > cursors.last_read
+			GROUP BY m.org_id
+		`);
+
+		for (const row of unreadRows.rows as { org_id: string; count: number }[]) {
+			if (row.count > 0) unreadCounts.set(row.org_id, row.count);
 		}
 	}
 
@@ -278,7 +285,7 @@ export const load: PageServerLoad = async (event) => {
 			.insert(readCursors)
 			.values({
 				orgId: roomId,
-				userId: locals.user.id,
+				userId: currentUser.id,
 				lastReadMessageId: latestId,
 				updatedAt: new Date()
 			})
@@ -323,7 +330,7 @@ export const load: PageServerLoad = async (event) => {
 	const seenEmails = new Set<string>();
 	const filteredInvitations = roomInvitations
 		.filter((inv: typeof roomInvitations[number]) => {
-			if (userRole !== 'owner' && inv.inviterId !== locals.user.id) return false;
+			if (userRole !== 'owner' && inv.inviterId !== currentUser.id) return false;
 			const key = inv.email.toLowerCase();
 			if (seenEmails.has(key)) return false;
 			seenEmails.add(key);
@@ -339,19 +346,14 @@ export const load: PageServerLoad = async (event) => {
 			username: inv.username || inv.userName || null
 		}));
 
-	// Expose HMAC secret for owner/lead (needed by external clients like martol-client)
-	let hmacSecret: string | null = null;
-	if ((userRole === 'owner' || userRole === 'lead') && platform?.env) {
-		hmacSecret = platform.env.HMAC_SIGNING_SECRET ?? null;
-	}
 
 	// Feature gates: plan-based limits for uploads and message sending
 	const orgLimits = roomId ? await checkOrgLimits(db, roomId) : null;
 
 	return {
 		roomId,
-		userId: locals.user.id,
-		userName: locals.user.username || locals.user.name || `User-${locals.user.id.slice(0, 6)}`,
+		userId: currentUser.id,
+		userName: currentUser.username || currentUser.name || `User-${currentUser.id.slice(0, 6)}`,
 		userRole,
 		roomName: org?.name || 'Chat',
 		userRooms: userRooms.map((r: typeof userRooms[number]) => ({
@@ -361,7 +363,6 @@ export const load: PageServerLoad = async (event) => {
 		roomInvitations: filteredInvitations,
 		initialMessages,
 		hasAgents,
-		hmacSecret,
 		enableUploads: orgLimits?.limits.uploadsEnabled ?? false,
 		canSend: orgLimits ? withinLimit(orgLimits.usage.msgsToday, orgLimits.limits.maxMsgsPerDay) : true,
 		plan: orgLimits?.plan ?? 'free',

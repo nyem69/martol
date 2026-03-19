@@ -25,7 +25,6 @@
 		userRole = 'member',
 		roomId = '',
 		invitations = [],
-		hmacSecret = null,
 		onShowBriefModal
 	}: {
 		open: boolean;
@@ -34,7 +33,6 @@
 		userRole?: string;
 		roomId?: string;
 		invitations?: Invitation[];
-		hmacSecret?: string | null;
 		onShowBriefModal: (brief: string, version: number) => void;
 	} = $props();
 
@@ -795,28 +793,17 @@
 			>
 				<div style="overflow: hidden;">
 					<div class="px-4 pb-3">
-						<!-- ── HMAC Secret (owner/lead only) ── -->
-						{#if hmacSecret && canManageAgents}
+						<!-- ── HMAC Secret note (owner/lead only) ── -->
+						{#if canManageAgents}
 							<div class="mb-3">
 								<h4 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--accent-muted);">
 									{m.agent_setup_connection()}
 								</h4>
 								<div class="param-row">
-									<div class="flex items-center justify-between">
-										<code class="param-label">MARTOL_HMAC_SECRET</code>
-										<button
-											class="copy-btn"
-											onclick={() => copyToClipboard(hmacSecret!, 'hmac')}
-											aria-label="Copy"
-										>
-											{#if copiedField === 'hmac'}
-												<Check size={10} />
-											{:else}
-												<Copy size={10} />
-											{/if}
-										</button>
+									<code class="param-label">MARTOL_HMAC_SECRET</code>
+									<div class="param-value" style="color: var(--text-muted); font-style: italic;">
+										Set in your agent's <code>.env</code> file (see <code>.dev.vars</code> or Cloudflare dashboard)
 									</div>
-									<div class="param-value">{hmacSecret}</div>
 								</div>
 							</div>
 						{/if}

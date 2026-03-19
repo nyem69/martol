@@ -1,6 +1,10 @@
 /// <reference types="@sveltejs/kit" />
 /// <reference types="@cloudflare/workers-types" />
 
+import type { Auth } from '$lib/server/auth/index.ts';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import type * as schema from '$lib/server/db/schema.ts';
+
 interface CloudflareEnv {
 	AI: Ai;
 	VECTORIZE: VectorizeIndex;
@@ -34,14 +38,10 @@ declare global {
 	const __BUILD_NUMBER__: string;
 	namespace App {
 		interface Locals {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			auth: any;
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			user: any | null;
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			session: any | null;
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			db: any | null;
+			auth: Auth;
+			user: Auth['$Infer']['Session']['user'] | null;
+			session: Auth['$Infer']['Session']['session'] | null;
+			db: NodePgDatabase<typeof schema> | null;
 			isAdmin: boolean;
 		}
 

@@ -39,7 +39,7 @@
 		}
 	}
 
-	async function updateStatus(ticketId: string, newStatus: string) {
+	async function updateStatus(ticketId: string, newStatus: 'open' | 'in_progress' | 'resolved' | 'closed') {
 		const res = await fetch(`/api/support/tickets/${ticketId}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },

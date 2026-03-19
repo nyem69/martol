@@ -10,7 +10,7 @@
 	let showForm = $state(false);
 	let title = $state('');
 	let description = $state('');
-	let category = $state('other');
+	let category: 'bug' | 'feature_request' | 'question' | 'issue' | 'other' = $state('other');
 	let submitting = $state(false);
 	let errorMsg = $state('');
 	let successMsg = $state('');

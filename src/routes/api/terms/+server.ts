@@ -50,7 +50,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				.insert(termsVersions)
 				.values({
 					version: `${type}-1.0.0`,
-					type,
+					type: type as 'tos' | 'privacy' | 'aup',
 					summary: 'Initial version',
 					url:
 						type === 'tos'

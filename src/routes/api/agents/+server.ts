@@ -53,9 +53,10 @@ async function resolveOrgAndRole(locals: App.Locals) {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const orgId = await resolveOrgAndRole(locals);
+	const db = locals.db!;
 
 	// Feature gate: check agent limit
-	const orgLimits = await checkOrgLimits(locals.db, orgId);
+	const orgLimits = await checkOrgLimits(db, orgId);
 	if (!withinLimit(orgLimits.usage.agents, orgLimits.limits.maxAgents)) {
 		error(403, `Agent limit reached (${orgLimits.limits.maxAgents} per room). Remove an agent before adding another.`);
 	}
@@ -73,7 +74,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const memberId = generateId();
 
 	try {
-		await locals.db.transaction(async (tx: typeof locals.db) => {
+		await db.transaction(async (tx: typeof db) => {
 			// 1. Create synthetic agent user
 			await tx.insert(user).values({
 				id: agentUserId,
@@ -121,7 +122,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} catch (e: any) {
 		// Compensating cleanup — remove the agent user created in the transaction above
 		try {
-			await locals.db.transaction(async (tx: typeof locals.db) => {
+			await db.transaction(async (tx: typeof db) => {
 				await tx.delete(member).where(
 					and(eq(member.userId, agentUserId), eq(member.organizationId, orgId))
 				);
