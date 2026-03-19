@@ -51,7 +51,7 @@ describe('getAiUsageForOrg', () => {
 	it('returns zeros when no rows exist', async () => {
 		const db = makeDb([]);
 		const usage = await getAiUsageForOrg(db, ORG_ID);
-		expect(usage).toEqual({ doc_process: 0, vector_query: 0 });
+		expect(usage).toEqual({ doc_process: 0, vector_query: 0, llm_generation: 0 });
 	});
 
 	it('aggregates a single doc_process row', async () => {

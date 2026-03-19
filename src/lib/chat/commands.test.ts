@@ -51,17 +51,19 @@ describe('getAvailableCommands', () => {
 		expect(leadCmds.map((c) => c.name)).not.toContain('clear');
 	});
 
-	it('returns only whois for members', () => {
+	it('returns whois, ticket and ask for members', () => {
 		const memberCmds = getAvailableCommands('member');
 		const names = memberCmds.map((c) => c.name);
 		expect(names).toContain('whois');
+		expect(names).toContain('ticket');
+		expect(names).toContain('ask');
 		expect(names).not.toContain('approve');
 		expect(names).not.toContain('clear');
 	});
 
-	it('returns only whois for viewers', () => {
+	it('returns only whois and ticket for viewers', () => {
 		const viewerCmds = getAvailableCommands('viewer');
-		expect(viewerCmds.map((c) => c.name)).toEqual(['whois']);
+		expect(viewerCmds.map((c) => c.name)).toEqual(['whois', 'ticket']);
 	});
 });
 

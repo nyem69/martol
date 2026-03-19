@@ -89,7 +89,7 @@ describe('authenticateAgent', () => {
 			api: {
 				verifyApiKey: vi.fn().mockResolvedValue({
 					valid: true,
-					key: { userId: 'agent-1', id: 'key-1' }
+					key: { referenceId: 'agent-1', id: 'key-1' }
 				})
 			}
 		};
@@ -110,7 +110,7 @@ describe('authenticateAgent', () => {
 			api: {
 				verifyApiKey: vi.fn().mockResolvedValue({
 					valid: true,
-					key: { userId: 'agent-1', id: 'key-1' }
+					key: { referenceId: 'agent-1', id: 'key-1' }
 				})
 			}
 		};
@@ -131,7 +131,7 @@ describe('authenticateAgent', () => {
 			api: {
 				verifyApiKey: vi.fn().mockResolvedValue({
 					valid: true,
-					key: { userId: 'agent-1', id: 'key-1' }
+					key: { referenceId: 'agent-1', id: 'key-1' }
 				})
 			}
 		};
@@ -158,7 +158,7 @@ describe('authenticateAgent', () => {
 			api: {
 				verifyApiKey: vi.fn().mockResolvedValue({
 					valid: true,
-					key: { userId: 'agent-1', id: 'key-1' }
+					key: { referenceId: 'agent-1', id: 'key-1' }
 				})
 			}
 		};
