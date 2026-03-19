@@ -17,7 +17,7 @@ export interface TextChunk {
  * Tried in order — first pattern finding 2+ matches wins.
  */
 const HEADING_PATTERNS: RegExp[] = [
-	/(?:^|\n)\[([A-Z][^\]]{4,200})\]/g,             // [Hukum Membina Masjid]
+	/(?:^|\n|\s)\[([A-Z][^\]]{4,200})\]/g,           // [Hukum Membina Masjid]
 	/(?:^|\n)#{1,3}\s+(.{5,200})$/gm,                // # Markdown headings
 	/(?:^|\n)(?:BAHAGIAN|CHAPTER|SECTION)\s+.+$/gim,  // All-caps sections
 	/(?:^|\n)\d+\.\s+[A-Z].{5,200}$/gm,              // 1. Numbered sections
