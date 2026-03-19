@@ -22,7 +22,7 @@ Feature plan: `docs/001-Features.md`
 | Real-time | Durable Objects (WebSocket Hibernation API) |
 | File storage | Cloudflare R2 |
 | Session cache | Cloudflare KV |
-| Embeddings | Workers AI (BGE-base-en-v1.5, 768-dim) |
+| Embeddings | Workers AI (BGE-M3, 1024-dim, multilingual) |
 | Vector search | Cloudflare Vectorize |
 | Document parsing | unpdf (PDF), @kreuzberg/wasm (DOCX/XLSX/PPTX) |
 | CSS | Tailwind v4 |

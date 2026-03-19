@@ -5,8 +5,9 @@
  * for the Durable Object's runRagResponse() method.
  */
 
-import { createWorkersAI } from 'workers-ai-provider';
-import { createOpenAI } from '@ai-sdk/openai';
+// AI SDK imports removed — streamText() doesn't work in DO context (see docs/026)
+// import { createWorkersAI } from 'workers-ai-provider';
+// import { createOpenAI } from '@ai-sdk/openai';
 
 export interface RagConfig {
 	ragEnabled: boolean;
@@ -146,19 +147,9 @@ ${question}`;
  * @param ai - The Workers AI binding (env.AI)
  * @param apiKey - Optional API key for external providers (resolved from KV)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createRagModel(config: RagConfig, ai: any, apiKey?: string) {
-	if (config.ragProvider === 'openai' && apiKey) {
-		const openai = createOpenAI({
-			baseURL: config.ragBaseUrl || 'https://api.openai.com/v1',
-			apiKey,
-		});
-		return openai(config.ragModel || 'gpt-4o-mini');
-	}
-	// Default: Workers AI
-	const workersai = createWorkersAI({ binding: ai });
-	return workersai(config.ragModel || '@cf/meta/llama-3.1-8b-instruct');
-}
+// createRagModel() removed — AI SDK streamText() doesn't work in DO context.
+// Using direct env.AI.run() in chat-room.ts instead.
+// Re-enable when AI SDK DO compatibility is resolved (see docs/026, Phase 5).
 
 /**
  * Validate a base URL for external AI providers.
