@@ -1567,8 +1567,11 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		await connectPromise;
 
 		try {
-			// [C6] Individual inserts — no wrapping transaction so one poison
-			// message (bad FK, constraint violation) doesn't block the entire batch.
+			// [C6] Batch insert with individual fallback — one batch INSERT for
+			// all messages whose replyTo is already resolved; sequential inserts
+			// for messages that reference other unflushed messages in this batch.
+			// On batch failure, falls back to per-message inserts so one poison
+			// message doesn't block the entire flush.
 			const mappings: Array<{ localId: string; serverSeqId: number; dbId: number }> = [];
 			const updates: Record<string, StoredMessage> = {};
 			const failed: number[] = [];
@@ -1585,21 +1588,32 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				}
 			}
 
+			// Partition messages: "batchable" have replyTo already resolved (null or in seqToDbId),
+			// "deferred" reference another unflushed message in this batch (needs sequential insert).
+			const unflushedSeqIds = new Set(toFlush.map((f) => f.seqId));
+			const batchable: Array<{ seqId: number; stored: StoredMessage; resolvedReplyTo: number | null }> = [];
+			const deferred: Array<{ seqId: number; stored: StoredMessage }> = [];
+
 			for (const { seqId, stored } of toFlush) {
-				// Resolve replyTo from WAL seqId to DB id.
-				// Agents send serverSeqId as replyTo; the DB expects messages.id.
-				let resolvedReplyTo: number | null = null;
 				if (stored.replyTo != null) {
 					const mapped = seqToDbId.get(stored.replyTo);
 					if (mapped) {
-						resolvedReplyTo = mapped;
+						batchable.push({ seqId, stored, resolvedReplyTo: mapped });
+					} else if (unflushedSeqIds.has(stored.replyTo)) {
+						// References another message in this batch — must be inserted after it
+						deferred.push({ seqId, stored });
 					} else {
 						// Not in WAL map — could be a real DB id (from web client) or
 						// a stale WAL ref. Pass through; FK constraint will catch invalids.
-						resolvedReplyTo = stored.replyTo;
+						batchable.push({ seqId, stored, resolvedReplyTo: stored.replyTo });
 					}
+				} else {
+					batchable.push({ seqId, stored, resolvedReplyTo: null });
 				}
+			}
 
+			// Helper: insert a single message with full error handling (FK retry, poison skip)
+			const insertSingle = async (seqId: number, stored: StoredMessage, resolvedReplyTo: number | null): Promise<void> => {
 				try {
 					const [inserted] = await db
 						.insert(messagesTable)
@@ -1622,17 +1636,15 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 
 					stored.flushed = true;
 					stored.dbId = inserted.id;
-					seqToDbId.set(seqId, inserted.id); // Update map for later replyTo lookups
+					seqToDbId.set(seqId, inserted.id);
 					updates[storageKey(seqId)] = stored;
 					mappings.push({ localId: stored.localId, serverSeqId: seqId, dbId: inserted.id });
 				} catch (insertErr) {
-					// Drizzle wraps PG errors: code may be on err.code or err.cause.code
 					const pgCode =
 						(insertErr as { code?: string })?.code ||
 						(insertErr as { cause?: { code?: string } })?.cause?.code;
 
-					// 23503 = FK violation — likely bad replyTo. Retry without replyTo
-					// before giving up on the message entirely.
+					// 23503 = FK violation — likely bad replyTo. Retry without replyTo.
 					if (pgCode === '23503' && resolvedReplyTo != null) {
 						console.error(
 							`[ChatRoom] FK violation on seq=${seqId} replyTo=${resolvedReplyTo}, retrying without replyTo`
@@ -1662,9 +1674,8 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							seqToDbId.set(seqId, retried.id);
 							updates[storageKey(seqId)] = stored;
 							mappings.push({ localId: stored.localId, serverSeqId: seqId, dbId: retried.id });
-							continue;
+							return;
 						} catch (retryErr) {
-							// Retry also failed — fall through to skip logic
 							const retryCode =
 								(retryErr as { code?: string })?.code ||
 								(retryErr as { cause?: { code?: string } })?.cause?.code;
@@ -1676,27 +1687,80 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 								stored.flushed = true;
 								updates[storageKey(seqId)] = stored;
 								failed.push(seqId);
-								continue;
+								return;
 							}
 							throw retryErr;
 						}
 					}
 
 					// Other constraint violations (23xxx) are permanent — mark as flushed to skip.
-					// Transient errors (connection, timeout) should be retried.
 					if (pgCode && pgCode.startsWith('23')) {
 						console.error(
 							`[ChatRoom] Skipping poison message seq=${seqId} (pg: ${pgCode}, sender: ${stored.senderId})`,
 							insertErr
 						);
-						stored.flushed = true; // Mark as flushed so it's not retried forever
+						stored.flushed = true;
 						updates[storageKey(seqId)] = stored;
 						failed.push(seqId);
 					} else {
-						// Transient error — rethrow to trigger retry/degraded logic
 						throw insertErr;
 					}
 				}
+			};
+
+			// [C8] Batch insert batchable messages (replyTo already resolved)
+			if (batchable.length > 0) {
+				const batchValues = batchable.map(({ stored, resolvedReplyTo }) => ({
+					orgId,
+					senderId: stored.senderId,
+					senderRole: stored.senderRole as
+						| 'owner'
+						| 'lead'
+						| 'member'
+						| 'viewer'
+						| 'agent',
+					type: 'chat' as const,
+					body: stored.body,
+					replyTo: resolvedReplyTo,
+					editedAt: stored.editedAt ? new Date(stored.editedAt) : null,
+					createdAt: new Date(stored.timestamp)
+				}));
+
+				try {
+					const inserted = await db
+						.insert(messagesTable)
+						.values(batchValues)
+						.returning({ id: messagesTable.id });
+
+					// Map returned IDs back to stored messages (order preserved by Drizzle/PG)
+					for (let i = 0; i < batchable.length; i++) {
+						const { seqId, stored } = batchable[i];
+						stored.flushed = true;
+						stored.dbId = inserted[i].id;
+						seqToDbId.set(seqId, inserted[i].id);
+						updates[storageKey(seqId)] = stored;
+						mappings.push({ localId: stored.localId, serverSeqId: seqId, dbId: inserted[i].id });
+					}
+				} catch (batchErr) {
+					// Batch failed — fall back to individual inserts for full error handling
+					console.error(
+						`[ChatRoom] Batch insert failed (${batchable.length} msgs), falling back to individual inserts`,
+						batchErr
+					);
+					for (const { seqId, stored, resolvedReplyTo } of batchable) {
+						await insertSingle(seqId, stored, resolvedReplyTo);
+					}
+				}
+			}
+
+			// [C9] Sequential insert for deferred messages (replyTo references this batch)
+			for (const { seqId, stored } of deferred) {
+				let resolvedReplyTo: number | null = null;
+				if (stored.replyTo != null) {
+					const mapped = seqToDbId.get(stored.replyTo);
+					resolvedReplyTo = mapped ?? stored.replyTo;
+				}
+				await insertSingle(seqId, stored, resolvedReplyTo);
 			}
 
 			await this.ctx.storage.put(updates);

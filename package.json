@@ -26,7 +26,6 @@
     "cap:android": "CAPACITOR=true vite build && cap sync && cap open android"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.41",
     "@better-auth/api-key": "^1.5.3",
     "@better-auth/drizzle-adapter": "^1.5.3",
     "@better-auth/passkey": "^1.5.3",
@@ -38,7 +37,6 @@
     "@lucide/svelte": "^0.575.0",
     "@sentry/cloudflare": "^10.42.0",
     "@sentry/sveltekit": "^10.42.0",
-    "ai": "^6.0.116",
     "better-auth": "^1.5.3",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",
@@ -49,7 +47,6 @@
     "svelte": "^5.46.0",
     "tailwind-merge": "^3.0.2",
     "unpdf": "^1.4.0",
-    "workers-ai-provider": "^3.1.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -657,6 +657,7 @@ export const documentChunks = pgTable(
 	(table) => [
 		index('idx_doc_chunks_attachment').on(table.attachmentId),
 		index('idx_doc_chunks_org').on(table.orgId),
+		index('idx_doc_chunks_org_vector').on(table.orgId, table.vectorId),
 		foreignKey({ columns: [table.attachmentId], foreignColumns: [attachments.id] }).onDelete('cascade'),
 		foreignKey({ columns: [table.orgId], foreignColumns: [organization.id] }).onDelete('restrict')
 	]

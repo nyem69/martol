@@ -61,6 +61,7 @@ export class MessagesStore {
 	private streamingMessages = new Set<string>(); // localId set of active streams
 	private streamingLastDelta = new Map<string, number>(); // localId → timestamp
 	private streamTimeoutInterval: ReturnType<typeof setInterval> | null = null;
+	private localIdIndex = new Map<string, number>(); // localId → array index (O(1) lookup)
 	private systemEventCounter = 0;
 
 	constructor(
@@ -85,6 +86,7 @@ export class MessagesStore {
 
 		if (initialMessages && initialMessages.length > 0) {
 			this.messages = initialMessages;
+			this.rebuildLocalIdIndex();
 			// Set lastServerSeqId from initial messages
 			for (const msg of initialMessages) {
 				if (msg.serverSeqId && msg.serverSeqId > this.lastServerSeqId) {
@@ -161,7 +163,7 @@ export class MessagesStore {
 				clearInterval(this.streamTimeoutInterval);
 				this.streamTimeoutInterval = null;
 			}
-			const streamIdx = this.messages.findIndex((m) => m.localId === payload.localId);
+			const streamIdx = this.indexOfLocalId(payload.localId);
 			if (streamIdx === -1) return;
 			this.messages[streamIdx] = {
 				localId: payload.localId,
@@ -186,7 +188,7 @@ export class MessagesStore {
 		}
 
 		// Deduplicate: replace pending message with confirmed version
-		const existingIdx = this.messages.findIndex((m) => m.localId === payload.localId);
+		const existingIdx = this.indexOfLocalId(payload.localId);
 		const display: DisplayMessage = {
 			localId: payload.localId,
 			serverSeqId: payload.serverSeqId,
@@ -208,6 +210,7 @@ export class MessagesStore {
 			this.messages[existingIdx] = display;
 		} else {
 			this.messages.push(display);
+			this.localIdIndex.set(payload.localId, this.messages.length - 1);
 		}
 
 		if (payload.serverSeqId > this.lastServerSeqId) {
@@ -259,6 +262,7 @@ export class MessagesStore {
 			this.messages = [...newMessages, ...this.messages].sort(
 				(a, b) => (a.serverSeqId ?? Infinity) - (b.serverSeqId ?? Infinity)
 			);
+			this.rebuildLocalIdIndex();
 		}
 
 		// Update lastServerSeqId from max in history
@@ -272,9 +276,9 @@ export class MessagesStore {
 
 	private handleIdMap(mappings: Array<{ localId: string; dbId: number }>): void {
 		for (const { localId, dbId } of mappings) {
-			const msg = this.messages.find((m) => m.localId === localId);
-			if (msg) {
-				msg.dbId = dbId;
+			const idx = this.indexOfLocalId(localId);
+			if (idx !== -1) {
+				this.messages[idx].dbId = dbId;
 			}
 		}
 	}
@@ -332,6 +336,7 @@ export class MessagesStore {
 
 	private handleClear(clearedBy: string): void {
 		this.messages = [];
+		this.localIdIndex.clear();
 		this.streamingMessages.clear();
 		this.streamingLastDelta.clear();
 		if (this.streamTimeoutInterval) {
@@ -361,6 +366,7 @@ export class MessagesStore {
 			streaming: true,
 		};
 		this.messages.push(display);
+		this.localIdIndex.set(msg.localId, this.messages.length - 1);
 		this.streamingMessages.add(msg.localId);
 		this.streamingLastDelta.set(msg.localId, Date.now());
 		if (!this.streamTimeoutInterval) {
@@ -373,7 +379,7 @@ export class MessagesStore {
 
 	private handleStreamDelta(msg: Extract<ServerMessage, { type: 'stream_delta' }>): void {
 		if (!this.streamingMessages.has(msg.localId)) return;
-		const idx = this.messages.findIndex((m) => m.localId === msg.localId);
+		const idx = this.indexOfLocalId(msg.localId);
 		if (idx === -1) return;
 		const dm = this.messages[idx];
 		// Index assignment with spread triggers Svelte 5 $state reactivity
@@ -383,7 +389,7 @@ export class MessagesStore {
 
 	private handleStreamAbort(msg: Extract<ServerMessage, { type: 'stream_abort' }>): void {
 		if (!this.streamingMessages.has(msg.localId)) return;
-		const idx = this.messages.findIndex((m) => m.localId === msg.localId);
+		const idx = this.indexOfLocalId(msg.localId);
 		if (idx === -1) return;
 		const dm = this.messages[idx];
 		this.messages[idx] = { ...dm, streaming: false, failed: true };
@@ -414,7 +420,7 @@ export class MessagesStore {
 		for (const [localId, lastDelta] of this.streamingLastDelta) {
 			if (now - lastDelta > 15_000) {
 				// Auto-abort phantom stream
-				const idx = this.messages.findIndex((m) => m.localId === localId);
+				const idx = this.indexOfLocalId(localId);
 				if (idx !== -1) {
 					const dm = this.messages[idx];
 					this.messages[idx] = { ...dm, streaming: false, failed: true };
@@ -443,15 +449,29 @@ export class MessagesStore {
 		}
 	}
 
+	// ── localId index management ────────────────────────────────────────
+
+	private rebuildLocalIdIndex(): void {
+		this.localIdIndex.clear();
+		for (let i = 0; i < this.messages.length; i++) {
+			this.localIdIndex.set(this.messages[i].localId, i);
+		}
+	}
+
+	private indexOfLocalId(localId: string): number {
+		const idx = this.localIdIndex.get(localId);
+		return idx !== undefined ? idx : -1;
+	}
+
 	// ── Pending message management ──────────────────────────────────────
 
 	private startPendingTimer(localId: string): void {
 		const timer = setTimeout(() => {
 			this.pendingTimers.delete(localId);
-			const msg = this.messages.find((m) => m.localId === localId);
-			if (msg && msg.pending) {
-				msg.failed = true;
-				msg.pending = false;
+			const idx = this.indexOfLocalId(localId);
+			if (idx !== -1 && this.messages[idx].pending) {
+				this.messages[idx].failed = true;
+				this.messages[idx].pending = false;
 			}
 		}, PENDING_TIMEOUT_MS);
 		this.pendingTimers.set(localId, timer);
@@ -498,6 +518,7 @@ export class MessagesStore {
 		};
 
 		this.messages.push(pending);
+		this.localIdIndex.set(localId, this.messages.length - 1);
 
 		const sent = this.ws.send({ type: 'message', body, localId, ...(replyTo ? { replyTo } : {}) });
 		if (sent) {
@@ -512,8 +533,10 @@ export class MessagesStore {
 
 	/** Retry a failed message */
 	retrySend(localId: string): void {
-		const msg = this.messages.find((m) => m.localId === localId);
-		if (!msg || !msg.failed) return;
+		const idx = this.indexOfLocalId(localId);
+		if (idx === -1) return;
+		const msg = this.messages[idx];
+		if (!msg.failed) return;
 
 		msg.failed = false;
 		msg.pending = true;

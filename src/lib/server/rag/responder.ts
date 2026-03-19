@@ -5,9 +5,6 @@
  * for the Durable Object's runRagResponse() method.
  */
 
-// AI SDK imports removed — streamText() doesn't work in DO context (see docs/026)
-// import { createWorkersAI } from 'workers-ai-provider';
-// import { createOpenAI } from '@ai-sdk/openai';
 
 export interface RagConfig {
 	ragEnabled: boolean;

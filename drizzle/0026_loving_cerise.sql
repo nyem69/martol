@@ -1,0 +1,1 @@
+CREATE INDEX "idx_doc_chunks_org_vector" ON "document_chunks" USING btree ("org_id","vector_id");
