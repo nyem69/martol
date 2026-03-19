@@ -112,7 +112,13 @@ Jawapan: Terdapat beberapa fatwa mengenai zakat fitrah:
  */
 export function buildUserPrompt(
 	question: string,
-	chunks: Array<{ content: string; filename: string; chunkIndex: number }>
+	chunks: Array<{
+		content: string;
+		filename: string;
+		chunkIndex: number;
+		documentDate?: string | null;
+		documentTitle?: string | null;
+	}>
 ): string {
 	// Guard: cap total context to ~3000 words (~12K chars, ~4K tokens)
 	// Keeps prompt within Workers AI's efficient range and reduces neuron costs
@@ -126,7 +132,13 @@ export function buildUserPrompt(
 	}
 
 	const formatted = cappedChunks
-		.map((c) => `[📄 ${c.filename} | Chunk ${c.chunkIndex}]\n${c.content}`)
+		.map((c) => {
+			const parts = [`📄 ${c.filename}`];
+			if (c.documentTitle) parts.push(c.documentTitle);
+			if (c.documentDate) parts.push(c.documentDate);
+			parts.push(`Chunk ${c.chunkIndex}`);
+			return `[${parts.join(' | ')}]\n${c.content}`;
+		})
 		.join('\n\n');
 
 	return `## Document Excerpts

@@ -21,6 +21,9 @@ export interface SearchResult {
 	attachmentId: number;
 	charStart: number | null;
 	charEnd: number | null;
+	documentDate?: string | null;
+	documentTitle?: string | null;
+	language?: string | null;
 }
 
 export async function searchDocuments(
@@ -30,7 +33,7 @@ export async function searchDocuments(
 	vectorize: VectorizeIndex,
 	orgId: string,
 	query: string,
-	topK: number = 10
+	topK: number = 7
 ): Promise<SearchResult[]> {
 	// 1. Embed the query
 	const queryVector = await embedQuery(ai, query);
@@ -56,6 +59,9 @@ export async function searchDocuments(
 			attachmentId: documentChunks.attachmentId,
 			charStart: documentChunks.charStart,
 			charEnd: documentChunks.charEnd,
+			documentDate: documentChunks.documentDate,
+			documentTitle: documentChunks.documentTitle,
+			language: documentChunks.language,
 		})
 		.from(documentChunks)
 		.where(and(eq(documentChunks.orgId, orgId), inArray(documentChunks.vectorId, vectorIds)));
@@ -68,12 +74,15 @@ export async function searchDocuments(
 		attachmentId: number;
 		charStart: number | null;
 		charEnd: number | null;
+		documentDate: string | null;
+		documentTitle: string | null;
+		language: string | null;
 	}
 	const chunkMap = new Map<string, ChunkRow>(
 		chunks.map((c: ChunkRow) => [c.vectorId, c] as const)
 	);
 
-	let merged = results.matches
+	let merged: SearchResult[] = results.matches
 		.filter((m) => chunkMap.has(m.id))
 		.map((m) => {
 			const chunk = chunkMap.get(m.id)!;
@@ -86,6 +95,9 @@ export async function searchDocuments(
 				attachmentId: chunk.attachmentId,
 				charStart: chunk.charStart,
 				charEnd: chunk.charEnd,
+				documentDate: chunk.documentDate,
+				documentTitle: chunk.documentTitle,
+				language: chunk.language,
 			};
 		});
 
