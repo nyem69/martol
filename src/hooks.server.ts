@@ -191,7 +191,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 		} catch (err) {
 			console.error('[Terms] Version check failed:', err);
-			// Fail open — don't block the user if the check fails
+			// Fail closed — block access if terms check errors
+			return new Response('Service unavailable', { status: 503 });
 		}
 	}
 
@@ -434,7 +435,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// ── Upload rate limit: 30 per user per minute ──
+	// ── Upload rate limit: 30 per user per minute (burst protection) ──
+	// Prevents rapid-fire uploads. A separate hourly limit (100/hr) below
+	// caps sustained upload volume over longer periods.
 	// Fail CLOSED: uploads blocked when KV is missing (unlike OTP which fails open)
 	if (isUpload && event.locals.user) {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
@@ -579,7 +582,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	// ── Upload rate limit: 100 per user per hour ──
+	// ── Upload rate limit: 100 per user per hour (long-term cap) ──
+	// Complements the per-minute burst limit (30/min) above — this prevents
+	// sustained abuse over longer periods (e.g. scripted uploads at 29/min).
 	if (isUpload && event.locals.user) {
 		const kv: KVNamespace | undefined = event.platform?.env?.CACHE;
 		if (kv) {
@@ -590,7 +595,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			});
 			if (!uploadLimit.allowed) {
 				return new Response(
-					JSON.stringify({ message: 'Too many uploads. Try again later.' }),
+					JSON.stringify({ error: { message: 'Too many uploads. Try again later.' } }),
 					{ status: 429, headers: { 'Content-Type': 'application/json' } }
 				);
 			}

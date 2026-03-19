@@ -71,9 +71,9 @@ R2 (file storage)
 
 RAG Pipeline (async, via ctx.waitUntil)
   +-- Extract: unpdf (PDF), Kreuzberg WASM (DOCX/XLSX/PPTX), TextDecoder (text types)
-  +-- Chunk: 500-word windows, 50-word overlap, char offsets
-  +-- Embed: Workers AI BGE-base-en-v1.5 (768-dim) → Vectorize upsert
-  +-- Search: Vectorize query with org filter + DB chunk join
+  +-- Chunk: topic-aware splitting (headings → sections), fallback 500-word windows with 50-word overlap
+  +-- Embed: Workers AI BGE-M3 (1024-dim, multilingual) → Vectorize upsert (martol-docs-v2)
+  +-- Search: Vectorize query with org filter + BGE reranker + DB chunk join
 ```
 
 ### Key Files
@@ -169,7 +169,7 @@ Before committing, always:
 ## Deployment
 
 - **NEVER run `pnpm cf:deploy` directly** — always commit and push to `main`; CI/CD handles deployment
-- Vectorize metadata index must be created before first document upload: `npx wrangler vectorize create-metadata-index martol-docs --property-name orgId --type string`
+- Vectorize metadata index must be created before first document upload: `npx wrangler vectorize create-metadata-index martol-docs-v2 --property-name orgId --type string`
 - Monitor Worker gzipped size — currently ~9.3 MB of 10 MB limit
 
 ## Related Repos

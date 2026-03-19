@@ -17,6 +17,9 @@ const MAX_MESSAGE_LEN = 5000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Simple in-memory rate limit: max 3 submissions per IP per 10 minutes
+// NOTE: In-memory rate limit is per-isolate. Under high concurrency,
+// different isolates may each allow their own limit. For stronger
+// protection, use KV-based rate limiting (like the upload endpoint).
 const rateMap = new Map<string, number[]>();
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT = 3;

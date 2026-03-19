@@ -38,6 +38,7 @@
 	let ocrEnabled = $state(false);
 	let ocrLoading = $state(false);
 	let reindexing = $state(false);
+	let panelError = $state('');
 
 	const canDelete = $derived(userRole === 'owner' || userRole === 'lead');
 	const canManage = $derived(userRole === 'owner' || userRole === 'lead');
@@ -76,7 +77,10 @@
 			const res = await fetch('/api/upload/files');
 			const json: { ok?: boolean; data?: DocFile[] } = await res.json();
 			if (json.ok && json.data) files = json.data;
-		} catch { /* silent */ }
+		} catch {
+			panelError = m.error_generic();
+			setTimeout(() => (panelError = ''), 6000);
+		}
 		loading = false;
 	}
 
@@ -96,7 +100,10 @@
 			if (res.ok) {
 				files = files.filter((f) => f.id !== id);
 			}
-		} catch { /* silent */ }
+		} catch {
+			panelError = m.error_generic();
+			setTimeout(() => (panelError = ''), 6000);
+		}
 		deleting = null;
 	}
 
@@ -112,7 +119,10 @@
 				const f = files.find((f) => f.id === id);
 				if (f) f.processing_status = 'pending';
 			}
-		} catch { /* silent */ }
+		} catch {
+			panelError = m.error_generic();
+			setTimeout(() => (panelError = ''), 6000);
+		}
 		retrying = null;
 	}
 
@@ -134,7 +144,10 @@
 			const res = await fetch(`/api/rooms/${roomId}/documents/search?q=${encodeURIComponent(searchQuery)}`);
 			const json: { ok?: boolean; data?: typeof searchResults } = await res.json();
 			if (json.ok && json.data) searchResults = json.data;
-		} catch { /* silent */ }
+		} catch {
+			panelError = m.error_generic();
+			setTimeout(() => (panelError = ''), 6000);
+		}
 		searching = false;
 	}
 
@@ -286,6 +299,9 @@
 
 	<!-- Content -->
 	<div class="flex-1 overflow-y-auto scrollbar-thin" style="padding-bottom: env(safe-area-inset-bottom);">
+		{#if panelError}
+			<div class="px-3 py-1.5 text-xs" style="color: var(--danger);">{panelError}</div>
+		{/if}
 		{#if loading}
 			<div class="flex items-center justify-center py-8" style="color: var(--text-muted);">
 				<RefreshCw size={16} class="animate-spin" />

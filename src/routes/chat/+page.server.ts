@@ -167,10 +167,9 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// Auto-accept any pending invitations for this user
+	// Auto-accept any pending invitations for this user (non-blocking — fire and forget)
 	if (currentUser.email) {
-		const pendingInvites = await db
-			.select({ id: invitation.id })
+		db.select({ id: invitation.id })
 			.from(invitation)
 			.where(
 				and(
@@ -178,18 +177,21 @@ export const load: PageServerLoad = async (event) => {
 					eq(invitation.status, 'pending'),
 					gt(invitation.expiresAt, new Date())
 				)
-			);
-
-		for (const inv of pendingInvites) {
-			try {
-				await locals.auth!.api.acceptInvitation({
-					body: { invitationId: inv.id },
-					headers: event.request.headers
-				});
-			} catch {
-				// Invitation may have been revoked or already accepted
-			}
-		}
+			)
+			.then((pendingInvites) => {
+				// Accept all invitations concurrently (no need to block page load)
+				return Promise.allSettled(
+					pendingInvites.map((inv) =>
+						locals.auth!.api.acceptInvitation({
+							body: { invitationId: inv.id },
+							headers: event.request.headers
+						})
+					)
+				);
+			})
+			.catch(() => {
+				// Best-effort — invitations will be accepted on next page load
+			});
 	}
 
 	// Load all rooms the user belongs to (for room switcher)

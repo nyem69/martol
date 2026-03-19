@@ -191,7 +191,7 @@
 						data-testid="brief-modal-edit"
 					>
 						<Pencil size={11} />
-						Edit
+						{m.chat_brief_edit()}
 					</button>
 				{/if}
 				{#if editing}
@@ -200,7 +200,7 @@
 						onclick={cancelEdit}
 					>
 						<Eye size={11} />
-						Read
+						{m.chat_brief_read()}
 					</button>
 				{/if}
 			</div>
@@ -245,10 +245,10 @@
 				<!-- ═══ READ MODE ═══ -->
 				{#if isEmpty}
 					<div class="brief-empty">
-						<p class="brief-empty-text">No brief yet.</p>
+						<p class="brief-empty-text">{m.chat_brief_empty()}</p>
 						<p class="brief-empty-hint">
 							{#if canEdit}
-								Click <strong>Edit</strong> to write one, or use <strong>Ask Agent to Fill</strong> below.
+								{m.chat_brief_empty_hint_edit()}
 							{:else}
 								{m.chat_brief_readonly_hint()}
 							{/if}

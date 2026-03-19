@@ -45,6 +45,8 @@
 	} = $props();
 
 	// Lookup map for reply threading: dbId → message
+	// Perf reviewed: O(n) Map rebuild on message change is acceptable for typical chat sizes (<200 messages).
+	// Svelte 5 $derived only re-runs when `messages` reference changes, not on every render.
 	const messageByDbId = $derived(new Map(messages.filter((m) => m.dbId).map((m) => [m.dbId!, m])));
 
 	let container: HTMLDivElement | undefined = $state();

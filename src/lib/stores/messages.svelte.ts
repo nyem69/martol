@@ -63,6 +63,7 @@ export class MessagesStore {
 	private streamTimeoutInterval: ReturnType<typeof setInterval> | null = null;
 	private localIdIndex = new Map<string, number>(); // localId → array index (O(1) lookup)
 	private systemEventCounter = 0;
+	private processingFileTimers = new Map<string, ReturnType<typeof setTimeout>>(); // filename → cleanup timer
 
 	constructor(
 		roomId: string,
@@ -132,10 +133,16 @@ export class MessagesStore {
 			case 'brief_changed':
 				this.briefVersion = msg.version;
 				break;
-			case 'document_indexed':
+			case 'document_indexed': {
+				const docTimer = this.processingFileTimers.get(msg.filename);
+				if (docTimer) {
+					clearTimeout(docTimer);
+					this.processingFileTimers.delete(msg.filename);
+				}
 				this.processingFiles = this.processingFiles.filter(f => f !== msg.filename);
 				window.dispatchEvent(new CustomEvent('document-indexed', { detail: msg }));
 				break;
+			}
 			case 'stream_start':
 				this.handleStreamStart(msg);
 				break;
@@ -577,9 +584,11 @@ export class MessagesStore {
 		if (!this.processingFiles.includes(filename)) {
 			this.processingFiles = [...this.processingFiles, filename];
 			// Auto-clear after 3 minutes (fallback for failed indexing that never sends document_indexed)
-			setTimeout(() => {
+			const timer = setTimeout(() => {
+				this.processingFileTimers.delete(filename);
 				this.processingFiles = this.processingFiles.filter(f => f !== filename);
 			}, 180_000);
+			this.processingFileTimers.set(filename, timer);
 		}
 	}
 
@@ -608,5 +617,10 @@ export class MessagesStore {
 			clearTimeout(this.typingIdleTimer);
 			this.typingIdleTimer = null;
 		}
+		// Clear processing file auto-clear timers
+		for (const timer of this.processingFileTimers.values()) {
+			clearTimeout(timer);
+		}
+		this.processingFileTimers.clear();
 	}
 }

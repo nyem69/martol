@@ -287,6 +287,11 @@
 	@media (hover: none) {
 		.msg-action {
 			opacity: 0.6;
+			min-width: 44px;
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 	}
 

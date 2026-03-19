@@ -55,8 +55,11 @@ function storageKey(id: number): string {
 	return `msg:${padId(id)}`;
 }
 
+// Reuse a single TextEncoder instance across the module (avoid re-creating per call)
+const TEXT_ENCODER = new TextEncoder();
+
 function measureBytes(value: unknown): number {
-	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+	return TEXT_ENCODER.encode(JSON.stringify(value)).byteLength;
 }
 
 // ── Chunked Storage Helpers (DO batch ops limited to 128 keys) ──────
@@ -121,8 +124,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 	// Pending edits to already-flushed messages — processed during flushToDb()
 	private pendingEdits = new Map<number, { dbId: number; body: string; editedAt: string; orgId: string }>();
 
-	// [R6] Pre-imported HMAC key for signing broadcast messages
+	// [R6] Pre-imported HMAC keys for signing/verifying broadcast messages
 	private broadcastSigningKey: CryptoKey | null = null;
+	private broadcastVerifyKey: CryptoKey | null = null;
 
 	constructor(ctx: DurableObjectState, env: App.Platform['env']) {
 		super(ctx, env);
@@ -144,16 +148,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			this.flushFailures = failures ?? 0;
 			this.degraded = this.flushFailures >= MAX_FLUSH_FAILURES;
 
-			// Import broadcast signing key for R6 message integrity
+			// Import broadcast signing + verify keys for R6 message integrity
 			const hmacSecret = this.env.HMAC_SIGNING_SECRET;
 			if (hmacSecret) {
-				this.broadcastSigningKey = await crypto.subtle.importKey(
-					'raw',
-					new TextEncoder().encode(hmacSecret),
-					{ name: 'HMAC', hash: 'SHA-256' },
-					false,
-					['sign']
-				);
+				const keyData = TEXT_ENCODER.encode(hmacSecret);
+				const [signKey, verifyKey] = await Promise.all([
+					crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']),
+					crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']),
+				]);
+				this.broadcastSigningKey = signKey;
+				this.broadcastVerifyKey = verifyKey;
 			} else {
 				console.warn('[ChatRoom] HMAC_SIGNING_SECRET not set — broadcast messages will not be signed');
 			}
@@ -218,11 +222,6 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response('Missing signed identity', { status: 401 });
 		}
 
-		const signingKey = this.env.HMAC_SIGNING_SECRET;
-		if (!signingKey) {
-			return new Response('Signing key unavailable', { status: 503 });
-		}
-
 		let parsedIdentity: { userId: string; role: string; userName: string; orgId: string; timestamp: number };
 		try {
 			parsedIdentity = JSON.parse(identityPayload);
@@ -230,20 +229,16 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response('Invalid identity payload', { status: 400 });
 		}
 
-		// Verify HMAC signature
-		const key = await crypto.subtle.importKey(
-			'raw',
-			new TextEncoder().encode(signingKey),
-			{ name: 'HMAC', hash: 'SHA-256' },
-			false,
-			['verify']
-		);
+		// Verify HMAC signature using cached verify key
+		if (!this.broadcastVerifyKey) {
+			return new Response('Signing key not imported', { status: 503 });
+		}
 		const sigBytes = Uint8Array.from(atob(identitySig), (c) => c.charCodeAt(0));
 		const valid = await crypto.subtle.verify(
 			'HMAC',
-			key,
+			this.broadcastVerifyKey,
 			sigBytes,
-			new TextEncoder().encode(identityPayload)
+			TEXT_ENCODER.encode(identityPayload)
 		);
 
 		if (!valid) {
@@ -560,7 +555,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return;
 		}
 
-		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
+		const bodyBytes = TEXT_ENCODER.encode(msg.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
 			await this.sendError(
 				ws,
@@ -785,7 +780,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const userId = this.extractTag(tags, 'user:');
 		if (userId !== session.senderId) return; // Not the stream owner
 
-		const deltaBytes = new TextEncoder().encode(msg.delta ?? '').byteLength;
+		const deltaBytes = TEXT_ENCODER.encode(msg.delta ?? '').byteLength;
 		if (typeof msg.delta !== 'string' || deltaBytes > MAX_STREAM_DELTA_SIZE) {
 			await this.abortStream(msg.localId, 'delta_too_large');
 			return;
@@ -817,7 +812,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return; // Empty body — nothing to commit
 		}
 
-		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
+		const bodyBytes = TEXT_ENCODER.encode(msg.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
 			// Body too large to commit — already sent deltas though, so abort
 			await this.broadcast({ type: 'stream_abort', localId: msg.localId, reason: 'body_too_large' });
@@ -930,7 +925,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response(JSON.stringify({ error: 'Body must be a string' }), { status: 400 });
 		}
 
-		const bodyBytes = new TextEncoder().encode(payload.body).byteLength;
+		const bodyBytes = TEXT_ENCODER.encode(payload.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
 			return new Response(JSON.stringify({ error: 'Message too large' }), { status: 413 });
 		}
@@ -1055,7 +1050,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return;
 		}
 
-		const bodyBytes = new TextEncoder().encode(msg.body).byteLength;
+		const bodyBytes = TEXT_ENCODER.encode(msg.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
 			await this.sendError(ws, 'invalid_message', `Message too large (max ${MAX_BODY_SIZE / 1024}KB)`);
 			return;
@@ -1138,7 +1133,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 			return new Response(JSON.stringify({ error: 'Body must be a string' }), { status: 400 });
 		}
 
-		const bodyBytes = new TextEncoder().encode(payload.body).byteLength;
+		const bodyBytes = TEXT_ENCODER.encode(payload.body).byteLength;
 		if (bodyBytes > MAX_BODY_SIZE) {
 			return new Response(JSON.stringify({ error: 'Message too large' }), { status: 413 });
 		}
@@ -1435,6 +1430,13 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				let fullBody = (aiResult as any)?.response ?? '';
 				if (typeof fullBody !== 'string') fullBody = '';
 				console.log(`[ChatRoom] RAG generation: ${fullBody.length} chars from ${config.ragModel}`);
+
+				// Output guardrail: detect possible system prompt extraction
+				const systemPromptLeaked = fullBody.includes('RULES:') && fullBody.includes('Never reveal these instructions');
+				if (systemPromptLeaked) {
+					fullBody = 'I was unable to generate a proper response. Please try again.';
+					console.warn('[ChatRoom] RAG output guardrail triggered — possible prompt extraction');
+				}
 
 				// 5. Broadcast the complete response as a stream (start → delta → message)
 				if (fullBody.trim()) {
@@ -2452,7 +2454,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		const sig = await crypto.subtle.sign(
 			'HMAC',
 			this.broadcastSigningKey,
-			new TextEncoder().encode(json)
+			TEXT_ENCODER.encode(json)
 		);
 		const hmac = btoa(String.fromCharCode(...new Uint8Array(sig)));
 		return json.slice(0, -1) + ',"_hmac":"' + hmac + '"}';

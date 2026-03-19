@@ -111,7 +111,6 @@
 			if (parsed.command === 'ask') {
 				if (!ragEnabled) {
 					uploadError = m.rag_disabled_ask();
-					setTimeout(() => (uploadError = ''), 6000);
 					return;
 				}
 				onSend(body, replyTo?.dbId);
@@ -295,14 +294,14 @@
 			return;
 		}
 
+		uploadError = '';
+
 		if (!ALLOWED_TYPES.has(file.type)) {
 			uploadError = m.chat_upload_type_not_allowed();
-			setTimeout(() => (uploadError = ''), 4000);
 			return;
 		}
 		if (file.size > MAX_SIZE) {
 			uploadError = m.chat_upload_too_large();
-			setTimeout(() => (uploadError = ''), 4000);
 			return;
 		}
 
@@ -347,11 +346,9 @@
 						resize();
 					} else {
 						uploadError = m.chat_upload_failed();
-						setTimeout(() => (uploadError = ''), 4000);
 					}
 				} catch {
 					uploadError = m.chat_upload_failed();
-					setTimeout(() => (uploadError = ''), 4000);
 				}
 			} else {
 				try {
@@ -364,7 +361,6 @@
 				} catch {
 					uploadError = m.chat_upload_failed();
 				}
-				setTimeout(() => (uploadError = ''), 6000);
 			}
 		};
 
@@ -373,7 +369,6 @@
 			uploading = false;
 			processNextUpload();
 			uploadError = m.chat_upload_failed();
-			setTimeout(() => (uploadError = ''), 4000);
 		};
 
 		xhr.open('POST', '/api/upload');

@@ -148,19 +148,6 @@ ${question}`;
 }
 
 /**
- * Create an AI model instance via the Vercel AI SDK.
- *
- * Supports Workers AI (default) and OpenAI-compatible providers.
- *
- * @param config - RAG configuration with provider details
- * @param ai - The Workers AI binding (env.AI)
- * @param apiKey - Optional API key for external providers (resolved from KV)
- */
-// createRagModel() removed — AI SDK streamText() doesn't work in DO context.
-// Using direct env.AI.run() in chat-room.ts instead.
-// Re-enable when AI SDK DO compatibility is resolved (see docs/026, Phase 5).
-
-/**
  * Validate a base URL for external AI providers.
  *
  * Ensures the URL is HTTPS (localhost exempted for dev) and blocks
