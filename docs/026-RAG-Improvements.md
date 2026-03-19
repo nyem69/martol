@@ -219,14 +219,14 @@ const header = [
 
 ## Build Sequence
 
-### Phase 1 — Evaluation + chunking + reranking fix
+### Phase 1 — Evaluation + chunking + reranking fix ✅ (code shipped)
 
-- [ ] Create `scripts/rag-eval.ts` with test corpus (10-15 queries)
-- [ ] Run baseline evaluation
-- [ ] Add multi-pattern `splitByTopics()` to `chunker.ts`
-- [ ] Add `reprocessDocument()` cleanup function
-- [ ] Wire into `processDocument()` — try topic split first, fallback to word-based
-- [ ] Add language-conditional reranking (English=rerank, Malay=vector-only)
+- [x] Create `scripts/rag-eval.ts` with test corpus (10 queries)
+- [ ] Run baseline evaluation (needs deploy + API key)
+- [x] Add multi-pattern `splitByTopics()` to `chunker.ts` (5 patterns)
+- [x] Add `reprocessDocument()` cleanup function
+- [x] Wire into `processDocument()` — try topic split first, fallback to word-based
+- [x] Add language-conditional reranking (English=rerank, Malay=vector-only)
 - [ ] Re-process multi-topic documents (198.pdf, etc.)
 - [ ] Run evaluation again — compare recall@5, recall@10
 
