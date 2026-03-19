@@ -29,7 +29,7 @@ export async function searchDocuments(
 	vectorize: VectorizeIndex,
 	orgId: string,
 	query: string,
-	topK: number = 10
+	topK: number = 5
 ): Promise<SearchResult[]> {
 	// 1. Embed the query
 	const queryVector = await embedQuery(ai, query);

@@ -113,12 +113,13 @@ export function buildUserPrompt(
 	question: string,
 	chunks: Array<{ content: string; filename: string; chunkIndex: number }>
 ): string {
-	// Guard: cap total context to ~8000 words
+	// Guard: cap total context to ~3000 words (~12K chars, ~4K tokens)
+	// Keeps prompt within Workers AI's efficient range and reduces neuron costs
 	let totalWords = 0;
 	const cappedChunks: typeof chunks = [];
 	for (const chunk of chunks) {
 		const words = chunk.content.split(/\s+/).length;
-		if (totalWords + words > 8000) break;
+		if (totalWords + words > 3000) break;
 		cappedChunks.push(chunk);
 		totalWords += words;
 	}

@@ -1394,7 +1394,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				}
 
 				// 2d. Search documents
-				const chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 10);
+				const chunks = await searchDocuments(db, this.env.AI, this.env.VECTORIZE, orgId, question, 5);
 
 				if (chunks.length === 0) {
 					// No chunks found — send visible error message
@@ -1412,11 +1412,15 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 				// 4. Call Workers AI directly (env.AI.run) instead of AI SDK streamText()
 				// AI SDK streamText() produces zero tokens with Workers AI — reason unknown.
 				// Direct env.AI.run() works reliably.
+				// Hard cap: truncate prompt to 12K chars (~3K tokens) to stay within neuron budget
+				const cappedPrompt = prompt.length > 12000 ? prompt.slice(0, 12000) + '\n\n[...truncated]' : prompt;
+				console.log(`[ChatRoom] RAG: sending ${system.length + cappedPrompt.length} chars to ${config.ragModel}`);
+
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const aiResult = await this.env.AI.run(config.ragModel as Parameters<Ai['run']>[0], {
 					messages: [
 						{ role: 'system', content: system },
-						{ role: 'user', content: prompt }
+						{ role: 'user', content: cappedPrompt }
 					],
 					temperature: config.ragTemperature ?? 0.3,
 					max_tokens: config.ragMaxTokens ?? 2048,
