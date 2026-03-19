@@ -644,6 +644,7 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 		// RAG responder trigger check (non-blocking, after broadcast so user sees their message)
 		// Lazy-load config from DB if not yet pushed via /notify-rag-config (e.g., after DO hibernation)
 		if (!this.ragConfig && orgId && (msg.body.startsWith('/ask ') || msg.body.includes('@docs'))) {
+			console.log(`[ChatRoom] Lazy-loading RAG config for org ${orgId}`);
 			try {
 				const { roomConfig: roomConfigTable } = await import('./db/schema');
 				const { db, client, connectPromise } = createHyperdriveDb(this.env.HYPERDRIVE);
@@ -665,6 +666,9 @@ export class ChatRoom extends DurableObject<App.Platform['env']> {
 							ragBaseUrl: row.ragBaseUrl ?? undefined,
 							ragApiKeyId: row.ragApiKeyId ?? undefined,
 						};
+						console.log(`[ChatRoom] RAG config loaded: enabled=${row.ragEnabled}, model=${row.ragModel}`);
+					} else {
+						console.log(`[ChatRoom] No RAG config found for org ${orgId}`);
 					}
 				} finally {
 					await client.end();
