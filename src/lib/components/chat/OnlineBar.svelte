@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages';
 	import type { SvelteMap } from 'svelte/reactivity';
 
 	let {
@@ -31,14 +32,14 @@
 	<div
 		class="scrollbar-none flex shrink-0 items-center gap-1.5 overflow-x-auto px-3 py-1.5"
 		style="background: var(--bg-elevated); border-bottom: 1px solid var(--border);"
-		aria-label="Online members"
+		aria-label={m.aria_online_members()}
 	>
 		{#each others as member (member.id)}
 			<button
 				class="online-pill flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 transition-opacity hover:opacity-80 active:scale-95"
 				style="background: var(--bg-surface); border: 1px solid var(--border);"
 				onclick={() => onMention(member.name)}
-				title="Mention {member.name}"
+				title={m.aria_mention({ name: member.name })}
 				data-testid="online-pill"
 			>
 				<span

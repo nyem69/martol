@@ -126,7 +126,8 @@
 
 	// ── Confirm dialog state ──
 	let confirmTarget = $state<{ agentUserId: string; name: string } | null>(null);
-	let confirmBtn = $state<HTMLButtonElement | undefined>();
+	let revokeCancelBtn = $state<HTMLButtonElement | undefined>();
+	let revokeDialogRef = $state<HTMLDivElement | undefined>();
 	let confirmPrevFocus: HTMLElement | null = null;
 
 	const canManageAgents = $derived(userRole === 'owner' || userRole === 'lead');
@@ -220,8 +221,29 @@
 	function promptRevoke(agentUserId: string, name: string) {
 		confirmPrevFocus = document.activeElement as HTMLElement;
 		confirmTarget = { agentUserId, name };
-		// Focus confirm button after render
-		requestAnimationFrame(() => confirmBtn?.focus());
+		// Focus cancel button after render (not the destructive confirm)
+		requestAnimationFrame(() => revokeCancelBtn?.focus());
+	}
+
+	function trapRevokeFocus(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			cancelRevoke();
+			return;
+		}
+		if (e.key !== 'Tab' || !revokeDialogRef) return;
+		const focusable = revokeDialogRef.querySelectorAll<HTMLElement>(
+			'button:not([tabindex="-1"]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
 	}
 
 	function cancelRevoke() {
@@ -864,7 +886,7 @@
 											<button
 												class="copy-btn"
 												onclick={() => copyToClipboard(generatedKey!, 'agentKey')}
-												aria-label="Copy"
+												aria-label={m.aria_copy()}
 											>
 												{#if copiedField === 'agentKey'}
 													<Check size={10} />
@@ -900,7 +922,7 @@
 													<button
 														class="copy-btn"
 														onclick={() => copyToClipboard(agent.name, `agent-${agent.agentUserId}`)}
-														aria-label="Copy name"
+														aria-label={m.aria_copy_name()}
 													>
 														{#if copiedField === `agent-${agent.agentUserId}`}
 															<Check size={10} />
@@ -940,7 +962,7 @@
 									<button
 										class="copy-btn"
 										onclick={() => copyToClipboard(wsUrl, 'ws')}
-										aria-label="Copy"
+										aria-label={m.aria_copy()}
 									>
 										{#if copiedField === 'ws'}
 											<Check size={10} />
@@ -1076,15 +1098,14 @@
 {#if confirmTarget}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
 		<div
+			bind:this={revokeDialogRef}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-revoke-title"
 			tabindex="-1"
 			class="mx-4 w-full max-w-sm rounded-lg p-5 shadow-xl"
 			style="background: var(--bg-elevated); border: 1px solid var(--border);"
-			onkeydown={(e) => {
-				if (e.key === 'Escape') cancelRevoke();
-			}}
+			onkeydown={trapRevokeFocus}
 		>
 			<h3
 				id="confirm-revoke-title"
@@ -1098,6 +1119,7 @@
 			</p>
 			<div class="flex justify-end gap-2">
 				<button
+					bind:this={revokeCancelBtn}
 					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
 					style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); font-family: var(--font-mono);"
 					onclick={cancelRevoke}
@@ -1105,7 +1127,6 @@
 					{m.cancel()}
 				</button>
 				<button
-					bind:this={confirmBtn}
 					class="rounded-md px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
 					style="background: var(--danger); color: #fff; font-family: var(--font-mono);"
 					onclick={executeRevoke}

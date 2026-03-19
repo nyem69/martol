@@ -558,7 +558,7 @@
 					onclick={() => { value = ''; resize(); showSlashMenu = false; onCancelReply?.(); }}
 					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-70 active:scale-95"
 					style="color: var(--text-muted);"
-					aria-label="Clear"
+					aria-label={m.aria_clear()}
 					data-testid="clear-input"
 				>
 					<X size={14} />

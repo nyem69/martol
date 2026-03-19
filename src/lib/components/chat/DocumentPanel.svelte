@@ -190,7 +190,7 @@
 		const d = new Date(iso);
 		const diff = Date.now() - d.getTime();
 		const mins = Math.floor(diff / 60000);
-		if (mins < 1) return 'just now';
+		if (mins < 1) return m.doc_panel_just_now();
 		if (mins < 60) return `${mins}m`;
 		const hrs = Math.floor(mins / 60);
 		if (hrs < 24) return `${hrs}h`;
@@ -209,11 +209,11 @@
 
 	function statusLabel(status: string): string {
 		switch (status) {
-			case 'indexed': return 'Indexed';
-			case 'processing': return 'Processing...';
-			case 'pending': return 'Queued';
-			case 'failed': return 'Failed';
-			case 'skipped': return 'Skipped';
+			case 'indexed': return m.doc_panel_status_indexed();
+			case 'processing': return m.doc_panel_status_processing();
+			case 'pending': return m.doc_panel_status_queued();
+			case 'failed': return m.doc_panel_status_failed();
+			case 'skipped': return m.doc_panel_status_skipped();
 			default: return status;
 		}
 	}
@@ -234,7 +234,7 @@
 		class="fixed inset-0 z-30"
 		style="background: rgba(0,0,0,0.5);"
 		onclick={onClose}
-		aria-label="Close document panel"
+		aria-label={m.aria_close_document_panel()}
 		tabindex="-1"
 	></button>
 {/if}
@@ -249,21 +249,21 @@
 		transform: translateX({open ? '0' : '100%'});
 		padding-top: env(safe-area-inset-top);
 	"
-	aria-label="Documents"
+	aria-label={m.aria_documents()}
 >
 	<!-- Header -->
 	<div class="flex shrink-0 items-center justify-between border-b px-4 py-3" style="border-color: var(--border);">
 		<div class="flex items-center gap-2">
 			<FileText size={16} style="color: var(--text-muted);" />
 			<span class="text-sm font-medium" style="color: var(--text); font-family: var(--font-mono);">
-				Documents ({files.length})
+				{m.doc_panel_title({ count: files.length.toString() })}
 			</span>
 		</div>
 		<button
 			class="rounded p-1 transition-opacity hover:opacity-70"
 			style="color: var(--text-muted);"
 			onclick={onClose}
-			aria-label="Close"
+			aria-label={m.close()}
 		>
 			<X size={16} />
 		</button>
@@ -275,7 +275,7 @@
 			<Search size={14} class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2" style="color: var(--text-muted);" />
 			<input
 				type="text"
-				placeholder="Search documents..."
+				placeholder={m.doc_panel_search_placeholder()}
 				bind:value={searchQuery}
 				oninput={onSearchInput}
 				class="w-full rounded-md py-1.5 pr-3 pl-8 text-xs"
@@ -289,13 +289,13 @@
 		{#if loading}
 			<div class="flex items-center justify-center py-8" style="color: var(--text-muted);">
 				<RefreshCw size={16} class="animate-spin" />
-				<span class="ml-2 text-xs">Loading...</span>
+				<span class="ml-2 text-xs">{m.doc_panel_loading()}</span>
 			</div>
 		{:else if searchQuery.trim() && searchResults.length > 0}
 			<!-- Search results -->
 			<div class="px-3 py-2">
 				<span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
-					Search Results ({searchResults.length})
+					{m.doc_panel_search_results({ count: searchResults.length.toString() })}
 				</span>
 			</div>
 			{#each searchResults as result}
@@ -317,11 +317,11 @@
 		{:else if searching}
 			<div class="flex items-center justify-center py-8" style="color: var(--text-muted);">
 				<Search size={14} class="animate-pulse" />
-				<span class="ml-2 text-xs">Searching...</span>
+				<span class="ml-2 text-xs">{m.doc_panel_searching()}</span>
 			</div>
 		{:else if filteredFiles.length === 0}
 			<div class="py-8 text-center text-xs" style="color: var(--text-muted);">
-				{searchQuery ? 'No matching documents' : 'No documents uploaded yet'}
+				{searchQuery ? m.doc_panel_no_matching() : m.doc_panel_no_documents()}
 			</div>
 		{:else}
 			<!-- File list -->
@@ -360,8 +360,8 @@
 								style="color: var(--warning, #f59e0b);"
 								onclick={() => retryFile(file.id)}
 								disabled={retrying === file.id}
-								aria-label="Retry"
-								title="Retry extraction"
+								aria-label={m.aria_retry()}
+								title={m.doc_panel_retry_extraction()}
 							>
 								<RefreshCw size={13} class={retrying === file.id ? 'animate-spin' : ''} />
 							</button>
@@ -370,8 +370,8 @@
 							href="/api/upload?key={file.filename}"
 							class="rounded p-1 transition-opacity hover:opacity-70"
 							style="color: var(--text-muted);"
-							aria-label="Download"
-							title="Download"
+							aria-label={m.aria_download()}
+							title={m.doc_panel_download()}
 							download
 						>
 							<Download size={13} />
@@ -382,8 +382,8 @@
 								style="color: var(--danger);"
 								onclick={() => confirmDelete(file.id)}
 								disabled={deleting === file.id}
-								aria-label="Delete"
-								title="Delete file"
+								aria-label={m.aria_delete()}
+								title={m.doc_panel_delete_file()}
 							>
 								<Trash2 size={13} />
 							</button>
@@ -397,22 +397,22 @@
 	<!-- Supported formats info -->
 	<div class="shrink-0 border-t px-4 py-3" style="border-color: var(--border);">
 		<span class="text-[10px] uppercase tracking-wider" style="color: var(--text-muted); font-family: var(--font-mono);">
-			Supported for search
+			{m.doc_panel_supported_title()}
 		</span>
 		<p class="mt-1 text-[10px] leading-relaxed" style="color: var(--text-muted);">
-			PDF, DOCX, XLSX, PPTX, TXT, Markdown, CSV, HTML, JSON, YAML, XML
+			{m.doc_panel_supported_formats()}
 		</p>
 		<p class="mt-1 text-[10px] leading-relaxed" style="color: var(--text-muted);">
-			Images — upload only (no text extraction)
+			{m.doc_panel_images_note()}
 		</p>
 	</div>
 </aside>
 
 <ConfirmDialog
 	open={deleteConfirmId !== null}
-	title="Delete File"
-	message="Delete this file? This cannot be undone."
-	confirmLabel="Delete"
+	title={m.doc_panel_delete_confirm_title()}
+	message={m.doc_panel_delete_confirm_message()}
+	confirmLabel={m.doc_panel_delete()}
 	variant="danger"
 	onConfirm={() => { if (deleteConfirmId) deleteFile(deleteConfirmId); }}
 	onCancel={() => { deleteConfirmId = null; }}

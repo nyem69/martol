@@ -141,7 +141,7 @@
 	<button
 		class="fixed inset-0 z-20"
 		onclick={closeDropdown}
-		aria-label="Close dropdown"
+		aria-label={m.aria_close_dropdown()}
 		tabindex="-1"
 	></button>
 {/if}
@@ -243,7 +243,7 @@
 									tabindex={0}
 									onclick={(e) => { e.stopPropagation(); startRename(); }}
 									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); startRename(); } }}
-									aria-label="Rename room"
+									aria-label={m.aria_rename_room()}
 								>
 									<Pencil size={12} />
 								</span>
@@ -313,8 +313,8 @@
 			class="brief-btn flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-opacity hover:opacity-70 active:scale-95"
 			style="color: var(--text-muted);"
 			onclick={onToggleDocuments}
-			aria-label="Documents"
-			title="Documents"
+			aria-label={m.aria_documents()}
+			title={m.aria_documents()}
 			data-testid="header-docs-btn"
 		>
 			<FileText size={15} />
@@ -371,7 +371,7 @@
 				<button
 					class="fixed inset-0 z-20"
 					onclick={closeUserMenu}
-					aria-label="Close menu"
+					aria-label={m.aria_close_menu()}
 					tabindex="-1"
 				></button>
 				<div

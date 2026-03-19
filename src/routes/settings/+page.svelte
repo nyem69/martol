@@ -1526,7 +1526,7 @@
 						</button>
 						<button
 							onclick={() => { showDeleteConfirm = false; deleteInput = ''; }}
-							aria-label="Cancel account deletion"
+							aria-label={m.aria_cancel_account_deletion()}
 							data-testid="cancel-delete-btn"
 							class="rounded-md px-3 py-2.5 text-sm transition-opacity hover:opacity-80"
 							style="color: var(--text-muted);"

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { X } from '@lucide/svelte';
+	import * as m from '$lib/paraglide/messages';
 
 	let {
 		open,
@@ -21,14 +22,36 @@
 		onCancel: () => void;
 	} = $props();
 
-	let confirmBtn = $state<HTMLButtonElement | undefined>();
+	let cancelBtn = $state<HTMLButtonElement | undefined>();
+	let dialogRef = $state<HTMLDivElement | undefined>();
 
 	$effect(() => {
 		if (open) {
-			// Focus cancel button on open for safety
-			requestAnimationFrame(() => confirmBtn?.focus());
+			// Focus cancel button on open for safety (not the destructive confirm)
+			requestAnimationFrame(() => cancelBtn?.focus());
 		}
 	});
+
+	function trapFocus(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			onCancel();
+			return;
+		}
+		if (e.key !== 'Tab' || !dialogRef) return;
+		const focusable = dialogRef.querySelectorAll<HTMLElement>(
+			'button:not([tabindex="-1"]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
+	}
 
 	function onKeydown(e: KeyboardEvent) {
 		if (open && e.key === 'Escape') onCancel();
@@ -48,15 +71,18 @@
 		role="dialog"
 		aria-modal="true"
 		aria-label={title}
+		tabindex="-1"
+		onkeydown={trapFocus}
 	>
 		<button
 			class="absolute inset-0 cursor-default border-none bg-transparent"
 			onclick={onCancel}
-			aria-label="Close"
+			aria-label={m.close()}
 			tabindex="-1"
 		></button>
 
 		<div
+			bind:this={dialogRef}
 			class="relative z-10 w-full max-w-sm rounded-lg border"
 			style="background: var(--bg-elevated); border-color: var(--border);"
 		>
@@ -69,7 +95,7 @@
 					class="rounded p-0.5 transition-opacity hover:opacity-70"
 					style="color: var(--text-muted);"
 					onclick={onCancel}
-					aria-label="Close"
+					aria-label={m.close()}
 				>
 					<X size={14} />
 				</button>
@@ -85,6 +111,7 @@
 			<!-- Footer -->
 			<div class="flex items-center justify-end gap-2 border-t px-4 py-3" style="border-color: var(--border);">
 				<button
+					bind:this={cancelBtn}
 					class="rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
 					style="color: var(--text-muted); border: 1px solid var(--border); font-family: var(--font-mono);"
 					onclick={onCancel}
@@ -92,7 +119,6 @@
 					{cancelLabel}
 				</button>
 				<button
-					bind:this={confirmBtn}
 					class="rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
 					style="background: {accentVar}; color: var(--bg); font-family: var(--font-mono);"
 					onclick={onConfirm}
