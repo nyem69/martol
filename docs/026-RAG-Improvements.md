@@ -230,19 +230,20 @@ const header = [
 - [ ] Re-process multi-topic documents (198.pdf, etc.)
 - [ ] Run evaluation again — compare recall@5, recall@10
 
-### Phase 2 — AI SDK investigation + cleanup
+### Phase 2 — AI SDK investigation ✅
 
-- [ ] Create minimal `streamText()` repro in plain Worker
-- [ ] Determine if bug is DO-specific
-- [ ] File issue or fix
-- [ ] If unfixable: remove `ai`, `workers-ai-provider`, `@ai-sdk/openai` from `package.json`
+- [x] Investigate workers-ai-provider source code
+- [x] Root cause identified: ReadableStream from `env.AI.run({stream:true})` closes when DO request context finalizes in `ctx.waitUntil()`. SSE pipeline dies.
+- [x] Bundle impact: zero (all imports commented out, tree-shaken by esbuild)
+- [ ] File issue on `cloudflare/workerd` or `cloudflare/workers-sdk` (runtime issue, not provider bug)
+- Packages kept — zero cost, easier to re-enable if Workers runtime fixes the stream lifecycle
 
-### Phase 3 — Prompt limit investigation + metadata
+### Phase 3 — Metadata read path + topK ✅
 
-- [ ] Test actual Workers AI prompt size limits
-- [ ] Adjust word cap based on findings
-- [ ] Wire metadata read path (search → prompt headers)
-- [ ] Reduce topK/word-cap waste
+- [x] Wire metadata read path: search.ts SELECT → SearchResult → buildUserPrompt headers
+- [x] Conditional chunk headers: `[📄 file | title | date | Chunk N]` (null-safe)
+- [x] Reduce topK: 10 → 7 (matches 3000-word cap, less DB waste)
+- [ ] Test actual Workers AI prompt size limits (deferred — current 3000-word cap works)
 
 ### Phase 4 — Model testing (only if P5 prompt fix insufficient)
 
