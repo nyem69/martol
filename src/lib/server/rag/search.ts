@@ -5,11 +5,12 @@
  */
 
 import { embedQuery } from './embedder';
+import { detectLanguage } from './metadata-extractor';
 import { documentChunks } from '$lib/server/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 
 const RERANKER_MODEL = '@cf/baai/bge-reranker-base';
-const OVERSAMPLE_FACTOR = 1; // No oversample while reranker is disabled (English-only reranker demotes Malay docs)
+const OVERSAMPLE_FACTOR = 2; // Retrieve 2x for reranking headroom (English) or truncate (non-English)
 const MAX_VECTORIZE_TOPK = 100; // Vectorize maximum results per query
 
 export interface SearchResult {
@@ -88,14 +89,15 @@ export async function searchDocuments(
 			};
 		});
 
-	// 5. Rerank with cross-encoder (if we have more candidates than needed)
-	// DISABLED: bge-reranker-base is English-only and demotes Malay-relevant documents.
-	// Re-enable when a multilingual reranker is available on Workers AI.
-	// if (merged.length > topK) {
-	// 	merged = await rerankResults(ai, query, merged, topK);
-	// }
+	// 5. Rerank with cross-encoder for English queries only
+	// bge-reranker-base is English-only — it degrades Malay retrieval
 	if (merged.length > topK) {
-		merged = merged.slice(0, topK);
+		const queryLang = detectLanguage(query);
+		if (queryLang === 'en') {
+			merged = await rerankResults(ai, query, merged, topK);
+		} else {
+			merged = merged.slice(0, topK);
+		}
 	}
 
 	return merged;

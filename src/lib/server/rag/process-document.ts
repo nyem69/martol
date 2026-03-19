@@ -11,7 +11,7 @@ import { eq, sql } from 'drizzle-orm';
 import { attachments, documentChunks, aiUsage, ingestionJobs } from '$lib/server/db/schema';
 import { extractText, registerProvider } from './parser';
 import { kreuzbergProvider, ExtractionError } from './kreuzberg-provider';
-import { chunkText } from './chunker';
+import { chunkText, splitByTopics } from './chunker';
 import { embedAndIndex, getEmbeddingModel, getEmbeddingDim } from './embedder';
 import { isAiCapReached } from '$lib/server/ai-billing';
 import { extractDocumentMetadata } from './metadata-extractor';
@@ -142,9 +142,14 @@ export async function processDocument(
 		// 6b. Extract document-level metadata (regex-only, <100ms)
 		const metadata = extractDocumentMetadata(extracted.text, att.filename);
 
-		// 7. Chunk
-		const chunks = chunkText(extracted.text, 500, 50);
-		console.log(`[RAG] Chunked into ${chunks.length} segments`);
+		// 7. Chunk — try topic-aware splitting first, fallback to word-based
+		let chunks = splitByTopics(extracted.text, 500, 100);
+		if (chunks.length > 0) {
+			console.log(`[RAG] Topic-aware chunking: ${chunks.length} segments`);
+		} else {
+			chunks = chunkText(extracted.text, 500, 50);
+			console.log(`[RAG] Word-based chunking: ${chunks.length} segments`);
+		}
 		if (chunks.length === 0) {
 			await db.update(attachments).set({ processingStatus: 'skipped' }).where(eq(attachments.id, attachmentId));
 			await finishJob(db, jobId, 'completed', null);
@@ -260,6 +265,41 @@ function resolveErrorCode(err: unknown): string {
 		return err.message.slice(0, 200);
 	}
 	return 'unknown_error';
+}
+
+/**
+ * Clean up existing chunks and vectors for a document before re-processing.
+ * Call this before resetting processingStatus to 'pending'.
+ */
+export async function reprocessDocument(
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	db: any,
+	vectorize: VectorizeIndex,
+	attachmentId: number
+): Promise<void> {
+	// 1. Get existing vectorIds
+	const existingChunks = await db
+		.select({ vectorId: documentChunks.vectorId })
+		.from(documentChunks)
+		.where(eq(documentChunks.attachmentId, attachmentId));
+
+	// 2. Delete from Vectorize
+	if (existingChunks.length > 0) {
+		const vectorIds = existingChunks.map((c: { vectorId: string }) => c.vectorId);
+		try {
+			await vectorize.deleteByIds(vectorIds);
+		} catch (err) {
+			console.error(`[RAG] Vectorize delete failed for attachment ${attachmentId}:`, err);
+		}
+	}
+
+	// 3. Delete chunks from DB (cascade would handle this, but be explicit)
+	await db.delete(documentChunks).where(eq(documentChunks.attachmentId, attachmentId));
+
+	// 4. Reset attachment status
+	await db.update(attachments)
+		.set({ processingStatus: 'pending', extractionErrorCode: null })
+		.where(eq(attachments.id, attachmentId));
 }
 
 async function notifyRoom(

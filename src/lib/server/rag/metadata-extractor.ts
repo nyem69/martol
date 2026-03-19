@@ -59,7 +59,7 @@ const MALAY_MARKERS = [
 	'hukum', 'fatwa', 'berkenaan',
 ];
 
-function detectLanguage(text: string): 'en' | 'ms' | 'mixed' | null {
+export function detectLanguage(text: string): 'en' | 'ms' | 'mixed' | null {
 	const sample = text.slice(0, 1000).toLowerCase();
 	const words = sample.split(/\s+/);
 	if (words.length < 10) return null;
