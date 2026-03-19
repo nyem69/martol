@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 import { isTestAccountEmail, verifyTestPassword } from '$lib/server/auth/test-accounts';
 import { user, session } from '$lib/server/db/auth-schema';
@@ -6,13 +7,13 @@ import { testAccountCredentials } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request, platform, locals, cookies }) => {
-	// Gate: TEST_ACCOUNTS_ENABLED must be set
+	// Gate: only available in dev OR when TEST_ACCOUNTS_ENABLED is explicitly set
 	const cfEnabled = (platform?.env as Record<string, string> | undefined)?.TEST_ACCOUNTS_ENABLED;
 	const nodeEnabled = process.env.TEST_ACCOUNTS_ENABLED;
 	const raw = cfEnabled ?? nodeEnabled;
-	const enabled = raw === 'true' || raw === '1';
+	const envEnabled = raw === 'true' || raw === '1';
 
-	if (!enabled) {
+	if (!dev && !envEnabled) {
 		throw error(404, 'Not found');
 	}
 
@@ -84,6 +85,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, cookies 
 	cookies.set('martol.session_token', token, {
 		path: '/',
 		httpOnly: true,
+		secure: !dev,
 		sameSite: 'lax',
 		maxAge: 7 * 24 * 60 * 60
 	});

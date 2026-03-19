@@ -79,6 +79,16 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
 
 export const GET: RequestHandler = async ({ params, locals, platform }) => {
 	if (!locals.user || !locals.session) error(401, 'Unauthorized');
+	if (!locals.db) error(503, 'Database unavailable');
+
+	// Verify caller is a member of this room
+	const orgId = params.roomId;
+	const [memberRecord] = await locals.db
+		.select({ role: member.role })
+		.from(member)
+		.where(and(eq(member.organizationId, orgId), eq(member.userId, locals.user.id)))
+		.limit(1);
+	if (!memberRecord) return json({ hasKey: false });
 
 	const kv = platform?.env?.CACHE;
 	if (!kv) return json({ hasKey: false });

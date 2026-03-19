@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { aiUsage } from '$lib/server/db/schema';
+import { member } from '$lib/server/db/auth-schema';
 import { eq, and, gte, sql } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -8,6 +9,14 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.db) return json({ count: 0, limit: 150 });
 
 	const orgId = params.roomId;
+
+	// Verify caller is a member of this room
+	const [memberRecord] = await locals.db
+		.select({ role: member.role })
+		.from(member)
+		.where(and(eq(member.organizationId, orgId), eq(member.userId, locals.user.id)))
+		.limit(1);
+	if (!memberRecord) return json({ count: 0, limit: 150 });
 	// Get current month's first day
 	const periodStart = new Date().toISOString().slice(0, 8) + '01';
 
