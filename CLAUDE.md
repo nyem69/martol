@@ -159,6 +159,13 @@ RAG Pipeline (async, via ctx.waitUntil)
 - `capacitor.config.ts` — Capacitor mobile config
 - `project.inlang/settings.json` — Paraglide i18n config
 
+## Build & Commit Workflow
+
+Before committing, always:
+1. Run `pnpm check && pnpm build` and fix all errors
+2. Run `pnpm test` and fix all failures (if tests exist)
+3. Only then stage and commit — show the build and test output
+
 ## Deployment
 
 - **NEVER run `pnpm cf:deploy` directly** — always commit and push to `main`; CI/CD handles deployment
